@@ -1,0 +1,15 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+# Node / React
+node_modules/
+build/
+dist/
+# Entorno y archivos subidos
+.env
+uploads/
+# Sistema
+.DS_Store
+Thumbs.db

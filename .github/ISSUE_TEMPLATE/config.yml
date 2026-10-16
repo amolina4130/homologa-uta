@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Guía de contribución
+    url: https://github.com/<usuario>/<repo>/blob/develop/docs/GUIA_CONTRIBUCION.md
+    about: Lee la guía antes de crear un issue o PR
