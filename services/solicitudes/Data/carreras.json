@@ -1,0 +1,7 @@
+[
+  { "id": 1, "nombre": "Software" },
+  { "id": 2, "nombre": "Tecnologías de la Información" },
+  { "id": 3, "nombre": "Automatización y Robótica" },
+  { "id": 4, "nombre": "Ingeniería Industrial" },
+  { "id": 5, "nombre": "Telecomunicaciones" }
+]
