@@ -30,10 +30,44 @@ frontend/                 React
 docs/                     Planificación y mockups
 ```
 
-## Cómo ejecutar (se completa en la HU-01)
+## Cómo levantar el sistema
+
+### Requisitos
+- Git
+- Docker Desktop (en ejecución)
+- Para desarrollar: .NET SDK (la misma versión LTS en todo el equipo) y Node.js LTS
+
+### Pasos
+1. Clonar el repositorio:
 ```
-docker compose up
+   git clone https://github.com/amolina4130/homologa-uta.git
+   cd homologa-uta
+   git checkout develop
 ```
+2. Crear el archivo de variables de entorno y cambiar los valores:
+```
+   cp .env.example .env
+```
+3. Levantar todo con un solo comando:
+```
+   docker compose up --build
+```
+4. Abrir la pantalla Estado del sistema: http://localhost:3000/estado
+
+### Puertos
+| Componente | Puerto |
+|---|---|
+| Frontend (React) | 3000 |
+| API Gateway (YARP) | 8080 |
+| Servicio de Autenticación | 5001 |
+| Servicio de Solicitudes | 5002 |
+| Servicio de Documentos | 5003 |
+| SQL Server | 1433 |
+
+Cada servicio expone Swagger en `/swagger` y su estado en `/health`.
+
+### Usuarios de prueba
+Se precargan con la HU-03: un usuario por rol (por ejemplo `estudiante@uta.edu.ec` y `coordinador@uta.edu.ec`). La contraseña de demostración la define el equipo en el archivo `.env`.
 
 ## Flujo de ramas
 `main` (versiones estables) ← `develop` (integración) ← `feature/HU-xx-nombre` (una por tarea o historia).
