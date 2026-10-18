@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # 1. Base de datos SQL Server
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: homologa_sql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SQL_SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    networks:
+      - homologa_network
+
+  # 2. Servicio de Autenticación
+  auth-service:
+    build:
+      context: ./services/autenticacion
+      dockerfile: Dockerfile
+    container_name: homologa_auth
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_AUTH};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "5001:8080" # Mapea el puerto 5001 de tu PC al 8080 interno de .NET
+    depends_on:
+      - sqlserver
+    networks:
+      - homologa_network
+
+  # 3. Servicio de Solicitudes
+  solicitudes-service:
+    build:
+      context: ./services/solicitudes
+      dockerfile: Dockerfile
+    container_name: homologa_solicitudes
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_SOLICITUDES};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+    ports:
+      - "5002:8080" # Mapea el puerto 5002 de tu PC al 8080 interno
+    depends_on:
+      - sqlserver
+    networks:
+      - homologa_network
+
+  # 4. Servicio de Documentos
+  documentos-service:
+    build:
+      context: ./services/documentos
+      dockerfile: Dockerfile
+    container_name: homologa_documentos
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_DOCUMENTOS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+    ports:
+      - "5003:8080" # Mapea el puerto 5003 de tu PC al 8080 interno
+    volumes:
+      - pdf_data:/app/pdfs
+    depends_on:
+      - sqlserver
+    networks:
+      - homologa_network
+
+  # 5. Gateway (YARP)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: homologa_gateway
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - solicitudes-service
+      - documentos-service
+    networks:
+      - homologa_network
+
+  # 6. Frontend (React + Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: homologa_frontend
+    ports:
+      - "3000:80" # Nginx usa el puerto 80 internamente
+    depends_on:
+      - gateway
+    networks:
+      - homologa_network
+
+# Volúmenes para persistencia de datos
+volumes:
+  sql_data:
+  pdf_data:
+
+# Red interna para que los contenedores se comuniquen entre sí
+networks:
+  homologa_network:
+    driver: bridge
