@@ -1,0 +1,19 @@
+{
+  "ReverseProxy": {
+    "Clusters": {
+      "auth": {
+        "Destinations": { "d1": { "Address": "http://auth-service:8080/" } }
+      },
+      "solicitudes": {
+        "Destinations": { "d1": { "Address": "http://solicitudes-service:8080/" } }
+      }
+    }
+  },
+  "Health": {
+    "Services": [
+      { "Name": "Servicio de autenticación", "Url": "http://auth-service:8080/health" },
+      { "Name": "Servicio de solicitudes",   "Url": "http://solicitudes-service:8080/health" },
+      { "Name": "Servicio de documentos",    "Url": "http://documentos-service:8080/health" }
+    ]
+  }
+}
