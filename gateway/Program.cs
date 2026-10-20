@@ -9,6 +9,10 @@ using Microsoft.IdentityModel.Tokens;
 // 1) YARP: las rutas y destinos viven en yarp.json
 // ---------------------------------------------------------------
 builder.Configuration.AddJsonFile("yarp.json", optional: false, reloadOnChange: true);
+
+if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true")
+    builder.Configuration.AddJsonFile("docker.settings.json", optional: false);
+    
 builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
