@@ -2,23 +2,10 @@ import { useState, useEffect } from "react";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
-// Puertos según el mockup M-01 (se buscan por palabra clave del nombre del servicio)
 const PENDIENTES = [
   { nombre: "RabbitMQ", puerto: 5672, pendiente: true },
   { nombre: "Ollama (agente)", puerto: 11434, pendiente: true },
 ];
-
-const PUERTOS = [
-  ["autentic", 5001],
-  ["solicitud", 5002],
-  ["documento", 5003],
-];
-
-function puertoDe(nombre) {
-  const n = (nombre || "").toLowerCase();
-  const hallado = PUERTOS.find(([clave]) => n.includes(clave));
-  return hallado ? hallado[1] : "—";
-}
 
 export default function EstadoSistema() {
   const [filas, setFilas] = useState([]);
@@ -29,27 +16,24 @@ export default function EstadoSistema() {
     // Agregamos "SQL Server" fijo, porque no tiene endpoint /health propio
     const frontend = { nombre: "Frontend (React)", puerto: 3000, enLinea: true, ms: 8 };
     const sqlServer = { nombre: "SQL Server", puerto: 1433, enLinea: true, ms: 9 };
-    const inicio = performance.now();
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(`${GATEWAY_URL}/health`, { signal: controller.signal });
       clearTimeout(timeout);
-      const msGateway = Math.round(performance.now() - inicio);
       const data = await res.json();
 
-      const servicios = (data.servicios ?? []).map((s) => ({
+      const servicios = (data.componentes ?? []).map((s) => ({
         nombre: s.nombre,
-        puerto: puertoDe(s.nombre),
-        enLinea: s.estado === "En línea",
-        ms: s.estado === "En línea" ? s.tiempoMs : null,
+        puerto: s.puerto,
+        enLinea: s.estado === "EN_LINEA",
+        ms: s.estado === "EN_LINEA" ? s.respuestaMs : null,
       }));
 
-      // Unimos todo: Frontend + SQL Server + Gateway + Servicios reales + Pendientes (Sprint 2)
+      // Unimos todo: Frontend + Servicios reales (incluye el Gateway) + SQL Server + Pendientes (Sprint 2)
       setFilas([
         frontend,
-        { nombre: "API Gateway (YARP)", puerto: 8080, enLinea: data.gateway === "En línea", ms: msGateway },
         ...servicios,
         sqlServer,
         ...PENDIENTES,
@@ -67,12 +51,12 @@ export default function EstadoSistema() {
     }
   }
 
-    useEffect(() => {
+  useEffect(() => {
     // Envolvemos la llamada en un setTimeout para evitar el error de ESLint
     const timer = setTimeout(() => {
       actualizar();
     }, 0);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
@@ -95,7 +79,7 @@ export default function EstadoSistema() {
             <tr key={f.nombre}>
               <td>{f.nombre}</td>
               <td>{f.puerto}</td>
-              
+
               {/* Evaluamos si es "pendiente" para mostrar el circulito "Sprint 2" */}
               <td>{f.pendiente ? "○ Sprint 2" : f.enLinea ? "● En línea" : "○ Sin respuesta"}</td>
               <td>{f.ms != null ? `${f.ms} ms` : "—"}</td>
