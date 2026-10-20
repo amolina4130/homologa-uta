@@ -1,0 +1,38 @@
+{
+  "ReverseProxy": {
+    "Routes": {
+      "auth-login": {
+        "ClusterId": "auth",
+        "AuthorizationPolicy": "Anonymous",
+        "Match": { "Path": "/auth/login" }
+      },
+      "auth": {
+        "ClusterId": "auth",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/auth/{**catch-all}" }
+      },
+      "carreras": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/carreras/{**catch-all}" }
+      },
+      "solicitudes": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "estudiante",
+        "Match": { "Path": "/solicitudes/{**catch-all}" }
+      }
+    },
+    "Clusters": {
+      "auth": {
+        "Destinations": {
+          "d1": { "Address": "http://localhost:5001/" }
+        }
+      },
+      "solicitudes": {
+        "Destinations": {
+          "d1": { "Address": "http://localhost:5002/" }
+        }
+      }
+    }
+  }
+}
