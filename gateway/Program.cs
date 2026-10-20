@@ -25,22 +25,25 @@ builder.Services.AddReverseProxy()
 var jwt = builder.Configuration.GetSection("Jwt");
 var key = builder.Configuration["JWT_SECRET"] ?? jwt["Key"]
     ?? throw new InvalidOperationException("Falta la configuración Jwt:Key");
+var issuer = builder.Configuration["JWT_ISSUER"] ?? jwt["Issuer"];
+var audience = builder.Configuration["JWT_AUDIENCE"] ?? jwt["Audience"];
+
 builder.Services
     .AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
     {
-        options.MapInboundClaims = false; // conserva el claim "role" tal cual
+        options.MapInboundClaims = false; // conserva el claim "rol" tal cual
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = jwt["Issuer"],
+            ValidIssuer = issuer,
             ValidateAudience = true,
-            ValidAudience = jwt["Audience"],
+            ValidAudience = audience,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
-            RoleClaimType = "role",
+            RoleClaimType = "rol",
             NameClaimType = "sub"
         };
     });
@@ -53,11 +56,11 @@ builder.Services
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
     .AddPolicy("autenticado", p => p.RequireAuthenticatedUser())
-    .AddPolicy("estudiante", p => p.RequireRole("Estudiante"))
-    .AddPolicy("coordinador", p => p.RequireRole("Coordinador"))
-    .AddPolicy("secretaria", p => p.RequireRole("Secretaria"))
-    .AddPolicy("consejo", p => p.RequireRole("Consejo"))
-    .AddPolicy("administrador", p => p.RequireRole("Administrador"));
+    .AddPolicy("estudiante", p => p.RequireRole("ESTUDIANTE"))
+    .AddPolicy("coordinador", p => p.RequireRole("COORDINADOR"))
+    .AddPolicy("secretaria", p => p.RequireRole("SECRETARIA"))
+    .AddPolicy("consejo", p => p.RequireRole("CONSEJO"))
+    .AddPolicy("administrador", p => p.RequireRole("ADMINISTRADOR"));
 
 // ---------------------------------------------------------------
 // 4) CORS: permite que el frontend React llame al Gateway desde otro origen
@@ -98,19 +101,18 @@ app.MapGet("/health", async (IHttpClientFactory factory, IConfiguration config) 
         {
             using var respuesta = await client.GetAsync(target.Url);
             reloj.Stop();
-            return new ServiceStatus(
-                target.Name,
-                respuesta.IsSuccessStatusCode ? "En línea" : "Sin respuesta",
-                reloj.ElapsedMilliseconds);
+            return respuesta.IsSuccessStatusCode
+                ? new ComponentStatus(target.Name, target.Port, "EN_LINEA", reloj.ElapsedMilliseconds)
+                : new ComponentStatus(target.Name, target.Port, "SIN_RESPUESTA", null);
         }
         catch (Exception)
         {
-            return new ServiceStatus(target.Name, "Sin respuesta", null);
+            return new ComponentStatus(target.Name, target.Port, "SIN_RESPUESTA", null);
         }
     }));
 
-    var general = servicios.All(s => s.Estado == "En línea") ? "Healthy" : "Degraded";
-    return Results.Ok(new { estado = general, gateway = "En línea", servicios });
+    var gateway = new ComponentStatus("API Gateway (YARP)", 8080, "EN_LINEA", 0);
+    return Results.Ok(new { componentes = new[] { gateway }.Concat(servicios) });
 }).AllowAnonymous();
 
 app.MapReverseProxy();
@@ -122,6 +124,7 @@ public class ServiceTarget
 {
     public string Name { get; set; } = "";
     public string Url { get; set; } = "";
+    public int Port { get; set; }
 }
 
-public record ServiceStatus(string Nombre, string Estado, long? TiempoMs);
+public record ComponentStatus(string Nombre, int Puerto, string Estado, long? RespuestaMs);
