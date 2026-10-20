@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 // 1) YARP: las rutas y destinos viven en yarp.json
 // ---------------------------------------------------------------
 builder.Configuration.AddJsonFile("yarp.json", optional: false, reloadOnChange: true);
+builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
 
@@ -18,8 +19,8 @@ builder.Services.AddReverseProxy()
 //    deben ser idénticos a los que use el servicio de autenticación.
 // ---------------------------------------------------------------
 var jwt = builder.Configuration.GetSection("Jwt");
-var key = jwt["Key"] ?? throw new InvalidOperationException("Falta la configuración Jwt:Key");
-
+var key = builder.Configuration["JWT_SECRET"] ?? jwt["Key"]
+    ?? throw new InvalidOperationException("Falta la configuración Jwt:Key");
 builder.Services
     .AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
