@@ -20,6 +20,77 @@ namespace HomologaUTA.Solicitudes.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("HomologaUTA.Solicitudes.Models.Asignatura", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CarreraId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Creditos")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Horas")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarreraId");
+
+                    b.ToTable("Asignaturas");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Solicitudes.Models.Carrera", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Carreras");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Solicitudes.Models.Asignatura", b =>
+                {
+                    b.HasOne("HomologaUTA.Solicitudes.Models.Carrera", "Carrera")
+                        .WithMany("Asignaturas")
+                        .HasForeignKey("CarreraId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Carrera");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Solicitudes.Models.Carrera", b =>
+                {
+                    b.Navigation("Asignaturas");
+                });
 #pragma warning restore 612, 618
         }
     }
