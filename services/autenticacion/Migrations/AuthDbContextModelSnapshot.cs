@@ -20,6 +20,100 @@ namespace HomologaUTA.Autenticacion.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("HomologaUTA.Autenticacion.Models.Rol", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Nombre = "ESTUDIANTE"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Nombre = "COORDINADOR"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Nombre = "SECRETARIA"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Nombre = "CONSEJO"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Nombre = "ADMINISTRADOR"
+                        });
+                });
+
+            modelBuilder.Entity("HomologaUTA.Autenticacion.Models.Usuario", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Correo")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RolId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Correo")
+                        .IsUnique();
+
+                    b.HasIndex("RolId");
+
+                    b.ToTable("Usuarios");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Autenticacion.Models.Usuario", b =>
+                {
+                    b.HasOne("HomologaUTA.Autenticacion.Models.Rol", "Rol")
+                        .WithMany("Usuarios")
+                        .HasForeignKey("RolId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Rol");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Autenticacion.Models.Rol", b =>
+                {
+                    b.Navigation("Usuarios");
+                });
 #pragma warning restore 612, 618
         }
     }
