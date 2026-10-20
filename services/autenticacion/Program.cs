@@ -1,4 +1,7 @@
 using HomologaUTA.Autenticacion.Data;
+using HomologaUTA.Autenticacion.Models;
+using HomologaUTA.Autenticacion.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,8 +19,11 @@ builder.Services.AddSwaggerGen(c =>
 });
 builder.Services.AddDbContext<AuthDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IPasswordHasher<Usuario>, PasswordHasher<Usuario>>();
+builder.Services.AddScoped<TokenService>();
 
 var app = builder.Build();
+
 
 app.UseSwagger();
 app.UseSwaggerUI();
