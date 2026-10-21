@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+//import React, { useEffect, useState } from 'react';
+import { useState, useEffect } from "react";
 import { TablaSolicitudes } from '../components/TablaSolicitudes';
 import { obtenerMisSolicitudes } from '../services/solicitudesService';
 

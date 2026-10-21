@@ -111,7 +111,7 @@
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{token_estudiante}}",
+								"value": "Bearer {{token}}",
 								"type": "text"
 							}
 						],
@@ -134,11 +134,108 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "3. Flujo de Solicitudes",
+			"item": [
+				{
+					"name": "3.1 Crear Solicitud (Estudiante)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 201\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"solicitud_id\", jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tipo\": \"Cambio de carrera\",\n    \"carreraOrigenId\": 1,\n    \"carreraDestinoId\": 2,\n    \"asignaturasIds\": [1, 2]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/solicitudes",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["solicitudes"]
+						}
+					}
+				},
+				{
+					"name": "3.2 Consultar Mis Solicitudes (Estudiante)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8080/solicitudes/mias",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["solicitudes", "mias"]
+						}
+					}
+				},
+				{
+					"name": "3.3 Verificar aislamiento (Estudiante 2 ve vacío)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_otro_estudiante}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8080/solicitudes/mias",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["solicitudes", "mias"]
+						}
+					}
+				}
+			]
 		}
 	],
 	"variable": [
 		{
 			"key": "token",
+			"value": ""
+		},
+		{
+			"key": "solicitud_id",
+			"value": ""
+		},
+		{
+			"key": "token_otro_estudiante",
 			"value": ""
 		}
 	]
