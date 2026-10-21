@@ -1,15 +1,16 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
+import Menu from "./components/Menu";
+import RutaProtegida from "./components/RutaProtegida";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
-// Pantalla temporal; el menú por rol llega en la TA-02.6
 function Inicio() {
-  const { rol, cerrarSesion } = useAuth();
+  const { rol } = useAuth();
   return (
     <div style={{ padding: 40, fontFamily: "sans-serif" }}>
-      <p>Sesión iniciada. Rol: {rol ?? "desconocido"}</p>
-      <button onClick={cerrarSesion}>Cerrar sesión</button>
+      <h2>¡Bienvenido!</h2>
+      <p>Sesión iniciada con el rol: <strong>{rol ?? "desconocido"}</strong></p>
     </div>
   );
 }
@@ -19,9 +20,16 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/estado" element={<EstadoSistema />} />
+          {/* Rutas públicas */}
           <Route path="/login" element={<Login />} />
-          <Route path="/inicio" element={<Inicio />} />
+
+          {/* Rutas protegidas */}
+          <Route element={<RutaProtegida />}>
+            <Route path="/inicio" element={<><Menu /><Inicio /></>} />
+            <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
+          </Route>
+
+          {/* Redirección por defecto */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>
