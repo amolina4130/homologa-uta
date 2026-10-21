@@ -19,3 +19,6 @@ COPY --from=build /app/publish .
 EXPOSE 8080
 
 ENTRYPOINT ["dotnet", "HomologaUTA.Solicitudes.dll"]
+
+# Ignorar la carpeta de pruebas al compilar
+RUN rm -rf HomologaUTA.Solicitudes.Tests

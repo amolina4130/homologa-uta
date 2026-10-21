@@ -5,6 +5,11 @@ import Menu from "./components/Menu";
 import RutaProtegida from "./components/RutaProtegida";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
+// Importamos las pantallas adicionales (asegúrate de que estos archivos existan en tu carpeta pages)
+import MisSolicitudes from "./pages/MisSolicitudes"; 
+import NuevaSolicitud from "./pages/NuevaSolicitud"; // Si Karol no la hizo, crea un archivo simple
+import Carreras from "./pages/Carreras";             // Si Karol no la hizo, crea un archivo simple
+
 function Inicio() {
   const { rol } = useAuth();
   return (
@@ -27,6 +32,11 @@ export default function App() {
           <Route element={<RutaProtegida />}>
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
+            
+            {/* AGREGAMOS LAS RUTAS QUE FALTABAN */}
+            <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
+            <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
+            <Route path="/carreras" element={<><Menu /><Carreras /></>} />
           </Route>
 
           {/* Redirección por defecto */}

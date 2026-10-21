@@ -3,6 +3,18 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// --- 1. CONFIGURACIÓN DE CORS ---
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+// --- 2. CONTROLADORES Y SWAGGER ---
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -14,32 +26,33 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Servicio de solicitudes y catálogo de carreras"
     });
 });
+
+// --- 3. BASE DE DATOS ---
 builder.Services.AddDbContext<SolicitudesDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
+// --- 4. USAR CORS ---
+app.UseCors("AllowAll");
+
+// --- 5. SWAGGER ---
 app.UseSwagger();
 app.UseSwaggerUI();
 
+// --- 6. MAPEAR CONTROLADORES ---
 app.MapControllers();
 
 app.Urls.Add("http://0.0.0.0:8080");
 
-// ==========================================
-// AGREGAR ESTE BLOQUE AQUÍ (Antes de app.Run)
-// ==========================================
+// --- 7. MIGRACIONES Y DATOS SEMILLA ---
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<SolicitudesDbContext>();
-        
-        // 1. Aplica las migraciones pendientes (crea las tablas si no existen)
         context.Database.Migrate();
-        
-        // 2. Ejecuta tu lógica para cargar los JSON
         await SeedData.InitializeAsync(context); 
     }
     catch (Exception ex)
@@ -48,6 +61,5 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "Ocurrió un error al inicializar la base de datos.");
     }
 }
-// ==========================================
 
 app.Run();

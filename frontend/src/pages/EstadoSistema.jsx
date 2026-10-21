@@ -13,7 +13,6 @@ export default function EstadoSistema() {
 
   async function actualizar() {
     setCargando(true);
-    // Agregamos "SQL Server" fijo, porque no tiene endpoint /health propio
     const frontend = { nombre: "Frontend (React)", puerto: 3000, enLinea: true, ms: 8 };
     const sqlServer = { nombre: "SQL Server", puerto: 1433, enLinea: true, ms: 9 };
 
@@ -31,15 +30,8 @@ export default function EstadoSistema() {
         ms: s.estado === "EN_LINEA" ? s.respuestaMs : null,
       }));
 
-      // Unimos todo: Frontend + Servicios reales (incluye el Gateway) + SQL Server + Pendientes (Sprint 2)
-      setFilas([
-        frontend,
-        ...servicios,
-        sqlServer,
-        ...PENDIENTES,
-      ]);
+      setFilas([frontend, ...servicios, sqlServer, ...PENDIENTES]);
     } catch {
-      // Si el Gateway no responde, se muestra todo lo demás en modo local
       setFilas([
         frontend,
         { nombre: "API Gateway (YARP)", puerto: 8080, enLinea: false, ms: null },
@@ -52,46 +44,70 @@ export default function EstadoSistema() {
   }
 
   useEffect(() => {
-    // Envolvemos la llamada en un setTimeout para evitar el error de ESLint
-    const timer = setTimeout(() => {
-      actualizar();
-    }, 0);
-
+    const timer = setTimeout(() => { actualizar(); }, 0);
     return () => clearTimeout(timer);
   }, []);
 
+  // Función auxiliar para pintar el estado con los colores de Bootstrap
+  const renderEstado = (f) => {
+    if (f.pendiente) return <span className="badge bg-secondary">⏳ Sprint 2</span>;
+    if (f.enLinea) return <span className="badge bg-success">🟢 En línea</span>;
+    return <span className="badge bg-danger">🔴 Sin respuesta</span>;
+  };
+
   return (
-    <div style={{ maxWidth: 800, margin: "40px auto", fontFamily: "sans-serif" }}>
-      <h1 style={{ textAlign: "center" }}>SISTEMA DE HOMOLOGACIÓN - UTA</h1>
-      <h2>Estado de los componentes</h2>
+    <div className="container mt-4">
+      <div className="row justify-content-center">
+        <div className="col-md-10">
+          
+          <div className="card shadow-sm border-0">
+            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+              <h4 className="mb-0 fw-bold">Estado del Sistema</h4>
+              <button onClick={actualizar} disabled={cargando} className="btn btn-light btn-sm fw-bold">
+                {cargando ? "Actualizando..." : "Actualizar estado"}
+              </button>
+            </div>
 
-      <table border="1" cellPadding="8" style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead>
-          <tr>
-            <th>Componente</th>
-            <th>Puerto</th>
-            <th>Estado</th>
-            <th>Respuesta</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f) => (
-            <tr key={f.nombre}>
-              <td>{f.nombre}</td>
-              <td>{f.puerto}</td>
+            <div className="card-body p-4">
+              <p className="text-muted mb-4">
+                Levantado con: <code>docker compose up</code>
+              </p>
 
-              {/* Evaluamos si es "pendiente" para mostrar el circulito "Sprint 2" */}
-              <td>{f.pendiente ? "○ Sprint 2" : f.enLinea ? "● En línea" : "○ Sin respuesta"}</td>
-              <td>{f.ms != null ? `${f.ms} ms` : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              <div className="table-responsive">
+                <table className="table table-hover table-bordered align-middle">
+                  <thead className="table-primary">
+                    <tr>
+                      <th>Componente</th>
+                      <th>Puerto</th>
+                      <th>Estado</th>
+                      <th>Respuesta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filas.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="text-center py-4 text-muted">
+                          Cargando información del sistema...
+                        </td>
+                      </tr>
+                    ) : (
+                      filas.map((f) => (
+                        <tr key={f.nombre}>
+                          <td className="fw-bold">{f.nombre}</td>
+                          <td>{f.puerto}</td>
+                          <td>{renderEstado(f)}</td>
+                          <td>{f.ms != null ? `${f.ms} ms` : "—"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
-      <button onClick={actualizar} disabled={cargando} style={{ marginTop: 16 }}>
-        {cargando ? "Actualizando..." : "Actualizar estado"}
-      </button>
-      <span style={{ marginLeft: 16 }}>Levantado con: docker compose up</span>
+        </div>
+      </div>
     </div>
   );
 }

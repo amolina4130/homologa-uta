@@ -71,6 +71,7 @@ services:
     container_name: homologa_gateway
     environment:
       - JWT_SECRET=${JWT_SECRET}
+      - Cors__Origins__0=http://localhost:3000  # <--- AGREGA ESTA LÍNEA AQUÍ
     ports:
       - "8080:8080"
     depends_on:

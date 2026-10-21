@@ -1,6 +1,7 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+// Forzamos la URL directa al puerto 8080 (Gateway)
+const GATEWAY_URL = "http://localhost:8080";
 
-// Función auxiliar centralizada
+// Función auxiliar para obtener el token
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   return {
@@ -13,6 +14,7 @@ export async function obtenerMisSolicitudes() {
   const res = await fetch(`${GATEWAY_URL}/solicitudes/mias`, {
     method: "GET",
     headers: getAuthHeaders(),
+    mode: 'cors'
   });
 
   if (res.status === 401) {
@@ -27,7 +29,7 @@ export async function obtenerMisSolicitudes() {
     throw err;
   }
 
-  return await res.json();
+  return await res.json(); 
 }
 
 export async function obtenerCarreras() {
@@ -55,3 +57,4 @@ export async function crearSolicitud(solicitudData) {
   if (!res.ok) throw new Error("Error al registrar la solicitud");
   return await res.json();
 }
+
