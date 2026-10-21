@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
- var builde = WebApplication.CreateBuilder(args);
+ var builder = WebApplication.CreateBuilder(args);
 
 //---------------------------------------------------------------
 // 1) YARP: las rutas y destinos viven en yarp.json
