@@ -1,0 +1,145 @@
+{
+	"info": {
+		"name": "HomologaUTA",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Auth",
+			"item": [
+				{
+					"name": "1.1 Login Exitoso",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"token\", jsonData.token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"correo\": \"estudiante@uta.edu.ec\",\n    \"contrasena\": \"Demo123!\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/auth/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Pruebas de Seguridad",
+			"item": [
+				{
+					"name": "2.1 Acceso con Token Válido (200)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8080/carreras",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["carreras"]
+						}
+					}
+				},
+				{
+					"name": "2.2 Acceso sin Token (401)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/carreras",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["carreras"]
+						}
+					}
+				},
+				{
+					"name": "2.3 Acceso con Token Vencido (401)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJ0ZXN0QHV0YS5lZHUuZWMiLCJleHAiOjE1MTYyMzkwMjJ9.4S1pX2V4cGlyZWRUb2tlblNpZ25hdHVyZQ",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8080/carreras",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["carreras"]
+						}
+					}
+				},
+				{
+					"name": "2.4 Acceso con Rol Incorrecto (403)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token_estudiante}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"comentario\": \"Intento de accion de coordinador\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8080/solicitudes/revision",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["solicitudes", "revision"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "token",
+			"value": ""
+		}
+	]
+}
