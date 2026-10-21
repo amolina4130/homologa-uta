@@ -1,4 +1,4 @@
-import React from 'react';
+//import React from 'react';
 
 export const TablaSolicitudes = ({ solicitudes }) => {
   if (!solicitudes || solicitudes.length === 0) {
