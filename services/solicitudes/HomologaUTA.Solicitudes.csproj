@@ -16,4 +16,11 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="HomologaUTA.Solicitudes.Tests\**" />
+    <Content Remove="HomologaUTA.Solicitudes.Tests\**" />
+    <EmbeddedResource Remove="HomologaUTA.Solicitudes.Tests\**" />
+    <None Remove="HomologaUTA.Solicitudes.Tests\**" />
+  </ItemGroup>
+
 </Project>
