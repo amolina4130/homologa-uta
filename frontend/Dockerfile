@@ -10,6 +10,11 @@ RUN npm run build
 FROM nginx:alpine
 # Copiamos los archivos compilados de React a la carpeta pública de Nginx
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# ¡ESTA ES LA LÍNEA QUE FALTA!
+# Copiamos nuestra configuración personalizada de Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # Exponemos el puerto 80 (el estándar de Nginx)
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
