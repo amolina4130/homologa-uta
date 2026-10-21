@@ -18,4 +18,12 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.*" />
   </ItemGroup>
 
+  <!-- AGREGAR ESTO PARA IGNORAR LA CARPETA DE PRUEBAS -->
+  <ItemGroup>
+    <Compile Remove="HomologaUTA.Autenticacion.Tests\**" />
+    <Content Remove="HomologaUTA.Autenticacion.Tests\**" />
+    <EmbeddedResource Remove="HomologaUTA.Autenticacion.Tests\**" />
+    <None Remove="HomologaUTA.Autenticacion.Tests\**" />
+  </ItemGroup>
+
 </Project>
