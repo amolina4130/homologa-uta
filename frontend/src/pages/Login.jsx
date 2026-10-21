@@ -41,43 +41,58 @@ export default function Login() {
     }
   }
 
-  const campo = { width: "100%", padding: 10, boxSizing: "border-box", border: "2px solid #000" };
-  const error = { color: "#b00020", fontSize: 14, margin: "4px 0 0" };
-
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "sans-serif", border: "2px solid #000" }}>
-      <div style={{ borderBottom: "2px solid #000", padding: "8px 16px", fontWeight: "bold" }}>INICIO DE SESIÓN</div>
-      <h1 style={{ textAlign: "center" }}>SISTEMA DE HOMOLOGACIÓN - UTA</h1>
-
-      <div style={{ display: "flex", gap: 48, padding: 32, alignItems: "flex-start" }}>
-        <div style={{ width: 200, height: 200, border: "2px solid #000", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          Logo UTA
+    <div className="container d-flex justify-content-center align-items-center vh-100 bg-light">
+      <div className="card shadow-lg p-4" style={{ maxWidth: "450px", width: "100%" }}>
+        
+        <div className="text-center mb-4">
+          {/* Aquí puedes poner el logo de la UTA con una etiqueta img si lo tienes */}
+          <h2 className="fw-bold text-primary">HomologaUTA</h2>
+          <p className="text-muted">Sistema de Homologación - UTA</p>
         </div>
 
-        <form onSubmit={ingresar} noValidate style={{ flex: 1 }}>
-          <h2>Iniciar sesión</h2>
+        <form onSubmit={ingresar} noValidate>
+          <h4 className="mb-4 text-center">Iniciar Sesión</h4>
 
-          <label htmlFor="correo">Correo institucional</label>
-          <input id="correo" type="email" style={campo} value={correo}
-                 placeholder="estudiante@uta.edu.ec"
-                 onChange={(e) => setCorreo(e.target.value)} />
-          {errores.correo && <p style={error}>{errores.correo}</p>}
-
-          <div style={{ marginTop: 16 }}>
-            <label htmlFor="contrasena">Contraseña</label>
-            <input id="contrasena" type="password" style={campo} value={contrasena}
-                   onChange={(e) => setContrasena(e.target.value)} />
-            {errores.contrasena && <p style={error}>{errores.contrasena}</p>}
+          <div className="mb-3">
+            <label htmlFor="correo" className="form-label fw-bold">Correo institucional</label>
+            <input 
+              id="correo" 
+              type="email" 
+              className={`form-control ${errores.correo ? 'is-invalid' : ''}`}
+              value={correo}
+              placeholder="estudiante@uta.edu.ec"
+              onChange={(e) => setCorreo(e.target.value)} 
+            />
+            {errores.correo && <div className="invalid-feedback">{errores.correo}</div>}
           </div>
 
-          {errorLogin && <p style={error}>{errorLogin}</p>}
+          <div className="mb-4">
+            <label htmlFor="contrasena" className="form-label fw-bold">Contraseña</label>
+            <input 
+              id="contrasena" 
+              type="password" 
+              className={`form-control ${errores.contrasena ? 'is-invalid' : ''}`}
+              value={contrasena}
+              onChange={(e) => setContrasena(e.target.value)} 
+            />
+            {errores.contrasena && <div className="invalid-feedback">{errores.contrasena}</div>}
+          </div>
 
-          <button type="submit" disabled={cargando} style={{ marginTop: 16, padding: "10px 32px" }}>
+          {errorLogin && (
+            <div className="alert alert-danger py-2" role="alert">
+              {errorLogin}
+            </div>
+          )}
+
+          <button type="submit" className="btn btn-primary w-100 py-2 fw-bold" disabled={cargando}>
             {cargando ? "Ingresando..." : "Ingresar"}
           </button>
-
-          <p style={{ marginTop: 24 }}>Al ingresar, el sistema lo redirige a la pantalla según su rol.</p>
         </form>
+
+        <p className="text-center text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+          Al ingresar, el sistema lo redirige a la pantalla según su rol.
+        </p>
       </div>
     </div>
   );

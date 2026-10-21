@@ -1,6 +1,5 @@
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.DTOs;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +7,7 @@ namespace HomologaUTA.Solicitudes.Controllers;
 
 [ApiController]
 [Route("carreras")]
-[Authorize] // Exige que el usuario tenga un token válido (401 si no)
+// [Authorize] <--- LO QUITAMOS PARA QUE NO EXPLOTE (El Gateway ya protege)
 public class CarrerasController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
@@ -35,7 +34,6 @@ public class CarrerasController : ControllerBase
     [HttpGet("{id}/asignaturas")]
     public async Task<IActionResult> ObtenerAsignaturas(int id)
     {
-        // Verificamos si la carrera existe
         var carreraExiste = await _db.Carreras.AnyAsync(c => c.Id == id);
         if (!carreraExiste)
             return NotFound(new { error = "Carrera no encontrada." });

@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
- var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 //---------------------------------------------------------------
 // 1) YARP: las rutas y destinos viven en yarp.json
@@ -19,8 +19,6 @@ builder.Services.AddReverseProxy()
 
 // ---------------------------------------------------------------
 // 2) JWT: el Gateway solo valida el token; lo emite el servicio de autenticación.
-//    Issuer, Audience, Key y el nombre del claim de rol ("role")
-//    deben ser idénticos a los que use el servicio de autenticación.
 // ---------------------------------------------------------------
 var jwt = builder.Configuration.GetSection("Jwt");
 var key = builder.Configuration["JWT_SECRET"] ?? jwt["Key"]
@@ -49,9 +47,7 @@ builder.Services
     });
 
 // ---------------------------------------------------------------
-// 3) Políticas de autorización por rol (las usa AuthorizationPolicy en yarp.json).
-//    La política de respaldo exige usuario autenticado: lo que no se
-//    marque como "Anonymous" queda protegido.
+// 3) Políticas de autorización por rol
 // ---------------------------------------------------------------
 builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
@@ -63,31 +59,30 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("administrador", p => p.RequireRole("ADMINISTRADOR"));
 
 // ---------------------------------------------------------------
-// 4) CORS: permite que el frontend React llame al Gateway desde otro origen
+// 4) CORS: FORZADO PARA EL FRONTEND
 // ---------------------------------------------------------------
-var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? Array.Empty<string>();
+var origins = new[] { "http://localhost:3000", "http://127.0.0.1:3000" };
 builder.Services.AddCors(options =>
     options.AddPolicy("frontend", policy => policy
         .WithOrigins(origins)
         .AllowAnyHeader()
-        .AllowAnyMethod()));
+        .AllowAnyMethod()
+        .AllowCredentials()));
 
 // ---------------------------------------------------------------
-// 5) Cliente HTTP para consultar el /health de cada servicio (máx. 2 s por servicio)
+// 5) Cliente HTTP para consultar el /health de cada servicio
 // ---------------------------------------------------------------
 builder.Services.AddHttpClient("health", client => client.Timeout = TimeSpan.FromSeconds(2));
 
 var app = builder.Build();
 
+// IMPORTANTE: UseCors debe ir antes de Authentication y Authorization
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
 // ---------------------------------------------------------------
-// GET /health: estado de cada servicio, consultado desde el Gateway.
-// Es público (lo usa la pantalla "Estado del sistema").
-// Siempre responde 200: si un servicio no contesta, aparece "Sin respuesta"
-// y los demás siguen "En línea".
+// GET /health
 // ---------------------------------------------------------------
 app.MapGet("/health", async (IHttpClientFactory factory, IConfiguration config) =>
 {
@@ -119,7 +114,7 @@ app.MapReverseProxy();
 
 app.Run();
 
-// Tipos auxiliares (deben ir después de las instrucciones de nivel superior)
+// Tipos auxiliares
 public class ServiceTarget
 {
     public string Name { get; set; } = "";

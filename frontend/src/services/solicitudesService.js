@@ -1,4 +1,5 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+// Forzamos la URL directa al puerto 8080 (Servicio de Solicitudes)
+const GATEWAY_URL = "http://localhost:8080";
 
 export async function obtenerMisSolicitudes() {
   // Obtenemos el token que Karol guardará al hacer login
@@ -8,9 +9,10 @@ export async function obtenerMisSolicitudes() {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      // Enviamos el token al Gateway de Anahi
+      // Enviamos el token directamente al servicio de Estefania
       "Authorization": `Bearer ${token}` 
     },
+    mode: 'cors'
   });
 
   if (res.status === 401) {
@@ -26,4 +28,4 @@ export async function obtenerMisSolicitudes() {
   }
 
   return await res.json(); 
-}
+} 

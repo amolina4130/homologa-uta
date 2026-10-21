@@ -25,12 +25,12 @@
     "Clusters": {
       "auth": {
         "Destinations": {
-          "d1": { "Address": "http://localhost:5001/" }
+          "d1": { "Address": "http://auth-service:8080/" }
         }
       },
       "solicitudes": {
         "Destinations": {
-          "d1": { "Address": "http://localhost:5002/" }
+          "d1": { "Address": "http://solicitudes-service:8080/" }
         }
       }
     }
