@@ -2,8 +2,11 @@ using Xunit;
 using Microsoft.EntityFrameworkCore;
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.Models;
+using HomologaUTA.Solicitudes.Controllers;
+using HomologaUTA.Solicitudes.DTOs;
+using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HomologaUTA.Solicitudes.Tests
@@ -19,17 +22,25 @@ namespace HomologaUTA.Solicitudes.Tests
         }
 
         [Fact]
-        public void Validacion_CarreraOrigenIgualADestino_DebeSerInvalido()
+        public async Task Validacion_CarreraOrigenIgualADestino_DebeDevolverBadRequest()
         {
             // 1. Preparar
-            int carreraOrigenId = 1;
-            int carreraDestinoId = 1;
+            using var context = GetInMemoryDbContext();
+            var controller = new SolicitudesController(context);
+            
+            var request = new SolicitudRequest
+            {
+                Tipo = "Cambio de carrera",
+                CarreraOrigenId = 1,
+                CarreraDestinoId = 1, // Carreras iguales (esto debe fallar)
+                AsignaturasIds = new List<int> { 1, 2 }
+            };
 
-            // 2. Actuar
-            bool esInvalido = (carreraOrigenId == carreraDestinoId);
+            // 2. Actuar (Llamamos al método real del controlador)
+            var result = await controller.CrearSolicitud(request);
 
-            // 3. Afirmar
-            Assert.True(esInvalido, "La validación debería rechazar solicitudes donde la carrera de origen y destino son iguales.");
+            // 3. Afirmar (Verificamos que devuelva un 400 Bad Request)
+            Assert.IsType<BadRequestObjectResult>(result);
         }
 
         [Fact]
@@ -37,21 +48,17 @@ namespace HomologaUTA.Solicitudes.Tests
         {
             // 1. Preparar
             using var context = GetInMemoryDbContext();
-            
-            // Ahora usamos los correos, como lo definió Anahi en el modelo
             var correoEstudiante1 = "estudiante1@uta.edu.ec";
             var correoEstudiante2 = "estudiante2@uta.edu.ec";
-
+            
             context.Solicitudes.Add(new Solicitud { Id = 1, EstudianteCorreo = correoEstudiante1, Tipo = "Cambio de carrera" });
             context.Solicitudes.Add(new Solicitud { Id = 2, EstudianteCorreo = correoEstudiante2, Tipo = "Homologación" });
             await context.SaveChangesAsync();
 
             // 2. Actuar
-            // Simulamos la consulta filtrando por el correo del estudiante
             var solicitudesEstudiante1 = await context.Solicitudes
                 .Where(s => s.EstudianteCorreo == correoEstudiante1)
                 .ToListAsync();
-
             var solicitudesEstudiante2 = await context.Solicitudes
                 .Where(s => s.EstudianteCorreo == correoEstudiante2)
                 .ToListAsync();
