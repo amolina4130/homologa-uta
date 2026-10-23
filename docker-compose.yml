@@ -21,11 +21,12 @@ services:
       context: ./services/autenticacion
       dockerfile: Dockerfile
     container_name: homologa_auth
+    restart: always  # <--- Importante para que no se caiga si SQL tarda en arrancar
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_AUTH};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       - JWT_SECRET=${JWT_SECRET}
     ports:
-      - "5001:8080" # Mapea el puerto 5001 de tu PC al 8080 interno de .NET
+      - "5001:8080"
     depends_on:
       - sqlserver
     networks:
@@ -37,10 +38,11 @@ services:
       context: ./services/solicitudes
       dockerfile: Dockerfile
     container_name: homologa_solicitudes
+    restart: always  # <--- AGREGA ESTO
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_SOLICITUDES};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
-      - "5002:8080" # Mapea el puerto 5002 de tu PC al 8080 interno
+      - "5002:8080"
     depends_on:
       - sqlserver
     networks:
@@ -52,10 +54,11 @@ services:
       context: ./services/documentos
       dockerfile: Dockerfile
     container_name: homologa_documentos
+    restart: always  # <--- AGREGA ESTO
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_DOCUMENTOS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
-      - "5003:8080" # Mapea el puerto 5003 de tu PC al 8080 interno
+      - "5003:8080"
     volumes:
       - pdf_data:/app/pdfs
     depends_on:
@@ -69,9 +72,9 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: homologa_gateway
+    restart: always  # <--- AGREGA ESTO
     environment:
       - JWT_SECRET=${JWT_SECRET}
-      - Cors__Origins__0=http://localhost:3000  # <--- AGREGA ESTA LÍNEA AQUÍ
     ports:
       - "8080:8080"
     depends_on:
@@ -87,19 +90,18 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: homologa_frontend
+    restart: always  # <--- AGREGA ESTO
     ports:
-      - "3000:80" # Nginx usa el puerto 80 internamente
+      - "3000:80"
     depends_on:
       - gateway
     networks:
       - homologa_network
 
-# Volúmenes para persistencia de datos
 volumes:
   sql_data:
   pdf_data:
 
-# Red interna para que los contenedores se comuniquen entre sí
 networks:
   homologa_network:
     driver: bridge
