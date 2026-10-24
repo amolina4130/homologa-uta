@@ -20,6 +20,16 @@
         "ClusterId": "solicitudes",
         "AuthorizationPolicy": "estudiante",
         "Match": { "Path": "/solicitudes/{**catch-all}" }
+      },
+      "reglas-consulta": {
+        "ClusterId": "reglas",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "GET" ] }
+      },
+      "reglas-modificar": {
+        "ClusterId": "reglas",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
       }
     },
     "Clusters": {
@@ -31,6 +41,11 @@
       "solicitudes": {
         "Destinations": {
           "d1": { "Address": "http://solicitudes-service:8080/" }
+        }
+      },
+      "reglas": {
+        "Destinations": {
+          "d1": { "Address": "http://reglas-service:8080/" }
         }
       }
     }
