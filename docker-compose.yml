@@ -21,7 +21,7 @@ services:
       context: ./services/autenticacion
       dockerfile: Dockerfile
     container_name: homologa_auth
-    restart: always  # <--- Importante para que no se caiga si SQL tarda en arrancar
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_AUTH};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       - JWT_SECRET=${JWT_SECRET}
@@ -38,7 +38,7 @@ services:
       context: ./services/solicitudes
       dockerfile: Dockerfile
     container_name: homologa_solicitudes
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_SOLICITUDES};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
@@ -54,7 +54,7 @@ services:
       context: ./services/documentos
       dockerfile: Dockerfile
     container_name: homologa_documentos
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_DOCUMENTOS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
@@ -72,7 +72,7 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: homologa_gateway
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - JWT_SECRET=${JWT_SECRET}
     ports:
@@ -90,7 +90,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: homologa_frontend
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     ports:
       - "3000:80"
     depends_on:
@@ -98,9 +98,36 @@ services:
     networks:
       - homologa_network
 
+  # 7. RabbitMQ (Bus de Eventos)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: homologa_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - homologa_network
+
+  # 8. Ollama (Agente de IA)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: homologa_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - homologa_network
+
 volumes:
   sql_data:
   pdf_data:
+  ollama_data:
 
 networks:
   homologa_network:
