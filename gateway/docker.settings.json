@@ -6,6 +6,9 @@
       },
       "solicitudes": {
         "Destinations": { "d1": { "Address": "http://solicitudes-service:8080/" } }
+      },
+      "reglas": {
+        "Destinations": { "d1": { "Address": "http://reglas-service:8080/" } }
       }
     }
   },
@@ -13,7 +16,8 @@
     "Services": [
       { "Name": "Servicio de autenticación", "Url": "http://auth-service:8080/health" },
       { "Name": "Servicio de solicitudes",   "Url": "http://solicitudes-service:8080/health" },
-      { "Name": "Servicio de documentos",    "Url": "http://documentos-service:8080/health" }
+      { "Name": "Servicio de documentos",    "Url": "http://documentos-service:8080/health" },
+      { "Name": "Servicio de reglas",        "Url": "http://reglas-service:8080/health" }
     ]
   }
 }
