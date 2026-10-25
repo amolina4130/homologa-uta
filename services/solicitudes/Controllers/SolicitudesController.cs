@@ -1,6 +1,7 @@
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.DTOs;
 using HomologaUTA.Solicitudes.Models;
+using HomologaUTA.Solicitudes.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -13,10 +14,12 @@ namespace HomologaUTA.Solicitudes.Controllers;
 public class SolicitudesController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
+    private readonly ReglasClient _reglasClient; // NUEVO
 
-    public SolicitudesController(SolicitudesDbContext db)
+    public SolicitudesController(SolicitudesDbContext db, ReglasClient reglasClient) // NUEVO: agregamos reglasClient
     {
         _db = db;
+        _reglasClient = reglasClient; // NUEVO
     }
 
     [HttpPost]
@@ -30,6 +33,9 @@ public class SolicitudesController : ControllerBase
 
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
+
+        // NUEVO: Consultamos las reglas activas al servicio gRPC
+        var reglasActivas = await _reglasClient.ObtenerReglasActivasAsync();
 
         // Como quitamos el Authorize, buscamos el correo de forma segura.
         // Si el token no llega, usamos uno de prueba para que no explote.
