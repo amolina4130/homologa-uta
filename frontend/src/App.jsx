@@ -1,3 +1,4 @@
+import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
+            <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
           {/* Redirección por defecto */}
