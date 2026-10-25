@@ -103,7 +103,7 @@ export default function AdjuntarDocumentos() {
           ))}
         </select>
 
-        <div style={{ border: "2px solid #000", padding: 20, marginBottom: 20 }}>
+        <div className="p-3 mb-3" style={{ border: "2px solid #000" }}>
           <h3 style={{ marginTop: 0 }}>Nuevo documento</h3>
 
           <label htmlFor="tipo"><strong>Tipo de documento</strong></label>
@@ -125,7 +125,7 @@ export default function AdjuntarDocumentos() {
             <p style={{ border: "1px dashed #000", padding: 12 }}>✖ {error}</p>
           )}
 
-          <button onClick={subir} disabled={cargando || !archivo} style={{ padding: "10px 20px", marginTop: 10 }}>
+          <button onClick={subir} disabled={cargando || !archivo} className="btn btn-primary mt-2">
             {cargando ? "Subiendo..." : "Adjuntar documento"}
           </button>
         </div>
