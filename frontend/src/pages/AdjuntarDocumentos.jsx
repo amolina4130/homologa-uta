@@ -76,7 +76,6 @@ export default function AdjuntarDocumentos() {
     }
   }
 
-  const campo = { width: "100%", padding: 10, boxSizing: "border-box", border: "2px solid #000", marginBottom: 15 };
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "sans-serif", border: "2px solid #000" }}>
