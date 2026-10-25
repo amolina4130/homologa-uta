@@ -21,7 +21,7 @@ services:
       context: ./services/autenticacion
       dockerfile: Dockerfile
     container_name: homologa_auth
-    restart: always  # <--- Importante para que no se caiga si SQL tarda en arrancar
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_AUTH};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       - JWT_SECRET=${JWT_SECRET}
@@ -38,7 +38,7 @@ services:
       context: ./services/solicitudes
       dockerfile: Dockerfile
     container_name: homologa_solicitudes
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_SOLICITUDES};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
@@ -54,7 +54,7 @@ services:
       context: ./services/documentos
       dockerfile: Dockerfile
     container_name: homologa_documentos
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_DOCUMENTOS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
@@ -65,6 +65,7 @@ services:
       - sqlserver
     networks:
       - homologa_network
+
   # 5. Servicio de Reglas
   reglas-service:
     build:
@@ -80,8 +81,8 @@ services:
       - sqlserver
     networks:
       - homologa_network
-    
-    # 6. Servicio de Homologación
+
+  # 6. Servicio de Homologación
   homologacion-service:
     build:
       context: ./services/homologacion
@@ -105,7 +106,7 @@ services:
       context: ./gateway
       dockerfile: Dockerfile
     container_name: homologa_gateway
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     environment:
       - JWT_SECRET=${JWT_SECRET}
     ports:
@@ -114,6 +115,8 @@ services:
       - auth-service
       - solicitudes-service
       - documentos-service
+      - reglas-service
+      - homologacion-service
     networks:
       - homologa_network
 
@@ -123,7 +126,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: homologa_frontend
-    restart: always  # <--- AGREGA ESTO
+    restart: always
     ports:
       - "3000:80"
     depends_on:
