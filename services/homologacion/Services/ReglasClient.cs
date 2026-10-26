@@ -9,7 +9,7 @@ public class ReglasClient
 
     public ReglasClient(IConfiguration configuration)
     {
-        _urlServicioReglas = configuration["ReglasService:Url"] ?? "http://localhost:5001";
+        _urlServicioReglas = configuration["ReglasService:Url"] ?? "http://localhost:5004";
     }
 
     public async Task<List<ReglaDto>> ObtenerReglasActivasAsync()

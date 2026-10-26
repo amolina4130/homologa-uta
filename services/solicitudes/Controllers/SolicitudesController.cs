@@ -1,7 +1,6 @@
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.DTOs;
 using HomologaUTA.Solicitudes.Models;
-using HomologaUTA.Solicitudes.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -10,16 +9,15 @@ namespace HomologaUTA.Solicitudes.Controllers;
 
 [ApiController]
 [Route("solicitudes")]
-// [Authorize] <--- LO QUITAMOS PARA QUE NO EXPLOTE
+// [Authorize] <--- Lo dejamos comentado como lo tenías para tus pruebas
 public class SolicitudesController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
-    private readonly ReglasClient _reglasClient; // NUEVO
 
-    public SolicitudesController(SolicitudesDbContext db, ReglasClient reglasClient) // NUEVO: agregamos reglasClient
+    // 1. Quitamos la inyección de ReglasClient
+    public SolicitudesController(SolicitudesDbContext db)
     {
         _db = db;
-        _reglasClient = reglasClient; // NUEVO
     }
 
     [HttpPost]
@@ -34,11 +32,8 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        // NUEVO: Consultamos las reglas activas al servicio gRPC
-        var reglasActivas = await _reglasClient.ObtenerReglasActivasAsync();
+        // 2. Eliminamos la llamada a _reglasClient.ObtenerReglasActivasAsync()
 
-        // Como quitamos el Authorize, buscamos el correo de forma segura.
-        // Si el token no llega, usamos uno de prueba para que no explote.
         var correo = User.FindFirstValue(ClaimTypes.Email) 
                      ?? User.FindFirstValue("email") 
                      ?? "estudiante@uta.edu.ec"; // Fallback para pruebas
