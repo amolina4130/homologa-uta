@@ -15,21 +15,7 @@ services:
     networks:
       - homologa_network
 
-  # 2. Bus de Eventos (RabbitMQ)
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: homologa_rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"   # Puerto para la comunicación entre microservicios
-      - "15672:15672" # Puerto para el panel de administración web
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-    networks:
-      - homologa_network
-
-  # 3. Servicio de Autenticación
+  # 2. Servicio de Autenticación
   auth-service:
     build:
       context: ./services/autenticacion
@@ -46,7 +32,7 @@ services:
     networks:
       - homologa_network
 
-  # 4. Servicio de Solicitudes
+  # 3. Servicio de Solicitudes
   solicitudes-service:
     build:
       context: ./services/solicitudes
@@ -63,7 +49,7 @@ services:
     networks:
       - homologa_network
 
-  # 5. Servicio de Documentos
+  # 4. Servicio de Documentos
   documentos-service:
     build:
       context: ./services/documentos
@@ -82,35 +68,37 @@ services:
     networks:
       - homologa_network
 
-  # 6. Gateway (YARP)
-  gateway:
+  # 5. Servicio de Reglas
+  reglas-service:
     build:
-      context: ./gateway
+      context: ./services/reglas
       dockerfile: Dockerfile
-    container_name: homologa_gateway
+    container_name: homologa_reglas
     restart: always
     environment:
-      - JWT_SECRET=${JWT_SECRET}
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_REGLAS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
     ports:
-      - "8080:8080"
+      - "5004:8080"
     depends_on:
-      - auth-service
-      - solicitudes-service
-      - documentos-service
+      - sqlserver
     networks:
       - homologa_network
 
-  # 7. Frontend (React + Vite + Nginx)
-  frontend:
+  # 6. Servicio de Homologación
+  homologacion-service:
     build:
-      context: ./frontend
+      context: ./services/homologacion
       dockerfile: Dockerfile
-    container_name: homologa_frontend
+    container_name: homologa_homologacion
     restart: always
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_HOMOLOGACION};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+      - JWT_SECRET=${JWT_SECRET}
     ports:
-      - "3000:80"
+      - "5005:8080"
     depends_on:
-      - gateway
+      - sqlserver
+      - reglas-service
     networks:
       - homologa_network
 
@@ -137,6 +125,40 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    networks:
+      - homologa_network
+
+  # 9. Gateway (YARP)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: homologa_gateway
+    restart: always
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - solicitudes-service
+      - documentos-service
+      - reglas-service
+      - homologacion-service
+    networks:
+      - homologa_network
+
+  # 10. Frontend (React + Vite + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: homologa_frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
     networks:
       - homologa_network
 
