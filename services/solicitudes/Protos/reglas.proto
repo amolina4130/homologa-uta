@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option csharp_namespace = "HomologaUTA.Reglas.Grpc";
+
+package reglas;
+
+service ReglasService {
+  rpc ObtenerReglasActivas (ReglasActivasRequest) returns (ReglasActivasResponse);
+}
+
+message ReglasActivasRequest {}
+
+message ReglaDto {
+  int32 id = 1;
+  string codigo = 2;
+  string descripcion = 3;
+  string fuente = 4;
+  string umbral = 5; 
+  bool activa = 6;
+}
+
+message ReglasActivasResponse {
+  repeated ReglaDto reglas = 1;
+}

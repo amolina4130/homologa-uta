@@ -15,5 +15,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
+  
+   <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="Protos\reglas.proto" GrpcServices="Server" />
+  </ItemGroup>
 
 </Project>
