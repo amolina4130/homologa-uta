@@ -11,7 +11,9 @@ export default function Menu() {
     "Nueva solicitud": "/nueva-solicitud",
     "Mis solicitudes": "/mis-solicitudes",
     "Carreras y mallas": "/carreras",
-    "Estado del sistema": "/estado"
+    "Estado del sistema": "/estado",
+    "Reglas": "/reglas",
+    "Panel Coordinador": "/panel-coordinador"
   };
 
   const opciones = {
@@ -19,7 +21,7 @@ export default function Menu() {
     COORDINADOR: ["Inicio", "Solicitudes pendientes", "Carreras y mallas"],
     SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Carreras y mallas"],
+    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Carreras y mallas"],
   };
 
   const misOpciones = opciones[rol] || [];

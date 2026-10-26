@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function NuevaSolicitud() {
@@ -28,9 +28,11 @@ export default function NuevaSolicitud() {
   // 2. Cuando cambia la carrera de origen, cargar sus asignaturas
   useEffect(() => {
     if (!origen) {
-      setAsignaturasDisponibles([]);
-      setSeleccionadas([]);
-      return;
+      const timer = setTimeout(() => {
+        setAsignaturasDisponibles([]);
+        setSeleccionadas([]);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     
     const token = localStorage.getItem("token");
@@ -71,7 +73,7 @@ export default function NuevaSolicitud() {
           tipo, 
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
-          asignaturasIds: seleccionadas // Enviamos los IDs reales seleccionados
+          asignaturasIds: seleccionadas
         })
       });
       
