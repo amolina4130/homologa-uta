@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Menu from "./components/Menu";
 import RutaProtegida from "./components/RutaProtegida";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import PanelReglas from "./pages/PanelReglas";
 
 // Importamos las pantallas adicionales (asegúrate de que estos archivos existan en tu carpeta pages)
 import MisSolicitudes from "./pages/MisSolicitudes"; 
@@ -34,7 +35,6 @@ export default function App() {
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
             
-            {/* AGREGAMOS LAS RUTAS QUE FALTABAN */}
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
