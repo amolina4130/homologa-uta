@@ -10,12 +10,13 @@ export default function Menu() {
     "Inicio": "/inicio",
     "Nueva solicitud": "/nueva-solicitud",
     "Mis solicitudes": "/mis-solicitudes",
+    "Adjuntar documentos": "/adjuntar-documentos",
     "Carreras y mallas": "/carreras",
     "Estado del sistema": "/estado"
   };
 
   const opciones = {
-    ESTUDIANTE: ["Inicio", "Nueva solicitud", "Mis solicitudes", "Carreras y mallas"],
+    ESTUDIANTE: ["Inicio", "Nueva solicitud", "Mis solicitudes", "Adjuntar documentos", "Carreras y mallas"],
     COORDINADOR: ["Inicio", "Solicitudes pendientes", "Carreras y mallas"],
     SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
