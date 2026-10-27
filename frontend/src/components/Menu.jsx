@@ -29,7 +29,7 @@ export default function Menu() {
   const handleLogout = () => {
     cerrarSesion();
     navigate("/login");
-  };
+  };  
 
   return (
     // Cambiamos bg-dark por bg-primary (Azul Bootstrap) y agregamos shadow

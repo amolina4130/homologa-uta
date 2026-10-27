@@ -8,12 +8,19 @@ const getAuthHeaders = () => {
   };
 };
 
+// Función auxiliar para extraer los datos de la respuesta del backend
+const extraerDatos = (json) => {
+  // Si el backend devuelve { data: [...] }, retornamos data; si no, el json directo
+  return json.data !== undefined ? json.data : json;
+};
+
 export async function obtenerSolicitudesPendientes() {
   const res = await fetch(`${GATEWAY_URL}/solicitudes/pendientes`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Error al cargar solicitudes pendientes");
-  return await res.json();
+  const json = await res.json();
+  return extraerDatos(json); // <-- Siempre devuelve un arreglo
 }
 
 export async function obtenerDetalleSolicitud(id) {
@@ -21,7 +28,8 @@ export async function obtenerDetalleSolicitud(id) {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Error al cargar el detalle");
-  return await res.json();
+  const json = await res.json();
+  return extraerDatos(json); // <-- Siempre devuelve el objeto
 }
 
 export async function emitirInforme(id, decisiones) {
@@ -31,5 +39,6 @@ export async function emitirInforme(id, decisiones) {
     body: JSON.stringify({ decisiones }),
   });
   if (!res.ok) throw new Error("Error al emitir el informe");
-  return await res.json();
+  const json = await res.json();
+  return extraerDatos(json);
 }

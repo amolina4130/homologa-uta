@@ -30,17 +30,21 @@ export default function App() {
           {/* Rutas públicas */}
           <Route path="/login" element={<Login />} />
 
-          {/* Rutas protegidas */}
+          {/* Rutas protegidas generales (cualquier rol logueado) */}
           <Route element={<RutaProtegida />}>
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
-            
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
-            
-            {/* Rutas de tus compañeras y la tuya */}
+          </Route>
+
+          {/* Rutas restringidas por rol */}
+          <Route element={<RutaProtegida rolPermitido="COORDINADOR" />}>
             <Route path="/panel-coordinador" element={<><Menu /><PanelCoordinador /></>} />
+          </Route>
+
+          <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
           </Route>
 
