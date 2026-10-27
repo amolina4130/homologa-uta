@@ -1,3 +1,4 @@
+import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
@@ -46,6 +47,7 @@ export default function App() {
 
           <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
+            <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
           {/* Redirección por defecto */}
