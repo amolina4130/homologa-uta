@@ -9,11 +9,12 @@ namespace HomologaUTA.Solicitudes.Controllers;
 
 [ApiController]
 [Route("solicitudes")]
-// [Authorize] <--- LO QUITAMOS PARA QUE NO EXPLOTE
+// [Authorize] <--- Lo dejamos comentado como lo tenías para tus pruebas
 public class SolicitudesController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
 
+    // 1. Quitamos la inyección de ReglasClient
     public SolicitudesController(SolicitudesDbContext db)
     {
         _db = db;
@@ -31,8 +32,8 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        // Como quitamos el Authorize, buscamos el correo de forma segura.
-        // Si el token no llega, usamos uno de prueba para que no explote.
+        // 2. Eliminamos la llamada a _reglasClient.ObtenerReglasActivasAsync()
+
         var correo = User.FindFirstValue(ClaimTypes.Email) 
                      ?? User.FindFirstValue("email") 
                      ?? "estudiante@uta.edu.ec"; // Fallback para pruebas

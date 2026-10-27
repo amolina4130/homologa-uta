@@ -15,7 +15,21 @@ services:
     networks:
       - homologa_network
 
-  # 2. Servicio de Autenticación
+  # 2. Bus de Eventos (RabbitMQ)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: homologa_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"   # Puerto para la comunicación entre microservicios
+      - "15672:15672" # Puerto para el panel de administración web
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - homologa_network
+
+  # 3. Servicio de Autenticación
   auth-service:
     build:
       context: ./services/autenticacion
@@ -32,7 +46,7 @@ services:
     networks:
       - homologa_network
 
-  # 3. Servicio de Solicitudes
+  # 4. Servicio de Solicitudes
   solicitudes-service:
     build:
       context: ./services/solicitudes
@@ -45,10 +59,11 @@ services:
       - "5002:8080"
     depends_on:
       - sqlserver
+      - rabbitmq
     networks:
       - homologa_network
 
-  # 4. Servicio de Documentos
+  # 5. Servicio de Documentos
   documentos-service:
     build:
       context: ./services/documentos
@@ -63,6 +78,7 @@ services:
       - pdf_data:/app/pdfs
     depends_on:
       - sqlserver
+      - rabbitmq
     networks:
       - homologa_network
 
@@ -134,9 +150,36 @@ services:
     networks:
       - homologa_network
 
+  # 7. RabbitMQ (Bus de Eventos)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: homologa_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - homologa_network
+
+  # 8. Ollama (Agente de IA)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: homologa_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - homologa_network
+
 volumes:
   sql_data:
   pdf_data:
+  ollama_data:
 
 networks:
   homologa_network:
