@@ -6,5 +6,7 @@
 | M-02 | Inicio de sesión | HU-02 | /login |
 | M-03 | Carreras y mallas | HU-03 | /carreras |
 | M-04 | Nueva solicitud | HU-04 | /solicitudes/nueva |
+| M-05 | Adjuntar documentos | HU-05 | /adjuntar-documentos |
+| M-08 | Panel del Coordinador | HU-10 (TA-10.1) |
 
 La pestaña Mis solicitudes y la pantalla de inicio de cada rol se programan sin mockup propio (ver la planificación).
