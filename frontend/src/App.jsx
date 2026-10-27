@@ -5,12 +5,13 @@ import Login from "./pages/Login";
 import Menu from "./components/Menu";
 import RutaProtegida from "./components/RutaProtegida";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import PanelCoordinador from "./pages/PanelCoordinador";
 import PanelReglas from "./pages/PanelReglas";
 
-// Importamos las pantallas adicionales (asegúrate de que estos archivos existan en tu carpeta pages)
+// Importamos las pantallas adicionales
 import MisSolicitudes from "./pages/MisSolicitudes"; 
-import NuevaSolicitud from "./pages/NuevaSolicitud"; // Si Karol no la hizo, crea un archivo simple
-import Carreras from "./pages/Carreras";             // Si Karol no la hizo, crea un archivo simple
+import NuevaSolicitud from "./pages/NuevaSolicitud";
+import Carreras from "./pages/Carreras";
 
 function Inicio() {
   const { rol } = useAuth();
@@ -30,14 +31,22 @@ export default function App() {
           {/* Rutas públicas */}
           <Route path="/login" element={<Login />} />
 
-          {/* Rutas protegidas */}
+          {/* Rutas protegidas generales (cualquier rol logueado) */}
           <Route element={<RutaProtegida />}>
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
-            
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
+          </Route>
+
+          {/* Rutas restringidas por rol */}
+          <Route element={<RutaProtegida rolPermitido="COORDINADOR" />}>
+            <Route path="/panel-coordinador" element={<><Menu /><PanelCoordinador /></>} />
+          </Route>
+
+          <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
+            <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
             <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 

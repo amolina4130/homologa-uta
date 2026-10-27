@@ -12,7 +12,9 @@ export default function Menu() {
     "Mis solicitudes": "/mis-solicitudes",
     "Adjuntar documentos": "/adjuntar-documentos",
     "Carreras y mallas": "/carreras",
-    "Estado del sistema": "/estado"
+    "Estado del sistema": "/estado",
+    "Reglas": "/reglas",
+    "Panel Coordinador": "/panel-coordinador"
   };
 
   const opciones = {
@@ -20,7 +22,7 @@ export default function Menu() {
     COORDINADOR: ["Inicio", "Solicitudes pendientes", "Carreras y mallas"],
     SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Carreras y mallas"],
+    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Carreras y mallas"],
   };
 
   const misOpciones = opciones[rol] || [];
@@ -28,7 +30,7 @@ export default function Menu() {
   const handleLogout = () => {
     cerrarSesion();
     navigate("/login");
-  };
+  };  
 
   return (
     // Cambiamos bg-dark por bg-primary (Azul Bootstrap) y agregamos shadow
