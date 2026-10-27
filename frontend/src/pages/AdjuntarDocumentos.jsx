@@ -5,7 +5,6 @@ import ListaDocumentos from "../components/ListaDocumentos";
 
 const MENSAJE_RECHAZO = "El archivo no es un PDF o excede el tamaño máximo permitido. No se guardó.";
 
-// El código viaja al backend (va dentro del nombre del archivo, por eso sin espacios ni tildes)
 const TIPOS = [
   { codigo: "MALLA", etiqueta: "Malla curricular" },
   { codigo: "HISTORIAL", etiqueta: "Historial académico" },
@@ -21,7 +20,6 @@ export default function AdjuntarDocumentos() {
   const [claveInput, setClaveInput] = useState(0);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  // El backend aún no tiene GET de documentos: la lista guarda lo subido en esta sesión
   const [documentosPorSolicitud, setDocumentosPorSolicitud] = useState({});
 
   useEffect(() => {
@@ -61,21 +59,20 @@ export default function AdjuntarDocumentos() {
         nombre: archivo.name,
         tipo: etiqueta,
         tamano: `${(archivo.size / (1024 * 1024)).toFixed(1)} MB`,
-        estado: "CARGADO",
+        estado: "PROCEADO",
       };
       setDocumentosPorSolicitud((prev) => ({
         ...prev,
         [solicitudId]: [...(prev[solicitudId] ?? []), nuevo],
       }));
       setArchivo(null);
-      setClaveInput((n) => n + 1); // limpia el campo de archivo
+      setClaveInput((n) => n + 1);
     } catch (err) {
       setError(err.message || MENSAJE_RECHAZO);
     } finally {
       setCargando(false);
     }
   }
-
 
   return (
     <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "sans-serif", border: "2px solid #000" }}>
@@ -90,7 +87,7 @@ export default function AdjuntarDocumentos() {
         <label htmlFor="solicitud"><strong>Solicitud</strong></label>
         <select
           id="solicitud"
-          style={campo}
+          className="form-control mb-3"
           value={solicitudId}
           onChange={(e) => { setSolicitudId(e.target.value); setError(""); }}
         >
@@ -106,7 +103,7 @@ export default function AdjuntarDocumentos() {
           <h3 style={{ marginTop: 0 }}>Nuevo documento</h3>
 
           <label htmlFor="tipo"><strong>Tipo de documento</strong></label>
-          <select id="tipo" style={campo} value={tipoCodigo} onChange={(e) => setTipoCodigo(e.target.value)}>
+          <select id="tipo" className="form-control mb-3" value={tipoCodigo} onChange={(e) => setTipoCodigo(e.target.value)}>
             {TIPOS.map((t) => (
               <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
             ))}
@@ -114,7 +111,7 @@ export default function AdjuntarDocumentos() {
 
           <label htmlFor="archivo"><strong>Archivo PDF</strong></label>
           <div>
-            <input key={claveInput} id="archivo" type="file" accept=".pdf" onChange={cambiarArchivo} />
+            <input key={claveInput} id="archivo" type="file" className="form-control mb-3" accept=".pdf" onChange={cambiarArchivo} />
           </div>
           <p style={{ fontSize: 14 }}>
             Solo se aceptan archivos PDF. Tamaño máximo configurable (por ejemplo, 10 MB).
