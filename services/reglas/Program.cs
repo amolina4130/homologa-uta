@@ -27,6 +27,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+builder.Services.AddGrpc();
 // --- 3. BASE DE DATOS ---
 builder.Services.AddDbContext<ReglasDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -37,7 +38,7 @@ app.UseCors("AllowAll");
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapControllers();
-
+app.MapGrpcService<HomologaUTA.Reglas.Services.ReglasGrpcService>();
 
 // --- 4. MIGRACIONES Y DATOS SEMILLA ---
 using (var scope = app.Services.CreateScope())
