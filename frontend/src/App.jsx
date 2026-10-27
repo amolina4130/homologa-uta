@@ -1,3 +1,4 @@
+import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
@@ -42,6 +43,7 @@ export default function App() {
             {/* Rutas de tus compañeras y la tuya */}
             <Route path="/panel-coordinador" element={<><Menu /><PanelCoordinador /></>} />
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
+            <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
           {/* Redirección por defecto */}

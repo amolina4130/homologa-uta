@@ -82,7 +82,41 @@ services:
     networks:
       - homologa_network
 
-  # 6. Gateway (YARP)
+  # 5. Servicio de Reglas
+  reglas-service:
+    build:
+      context: ./services/reglas
+      dockerfile: Dockerfile
+    container_name: homologa_reglas
+    restart: always
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_REGLAS};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+    ports:
+      - "5004:8080"
+    depends_on:
+      - sqlserver
+    networks:
+      - homologa_network
+
+  # 6. Servicio de Homologación
+  homologacion-service:
+    build:
+      context: ./services/homologacion
+      dockerfile: Dockerfile
+    container_name: homologa_homologacion
+    restart: always
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_HOMOLOGACION};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "5005:8080"
+    depends_on:
+      - sqlserver
+      - reglas-service
+    networks:
+      - homologa_network
+
+  # 7. Gateway (YARP)
   gateway:
     build:
       context: ./gateway
@@ -97,10 +131,12 @@ services:
       - auth-service
       - solicitudes-service
       - documentos-service
+      - reglas-service
+      - homologacion-service
     networks:
       - homologa_network
 
-  # 7. Frontend (React + Vite + Nginx)
+  # 8. Frontend (React + Vite + Nginx)
   frontend:
     build:
       context: ./frontend
