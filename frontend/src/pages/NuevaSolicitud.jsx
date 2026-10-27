@@ -73,7 +73,7 @@ export default function NuevaSolicitud() {
           tipo, 
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
-          asignaturasIds: seleccionadas
+          asignaturasIds: seleccionadas 
         })
       });
       
