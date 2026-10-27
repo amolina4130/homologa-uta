@@ -3,10 +3,9 @@ import { useAuth } from "../context/AuthContext";
 import { jwtDecode } from "jwt-decode";
 import { useState } from "react";
 
-export default function RutaProtegida() {
-  const { token, cerrarSesion } = useAuth();
+export default function RutaProtegida({ rolPermitido }) { 
+  const { token, rol, cerrarSesion } = useAuth(); 
   
-  // Guardamos el tiempo actual en un estado inicial. Así ESLint no se queja.
   const [tiempoActual] = useState(() => Date.now() / 1000);
   
   let esValido = false;
@@ -14,7 +13,6 @@ export default function RutaProtegida() {
   if (token) {
     try {
       const decoded = jwtDecode(token);
-      
       if (decoded.exp && decoded.exp > tiempoActual) {
         esValido = true;
       }
@@ -26,6 +24,10 @@ export default function RutaProtegida() {
   if (!esValido) {
     if (token) cerrarSesion(); 
     return <Navigate to="/login" replace />;
+  }
+
+  if (rolPermitido && rol !== rolPermitido) {
+    return <Navigate to="/inicio" replace />;
   }
 
   return <Outlet />;
