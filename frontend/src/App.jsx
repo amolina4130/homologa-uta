@@ -1,17 +1,17 @@
-import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
 import Menu from "./components/Menu";
 import RutaProtegida from "./components/RutaProtegida";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import PanelCoordinador from "./pages/PanelCoordinador";
-import PanelReglas from "./pages/PanelReglas";
 
-// Importamos las pantallas adicionales
+// Importamos las pantallas
 import MisSolicitudes from "./pages/MisSolicitudes"; 
 import NuevaSolicitud from "./pages/NuevaSolicitud";
 import Carreras from "./pages/Carreras";
+import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
+import PanelReglas from "./pages/PanelReglas"; 
+import PanelCoordinador from "./pages/PanelCoordinador"; 
 
 function Inicio() {
   const { rol } = useAuth();
@@ -28,10 +28,10 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Rutas públicas */}
+          {/* Ruta pública */}
           <Route path="/login" element={<Login />} />
 
-          {/* Rutas protegidas generales (cualquier rol logueado) */}
+          {/* Rutas protegidas generales */}
           <Route element={<RutaProtegida />}>
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
@@ -47,6 +47,10 @@ export default function App() {
 
           <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
+          </Route>
+
+          {/* Ruta para adjuntar documentos */}
+          <Route element={<RutaProtegida />}>
             <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
