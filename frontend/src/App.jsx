@@ -11,7 +11,7 @@ import NuevaSolicitud from "./pages/NuevaSolicitud";
 import Carreras from "./pages/Carreras";
 import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import PanelReglas from "./pages/PanelReglas"; 
-import PanelCoordinador from "./pages/PanelCoordinador"; // Aseguramos que esté importado
+import PanelCoordinador from "./pages/PanelCoordinador"; 
 
 function Inicio() {
   const { rol } = useAuth();
@@ -38,7 +38,6 @@ export default function App() {
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
-            <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
           {/* Rutas restringidas por rol */}
@@ -48,6 +47,11 @@ export default function App() {
 
           <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
+          </Route>
+
+          {/* Ruta para adjuntar documentos */}
+          <Route element={<RutaProtegida />}>
+            <Route path="/adjuntar-documentos" element={<><Menu /><AdjuntarDocumentos /></>} />
           </Route>
 
           {/* Redirección por defecto */}
