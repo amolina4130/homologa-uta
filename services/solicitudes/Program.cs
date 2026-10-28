@@ -31,6 +31,8 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<SolicitudesDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddScoped<HomologaUTA.Solicitudes.Services.ReglasClient>();
+
 var app = builder.Build();
 
 // --- 4. USAR CORS ---

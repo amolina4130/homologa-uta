@@ -102,21 +102,7 @@ services:
     networks:
       - homologa_network
 
-  # 7. RabbitMQ (Bus de Eventos)
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: homologa_rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-    networks:
-      - homologa_network
-
-  # 8. Ollama (Agente de IA)
+  # 10. Ollama (Agente de IA)
   ollama:
     image: ollama/ollama:latest
     container_name: homologa_ollama

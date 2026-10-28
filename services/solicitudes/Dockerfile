@@ -15,10 +15,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Exponer el puerto por defecto de .NET (ellos lo mapearán en el compose)
+# Exponer el puerto por defecto de .NET
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "HomologaUTA.Solicitudes.dll"]
-
-# Ignorar la carpeta de pruebas al compilar
-RUN rm -rf HomologaUTA.Solicitudes.Tests
+ENTRYPOINT ["dotnet", "HomologaUTA.Homologacion.dll"]
