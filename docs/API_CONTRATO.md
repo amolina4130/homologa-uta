@@ -75,6 +75,7 @@ Petición:
 ```json
 {
   "tipo": "CAMBIO_CARRERA",
+  "modulo": "INTERNO",
   "carreraOrigenId": 1,
   "carreraDestinoId": 3,
   "asignaturaIds": [10, 11]
@@ -95,3 +96,12 @@ Reglas: todos los campos son obligatorios, al menos una asignatura, origen disti
 ```json
 [ { "id": 3, "numero": "0003", "fecha": "2026-10-20", "tipo": "CAMBIO_CARRERA", "origen": "Software", "destino": "Industrial", "estado": "REGISTRADA" } ]
 ```
+
+## Endpoints del Sprint 2 (Coordinador)
+
+| Método y ruta | Acceso | Historia | Pantalla |
+|---|---|---|---|
+| `GET /solicitudes/pendientes` | COORDINADOR | HU-10 | M-08 |
+| `GET /solicitudes/{id}/detalle` | COORDINADOR | HU-10 | M-08 |
+| `POST /solicitudes/{id}/informe` | COORDINADOR | HU-10 | M-08 |
+
