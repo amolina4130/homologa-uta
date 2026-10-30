@@ -1,3 +1,4 @@
+using HomologaUTA.Homologacion.Agents; 
 using HomologaUTA.Homologacion.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +21,7 @@ builder.Services.AddSwaggerGen(c =>
 // 2. Registrar el cliente de Ollama
 builder.Services.AddHttpClient<OllamaClient>();
 // 3. Registrar el Agente Interno
-builder.Services.AddScoped<Agents.AgenteInterno>();
+builder.Services.AddScoped<AgenteInterno>();
 var app = builder.Build();
 
 // 4. Configuración de la app
