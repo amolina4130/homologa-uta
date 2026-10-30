@@ -19,10 +19,11 @@ builder.Services.AddSwaggerGen(c =>
 
 // 2. Registrar el cliente de Ollama
 builder.Services.AddHttpClient<OllamaClient>();
-
+// 3. Registrar el Agente Interno
+builder.Services.AddScoped<Agents.AgenteInterno>();
 var app = builder.Build();
 
-// 3. Configuración de la app
+// 4. Configuración de la app
 app.UseSwagger();
 app.UseSwaggerUI();
 
