@@ -4,18 +4,34 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Comentarios XML para Swagger; se silencia el aviso de miembros sin comentario -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.32" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
-    
+
     <!-- PAQUETES NUEVOS PARA LA BASE DE DATOS -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+
+    <!-- Cliente gRPC del servicio de reglas (lo usa Services/ReglasClient.cs) -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.62.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.25.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.62.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copia de services/reglas/Protos/reglas.proto: el Dockerfile solo ve esta carpeta -->
+    <Protobuf Include="Protos\reglas.proto" GrpcServices="Client" />
   </ItemGroup>
 
   <ItemGroup>

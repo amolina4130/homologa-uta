@@ -30,6 +30,11 @@
         "ClusterId": "reglas",
         "AuthorizationPolicy": "administrador",
         "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
+      },
+      "homologacion": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/homologacion/{**catch-all}" }
       }
     },
     "Clusters": {
@@ -46,6 +51,11 @@
       "reglas": {
         "Destinations": {
           "d1": { "Address": "http://reglas-service:8080/" }
+        }
+      },
+      "homologacion": {
+        "Destinations": {
+          "d1": { "Address": "http://homologacion-service:8080/" }
         }
       }
     }
