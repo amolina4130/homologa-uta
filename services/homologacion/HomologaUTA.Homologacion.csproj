@@ -34,4 +34,13 @@
     <Protobuf Include="Protos\reglas.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Protobuf Include="Protos\reglas.proto" GrpcServices="Client" />
+  </ItemGroup>
+
+  <!-- Esta línea permite que el proyecto use el cliente de Ollama y HttpClient -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

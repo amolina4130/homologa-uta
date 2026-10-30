@@ -15,14 +15,14 @@ services:
     networks:
       - homologa_network
 
-  # 2. Bus de Eventos (RabbitMQ)
+  # 2. RabbitMQ (Bus de Eventos)
   rabbitmq:
     image: rabbitmq:3-management
     container_name: homologa_rabbitmq
     restart: always
     ports:
-      - "5672:5672"   # Puerto para la comunicación entre microservicios
-      - "15672:15672" # Puerto para el panel de administración web
+      - "5672:5672"
+      - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
@@ -82,7 +82,7 @@ services:
     networks:
       - homologa_network
 
-  # 5. Servicio de Reglas
+  # 6. Servicio de Reglas
   reglas-service:
     build:
       context: ./services/reglas
@@ -98,7 +98,7 @@ services:
     networks:
       - homologa_network
 
-  # 6. Servicio de Homologación
+  # 7. Servicio de Homologación
   homologacion-service:
     build:
       context: ./services/homologacion
@@ -108,15 +108,17 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_HOMOLOGACION};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       - JWT_SECRET=${JWT_SECRET}
+      - Ollama__Url=http://ollama:11434
     ports:
       - "5005:8080"
     depends_on:
       - sqlserver
       - reglas-service
+      - ollama
     networks:
       - homologa_network
 
-  # 7. Gateway (YARP)
+  # 8. Gateway (YARP)
   gateway:
     build:
       context: ./gateway
@@ -136,7 +138,7 @@ services:
     networks:
       - homologa_network
 
-  # 8. Frontend (React + Vite + Nginx)
+  # 9. Frontend (React + Vite + Nginx)
   frontend:
     build:
       context: ./frontend
@@ -150,21 +152,7 @@ services:
     networks:
       - homologa_network
 
-  # 7. RabbitMQ (Bus de Eventos)
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: homologa_rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-    networks:
-      - homologa_network
-
-  # 8. Ollama (Agente de IA)
+  # 10. Ollama (Agente de IA)
   ollama:
     image: ollama/ollama:latest
     container_name: homologa_ollama
