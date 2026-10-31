@@ -1,5 +1,4 @@
-using HomologaUTA.Homologacion.Services;
-using HomologaUTA.Homologacion.Validadores;
+using HomologaUTA.Homologacion.Agents; 
 using HomologaUTA.Homologacion.Clients;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,11 +28,12 @@ builder.Services.AddSingleton<ServicioValidacionSolicitud>();
 
 // 3. Registrar el cliente de Ollama
 builder.Services.AddHttpClient<OllamaClient>();
-
+// 4. Registrar el Agente Interno
+builder.Services.AddScoped<AgenteInterno>();
 var app = builder.Build();
 
-// 4. Swagger siempre activo (igual que los demás servicios), también dentro de Docker.
-app.UseSwagger(c => c.SerializeAsV2 = true);
+// 5. Configuración de la app
+app.UseSwagger();
 app.UseSwaggerUI();
 
 app.MapControllers();
