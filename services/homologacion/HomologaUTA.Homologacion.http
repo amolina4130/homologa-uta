@@ -1,6 +1,24 @@
 @HomologaUTA.Homologacion_HostAddress = http://localhost:5224
 
-GET {{HomologaUTA.Homologacion_HostAddress}}/weatherforecast/
+GET {{HomologaUTA.Homologacion_HostAddress}}/health
 Accept: application/json
+
+###
+
+POST {{HomologaUTA.Homologacion_HostAddress}}/homologacion/1/validar
+Content-Type: application/json
+
+{
+  "tipo": "CAMBIO_UNIVERSIDAD",
+  "esUniversidadExtranjera": false,
+  "requisitos": { "tieneCambiosCarreraPrevios": false, "periodosCursados": 4 },
+  "documentacion": { "tieneMallaOrigen": true, "tieneHistorialAcademico": true, "tieneSilabos": true, "documentosApostillados": false },
+  "asignaturas": [
+    { "id": 10, "nombre": "Cálculo I", "aprobada": true, "aniosDesdeAprobacion": 2, "numeroMatricula": 1 },
+    { "id": 11, "nombre": "Física I", "aprobada": true, "aniosDesdeAprobacion": 12, "numeroMatricula": 1 },
+    { "id": 12, "nombre": "Química", "aprobada": false, "aniosDesdeAprobacion": 1, "numeroMatricula": 1 },
+    { "id": 13, "nombre": "Programación", "aprobada": true, "aniosDesdeAprobacion": 3, "numeroMatricula": 3 }
+  ]
+}
 
 ###

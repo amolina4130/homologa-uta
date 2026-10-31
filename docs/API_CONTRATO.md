@@ -8,6 +8,7 @@ Propuesta para confirmar en la tarea TA-01.1. Todo pasa por el **API Gateway** (
 | `/auth` | Autenticación |
 | `/carreras` | Solicitudes (catálogo) |
 | `/solicitudes` | Solicitudes |
+| `/homologacion` | Homologación (validación de reglas) |
 
 ## Resumen
 | Método y ruta | Acceso | Historia | Pantalla |
@@ -104,4 +105,37 @@ Reglas: todos los campos son obligatorios, al menos una asignatura, origen disti
 | `GET /solicitudes/pendientes` | COORDINADOR | HU-10 | M-08 |
 | `GET /solicitudes/{id}/detalle` | COORDINADOR | HU-10 | M-08 |
 | `POST /solicitudes/{id}/informe` | COORDINADOR | HU-10 | M-08 |
+| `POST /homologacion/{id}/validar` | Autenticado | HU-07 | — |
 
+## POST /homologacion/{id}/validar
+Ejecuta las reglas objetivas (RN-01, RN-02, RN-04, RN-05 y RN-06) sobre la solicitud `{id}` y devuelve el resultado por asignatura.
+
+Petición:
+```json
+{
+  "tipo": "CAMBIO_UNIVERSIDAD",
+  "esUniversidadExtranjera": false,
+  "requisitos": { "tieneCambiosCarreraPrevios": false, "periodosCursados": 4 },
+  "documentacion": { "tieneMallaOrigen": true, "tieneHistorialAcademico": true, "tieneSilabos": true, "documentosApostillados": false },
+  "asignaturas": [
+    { "id": 10, "nombre": "Cálculo I", "aprobada": true, "aniosDesdeAprobacion": 2, "numeroMatricula": 1 },
+    { "id": 11, "nombre": "Física I", "aprobada": true, "aniosDesdeAprobacion": 12, "numeroMatricula": 1 }
+  ]
+}
+```
+`requisitos` es obligatorio solo para cambio de universidad (RN-05).
+
+`200`:
+```json
+{
+  "solicitudId": 1,
+  "tipo": "CAMBIO_UNIVERSIDAD",
+  "resumen": { "total": 2, "listasParaAgente": 1, "derivadas": 1, "excluidas": 0, "conFaltantes": 0 },
+  "validacionesGenerales": [ { "regla": "RN-06", "cumple": true, "detalle": "..." } ],
+  "asignaturas": [
+    { "id": 10, "asignatura": "Cálculo I", "estado": "LISTA_PARA_AGENTE", "reglaAplicada": "RN-03", "detalle": "..." },
+    { "id": 11, "asignatura": "Física I", "estado": "DERIVADA", "reglaAplicada": "RN-01", "detalle": "..." }
+  ]
+}
+```
+Estados: `LISTA_PARA_AGENTE`, `DERIVADA` (RN-01), `EXCLUIDA` (RN-02, RN-04 o RN-05), `CON_FALTANTES` (RN-06). `400` con `{ "error": "..." }` si los datos no son válidos.
