@@ -15,7 +15,21 @@ services:
     networks:
       - homologa_network
 
-  # 2. Servicio de Autenticación
+  # 2. RabbitMQ (Bus de Eventos)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: homologa_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    networks:
+      - homologa_network
+
+  # 3. Servicio de Autenticación
   auth-service:
     build:
       context: ./services/autenticacion
@@ -32,7 +46,7 @@ services:
     networks:
       - homologa_network
 
-  # 3. Servicio de Solicitudes
+  # 4. Servicio de Solicitudes
   solicitudes-service:
     build:
       context: ./services/solicitudes
@@ -49,7 +63,7 @@ services:
     networks:
       - homologa_network
 
-  # 4. Servicio de Documentos
+  # 5. Servicio de Documentos
   documentos-service:
     build:
       context: ./services/documentos
@@ -68,7 +82,7 @@ services:
     networks:
       - homologa_network
 
-  # 5. Servicio de Reglas
+  # 6. Servicio de Reglas
   reglas-service:
     build:
       context: ./services/reglas
@@ -84,7 +98,7 @@ services:
     networks:
       - homologa_network
 
-  # 6. Servicio de Homologación
+  # 7. Servicio de Homologación
   homologacion-service:
     build:
       context: ./services/homologacion
@@ -94,27 +108,17 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_HOMOLOGACION};User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;
       - JWT_SECRET=${JWT_SECRET}
+      - Ollama__Url=http://ollama:11434
     ports:
       - "5005:8080"
     depends_on:
       - sqlserver
       - reglas-service
+      - ollama
     networks:
       - homologa_network
 
-  # 10. Ollama (Agente de IA)
-  ollama:
-    image: ollama/ollama:latest
-    container_name: homologa_ollama
-    restart: always
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - homologa_network
-
-  # 9. Gateway (YARP)
+  # 8. Gateway (YARP)
   gateway:
     build:
       context: ./gateway
@@ -134,7 +138,7 @@ services:
     networks:
       - homologa_network
 
-  # 10. Frontend (React + Vite + Nginx)
+  # 9. Frontend (React + Vite + Nginx)
   frontend:
     build:
       context: ./frontend
@@ -145,6 +149,18 @@ services:
       - "3000:80"
     depends_on:
       - gateway
+    networks:
+      - homologa_network
+
+  # 10. Ollama (Agente de IA)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: homologa_ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
     networks:
       - homologa_network
 
