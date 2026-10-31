@@ -1,5 +1,5 @@
 using HomologaUTA.Documentos.Data;
-using HomologaUTA.Documentos.Services; // <-- Para el Extractor
+using HomologaUTA.Documentos.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,8 +20,9 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<DocumentosDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// --- NUEVO: Registrar el servicio extractor de PDF ---
+// --- Registrar servicios ---
 builder.Services.AddScoped<ExtractorPdfService>();
+builder.Services.AddScoped<EventPublisherService>(); // <--- NUEVO: Publicador de RabbitMQ
 
 var app = builder.Build();
 
@@ -32,14 +33,14 @@ app.MapControllers();
 
 app.Urls.Add("http://0.0.0.0:8080");
 
-// --- NUEVO: APLICAR MIGRACIONES AUTOMÁTICAMENTE ---
+// --- APLICAR MIGRACIONES AUTOMÁTICAMENTE ---
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<DocumentosDbContext>();
-        context.Database.Migrate(); // Crea la tabla si no existe
+        context.Database.Migrate();
     }
     catch (Exception ex)
     {

@@ -3,7 +3,7 @@ using HomologaUTA.Documentos.DTOs;
 using HomologaUTA.Documentos.Data;
 using HomologaUTA.Documentos.Models;
 using HomologaUTA.Documentos.Services;
-using Microsoft.EntityFrameworkCore; // Necesario para ToListAsync
+using Microsoft.EntityFrameworkCore;
 
 namespace HomologaUTA.Documentos.Controllers;
 
@@ -15,13 +15,20 @@ public class DocumentosController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly DocumentosDbContext _db;
     private readonly ExtractorPdfService _extractor;
+    private readonly EventPublisherService _eventPublisher; // <--- NUEVO
 
-    public DocumentosController(IConfiguration config, IWebHostEnvironment env, DocumentosDbContext db, ExtractorPdfService extractor)
+    public DocumentosController(
+        IConfiguration config, 
+        IWebHostEnvironment env, 
+        DocumentosDbContext db, 
+        ExtractorPdfService extractor,
+        EventPublisherService eventPublisher) // <--- NUEVO
     {
         _config = config;
         _env = env;
         _db = db;
         _extractor = extractor;
+        _eventPublisher = eventPublisher;
     }
 
     [HttpPost]
@@ -68,9 +75,16 @@ public class DocumentosController : ControllerBase
         _db.Documentos.Add(documento);
         await _db.SaveChangesAsync();
 
+        // 5. PUBLICAR EVENTO EN RABBITMQ
+        await _eventPublisher.PublicarDocumentoProcesadoAsync(
+            documento.Id, 
+            documento.SolicitudId, 
+            documento.TextoExtraido
+        );
+
         return Ok(new
         {
-            mensaje = "Archivo subido, procesado y guardado en la base de datos.",
+            mensaje = "Archivo subido, procesado, guardado y evento publicado.",
             documentoId = documento.Id,
             textoExtraido = textoExtraido.Substring(0, Math.Min(50, textoExtraido.Length)) + "..."
         });
