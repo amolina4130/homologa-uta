@@ -1,6 +1,7 @@
 using HomologaUTA.Homologacion.Agents; 
 using HomologaUTA.Homologacion.Clients;
 using HomologaUTA.Homologacion.Services;
+using HomologaUTA.Homologacion.Validadores;
 
 var builder = WebApplication.CreateBuilder(args);
 
