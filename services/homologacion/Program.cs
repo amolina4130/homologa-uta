@@ -1,5 +1,7 @@
 using HomologaUTA.Homologacion.Agents; 
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Validadores; // <-- NUEVO: Para los validadores
+using HomologaUTA.Homologacion.Services;    // <-- NUEVO: Para el ServicioValidacionSolicitud
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +32,7 @@ builder.Services.AddSingleton<ServicioValidacionSolicitud>();
 builder.Services.AddHttpClient<OllamaClient>();
 // 4. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
+
 var app = builder.Build();
 
 // 5. Configuración de la app
