@@ -41,7 +41,7 @@ builder.Services.AddHttpClient<OllamaClient>();
 // 5. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
 
-// 6. AnÃ¡lisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
+// 6. Análisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
 builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>();
 builder.Services.AddScoped<AnalisisService>();
 
