@@ -27,7 +27,7 @@ public class AgenteExternoSimuladoController : ControllerBase
 
         // Correo "lento...": tarda más que el tiempo de espera para probar el timeout
         if (request.Estudiante.StartsWith("lento", StringComparison.OrdinalIgnoreCase))
-            await Task.Delay(TimeSpan.FromSeconds(15), ct);
+            await Task.Delay(TimeSpan.FromSeconds(35), ct);
 
         // Correo "caido...": el agente falla
         if (request.Estudiante.StartsWith("caido", StringComparison.OrdinalIgnoreCase))
