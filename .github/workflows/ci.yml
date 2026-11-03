@@ -19,32 +19,38 @@ jobs:
       with:
         dotnet-version: '8.0.x'
 
-    # 1. Compilar y probar Autenticación
-    - name: Restaurar Autenticación
-      run: dotnet restore services/autenticacion/HomologaUTA.Autenticacion.csproj
+    # ==============================
+    # AUTENTICACIÓN
+    # ==============================
     - name: Compilar Autenticación
-      run: dotnet build services/autenticacion/HomologaUTA.Autenticacion.csproj --no-restore
+      run: dotnet build services/autenticacion/HomologaUTA.Autenticacion.Tests/HomologaUTA.Autenticacion.Tests.csproj
+
     - name: Probar Autenticación
       run: dotnet test services/autenticacion/HomologaUTA.Autenticacion.Tests/HomologaUTA.Autenticacion.Tests.csproj --no-build
 
-    # 2. Compilar y probar Solicitudes
-    - name: Restaurar Solicitudes
-      run: dotnet restore services/solicitudes/HomologaUTA.Solicitudes.csproj
+    # ==============================
+    # SOLICITUDES
+    # ==============================
     - name: Compilar Solicitudes
-      run: dotnet build services/solicitudes/HomologaUTA.Solicitudes.csproj --no-restore
+      run: dotnet build services/solicitudes/HomologaUTA.Solicitudes.Tests/HomologaUTA.Solicitudes.Tests.csproj
+
     - name: Probar Solicitudes
       run: dotnet test services/solicitudes/HomologaUTA.Solicitudes.Tests/HomologaUTA.Solicitudes.Tests.csproj --no-build
 
-    # 3. Compilar y probar Homologación
-    - name: Restaurar Homologación
-      run: dotnet restore services/homologacion/HomologaUTA.Homologacion.csproj
+    # ==============================
+    # HOMOLOGACIÓN
+    # ==============================
     - name: Compilar Homologación
-      run: dotnet build services/homologacion/HomologaUTA.Homologacion.csproj --no-restore
+      run: dotnet build services/HomologaUTA.Homologacion.Tests/HomologaUTA.Homologacion.Tests.csproj
+
     - name: Probar Homologación
       run: dotnet test services/HomologaUTA.Homologacion.Tests/HomologaUTA.Homologacion.Tests.csproj --no-build
 
-    # 4. Compilar Documentos y Reglas (solo compilación, sin pruebas por ahora)
+    # ==============================
+    # OTROS SERVICIOS (solo compilar)
+    # ==============================
     - name: Compilar Documentos
       run: dotnet build services/documentos/HomologaUTA.Documentos.csproj
+
     - name: Compilar Reglas
       run: dotnet build services/reglas/HomologaUTA.Reglas.csproj
