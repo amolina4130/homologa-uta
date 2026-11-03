@@ -8,10 +8,14 @@ export default function ResultadoAnalisis() {
   const [resultado, setResultado] = useState(null);
   const [validacion, setValidacion] = useState(null);
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState(null);
+  
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  
+  // NUEVOS ESTADOS para la validación
+  const [validando, setValidando] = useState(false);
+  const [errorValidacion, setErrorValidacion] = useState("");
 
-  // Envolvemos la función en useCallback para que no se recree en cada render
   const cargarResultado = useCallback(async () => {
     setCargando(true);
     setError("");
@@ -32,16 +36,20 @@ export default function ResultadoAnalisis() {
     const timer = setTimeout(() => {
       cargarResultado();
     }, 0);
-
     return () => clearTimeout(timer);
   }, [cargarResultado]);
 
+  // FUNCIÓN MODIFICADA: separa el error y activa el estado "validando"
   const handleValidar = async () => {
+    setValidando(true);
+    setErrorValidacion("");
     try {
       const data = await validarReglasObjetivas(id);
       setValidacion(data);
     } catch {
-      setError("Error al validar las reglas.");
+      setErrorValidacion("Error al validar las reglas. Intente nuevamente.");
+    } finally {
+      setValidando(false);
     }
   };
 
@@ -114,27 +122,59 @@ export default function ResultadoAnalisis() {
         </div>
       )}
 
-      {/* Textos informativos */}
+      {/* CORRECCIÓN 1: Textos informativos sin datos fijos */}
       <p className="text-muted small">
-        Umbral: 80 % en cada dimensión (RN-03). El sistema calcula la decisión; el agente solo entrega los porcentajes.<br/>
-        Tiempo de análisis por asignatura: 34 s (máximo 60 s). "Requiere revisión": el agente no devolvió una respuesta válida.
+        El sistema calcula la decisión en base a las reglas configuradas. El agente de IA solo entrega los porcentajes de similitud.<br/>
+        "Requiere revisión": el agente no devolvió una respuesta válida.
       </p>
 
       {/* Botones de acción */}
-      <div className="d-flex justify-content-between mt-4">
+      <div className="d-flex justify-content-between align-items-center mt-4">
         <button className="btn btn-outline-secondary" onClick={() => navigate("/mis-solicitudes")}>
           Volver a Mis solicitudes
         </button>
 
-        {/* Sección de validación de reglas (HU-07) */}
-        <button className="btn btn-primary" onClick={handleValidar}>
-          Validar Reglas Objetivas
-        </button>
+        <div className="text-end">
+          {/* CORRECCIÓN 3: Botón con estado "validando" y error separado */}
+          <button className="btn btn-primary" onClick={handleValidar} disabled={validando}>
+            {validando ? "Validando..." : "Validar Reglas Objetivas"}
+          </button>
+          {errorValidacion && <div className="text-danger small mt-2">{errorValidacion}</div>}
+        </div>
       </div>
 
-      {validacion && (
-        <div className="alert alert-info mt-3">
-          <pre className="mb-0">{JSON.stringify(validacion, null, 2)}</pre>
+      {/* CORRECCIÓN 2: Tabla legible en lugar de JSON crudo */}
+      {validacion && validacion.reglas && (
+        <div className="card shadow-sm border mt-4">
+          <div className="card-header bg-light">
+            <h5 className="mb-0">Validación de Reglas Objetivas</h5>
+          </div>
+          <div className="card-body p-0">
+            <table className="table table-sm table-bordered mb-0">
+              <thead>
+                <tr>
+                  <th>Regla</th>
+                  <th>Resultado</th>
+                  <th>Detalle</th>
+                </tr>
+              </thead>
+              <tbody>
+                {validacion.reglas.map((regla, i) => (
+                  <tr key={i}>
+                    <td>{regla.nombre || regla.codigo}</td>
+                    <td>
+                      {regla.cumple ? (
+                        <span className="text-success">✓ Cumple</span>
+                      ) : (
+                        <span className="text-danger">✗ No cumple</span>
+                      )}
+                    </td>
+                    <td>{regla.detalle || "Sin detalle adicional"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

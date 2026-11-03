@@ -139,3 +139,10 @@ Petición:
 }
 ```
 Estados: `LISTA_PARA_AGENTE`, `DERIVADA` (RN-01), `EXCLUIDA` (RN-02, RN-04 o RN-05), `CON_FALTANTES` (RN-06). `400` con `{ "error": "..." }` si los datos no son válidos.
+
+## Endpoints de Homologación (Resultado del Análisis)
+
+| Método y ruta | Acceso | Historia | Pantalla |
+|---|---|---|---|
+| `GET /homologacion/{id}/resultado` | ESTUDIANTE | HU-08 | M-07 |
+| `POST /homologacion/{id}/validar` | ESTUDIANTE | HU-07 | M-07 |
