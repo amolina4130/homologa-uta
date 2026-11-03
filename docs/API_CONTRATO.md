@@ -232,3 +232,27 @@ Petición:
 | 409 | El informe ya fue emitido |
 
 Al guardarse, el análisis pasa a `INFORME_EMITIDO` y sale de la lista de pendientes.
+
+
+
+### GET /solicitudes/{id}/historial
+
+Devuelve el historial de cambios de estado de una solicitud, ordenado por fecha.
+
+**Respuesta 200**
+```json
+[
+  {
+    "id": 1,
+    "estadoAnterior": null,
+    "estadoNuevo": "REGISTRADA",
+    "usuario": "estudiante@uta.edu.ec",
+    "fecha": "2026-11-03T19:55:00Z"
+  }
+]
+```
+
+**Respuesta 404**
+```json
+{ "error": "Solicitud no encontrada." }
+```
