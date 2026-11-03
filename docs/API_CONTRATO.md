@@ -23,7 +23,7 @@ Propuesta para confirmar en la tarea TA-01.1. Todo pasa por el **API Gateway** (
 Los endpoints de documentos (`POST` y `GET /solicitudes/{id}/documentos`) pasan al Sprint 2.
 
 ## Autenticación
-Cabecera `Authorization: Bearer <token>` en todo lo que no sea público. El JWT lleva `sub` (id), `correo` y `rol`.
+Cabecera `Authorization: Bearer <token>` en todo lo que no sea público. El JWT lleva `sub` (id), `email` y `rol`.
 
 | Código | Cuándo |
 |---|---|
@@ -102,9 +102,9 @@ Reglas: todos los campos son obligatorios, al menos una asignatura, origen disti
 
 | Método y ruta | Acceso | Historia | Pantalla |
 |---|---|---|---|
-| `GET /solicitudes/pendientes` | COORDINADOR | HU-10 | M-08 |
-| `GET /solicitudes/{id}/detalle` | COORDINADOR | HU-10 | M-08 |
-| `POST /solicitudes/{id}/informe` | COORDINADOR | HU-10 | M-08 |
+| `GET /homologacion/coordinador/pendientes` | COORDINADOR | HU-10 | M-08 |
+| `GET /homologacion/coordinador/{id}/detalle` | COORDINADOR | HU-10 | M-08 |
+| `POST /homologacion/coordinador/{id}/informe` | COORDINADOR | HU-10 | M-08 |
 | `POST /homologacion/{id}/validar` | Autenticado | HU-07 | — |
 
 ## POST /homologacion/{id}/validar
@@ -139,10 +139,96 @@ Petición:
 }
 ```
 Estados: `LISTA_PARA_AGENTE`, `DERIVADA` (RN-01), `EXCLUIDA` (RN-02, RN-04 o RN-05), `CON_FALTANTES` (RN-06). `400` con `{ "error": "..." }` si los datos no son válidos.
+## Endpoints del Coordinador (HU-10)
 
-## Endpoints de Homologación (Resultado del Análisis)
+Pasan por el Gateway bajo `/homologacion/coordinador` y solo los puede usar el rol COORDINADOR (`401` sin token, `403` con otro rol). La fecha, el estudiante, el tipo y las carreras los toma Homologación del servicio de Solicitudes mediante una ruta interna (`/internal/solicitudes`) que el Gateway no expone.
 
-| Método y ruta | Acceso | Historia | Pantalla |
-|---|---|---|---|
-| `GET /homologacion/{id}/resultado` | ESTUDIANTE | HU-08 | M-07 |
-| `POST /homologacion/{id}/validar` | ESTUDIANTE | HU-07 | M-07 |
+### GET /homologacion/coordinador/pendientes
+Solicitudes en `PENDIENTE_REVISION`, las más antiguas primero.
+
+`200`:
+```json
+[
+  {
+    "solicitudId": 2,
+    "fecha": "2026-11-02T10:15:00",
+    "estudiante": "estudiante@uta.edu.ec",
+    "tipo": "Homologación",
+    "carreraOrigen": "Ingeniería en Software",
+    "carreraDestino": "Ingeniería Industrial",
+    "fechaAnalisis": "2026-11-03T04:12:01Z",
+    "totalAsignaturas": 2
+  }
+]
+```
+`502` si el servicio de Solicitudes no responde.
+
+### GET /homologacion/coordinador/{id}/detalle
+Detalle de la solicitud con la propuesta del agente por asignatura. El `id` de cada asignatura es el que se usa al emitir el informe.
+
+`200`:
+```json
+{
+  "solicitudId": 2,
+  "estado": "PENDIENTE_REVISION",
+  "fecha": "2026-11-02T10:15:00",
+  "estudiante": "estudiante@uta.edu.ec",
+  "tipo": "Homologación",
+  "carreraOrigen": "Ingeniería en Software",
+  "carreraDestino": "Ingeniería Industrial",
+  "fechaAnalisis": "2026-11-03T04:12:01Z",
+  "coordinadorCorreo": null,
+  "fechaInforme": null,
+  "asignaturas": [
+    {
+      "id": 5,
+      "asignaturaOrigen": "Programación I",
+      "asignaturaDestino": "Fundamentos de Programación",
+      "propuesta": {
+        "decision": "HOMOLOGABLE",
+        "justificacion": "Los contenidos son equivalentes.",
+        "porcentajeContenido": 90,
+        "porcentajeProfundidad": 85,
+        "porcentajeHoras": 88,
+        "requiereRevision": false
+      },
+      "decisionCoordinador": null,
+      "observacionCoordinador": null
+    }
+  ]
+}
+```
+`404` si la solicitud no tiene análisis. `502` si el servicio de Solicitudes no responde.
+
+### POST /homologacion/coordinador/{id}/informe
+Emite el informe técnico. Debe traer **todas** las asignaturas del análisis, cada una con su decisión (`HOMOLOGABLE` o `NO_HOMOLOGABLE`) y una observación obligatoria (máx. 1000 caracteres). El Coordinador se toma del token.
+
+Petición:
+```json
+{
+  "asignaturas": [
+    { "asignaturaId": 5, "decision": "HOMOLOGABLE", "observacion": "Cumple con el contenido y la carga horaria." }
+  ]
+}
+```
+`200`:
+```json
+{
+  "solicitudId": 2,
+  "estado": "INFORME_EMITIDO",
+  "coordinadorCorreo": "coordinador@uta.edu.ec",
+  "fechaInforme": "2026-11-03T05:30:00Z",
+  "asignaturas": [
+    { "asignaturaId": 5, "asignaturaOrigen": "Programación I", "decision": "HOMOLOGABLE", "observacion": "Cumple con el contenido y la carga horaria." }
+  ]
+}
+```
+
+| Código | Cuándo |
+|---|---|
+| 400 | Falta alguna asignatura, hay repetidas o ajenas a la solicitud, decisión inválida u observación vacía |
+| 401 | No se pudo identificar al Coordinador en el token |
+| 404 | La solicitud no tiene análisis |
+| 409 | El informe ya fue emitido |
+
+Al guardarse, el análisis pasa a `INFORME_EMITIDO` y sale de la lista de pendientes.

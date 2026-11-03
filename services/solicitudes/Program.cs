@@ -1,4 +1,4 @@
-using HomologaUTA.Solicitudes.Data;
+﻿using HomologaUTA.Solicitudes.Data;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +30,7 @@ builder.Services.AddSwaggerGen(c =>
 // --- 3. BASE DE DATOS ---
 builder.Services.AddDbContext<SolicitudesDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 var app = builder.Build();
 
 // --- 4. USAR CORS ---

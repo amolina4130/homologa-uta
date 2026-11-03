@@ -1,9 +1,12 @@
 namespace HomologaUTA.Homologacion.Models;
 
-/// <summary>Estados en los que queda la solicitud después del análisis.</summary>
+/// <summary>Estados en los que queda el análisis de una solicitud.</summary>
 public static class EstadoAnalisis
 {
     public const string PENDIENTE_REVISION = "PENDIENTE_REVISION";
+
+    /// <summary>El Coordinador ya emitió su informe técnico.</summary>
+    public const string INFORME_EMITIDO = "INFORME_EMITIDO";
 }
 
 /// <summary>Decisiones posibles para una asignatura.</summary>
@@ -27,6 +30,12 @@ public class AnalisisSolicitud
     public string Estado { get; set; } = EstadoAnalisis.PENDIENTE_REVISION;
     public DateTime FechaAnalisis { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Correo del Coordinador que emitió el informe técnico (null mientras no se emita).</summary>
+    public string? CoordinadorCorreo { get; set; }
+
+    /// <summary>Fecha en que se emitió el informe técnico (null mientras no se emita).</summary>
+    public DateTime? FechaInforme { get; set; }
+
     public List<AnalisisAsignatura> Asignaturas { get; set; } = new();
 }
 
@@ -45,9 +54,15 @@ public class AnalisisAsignatura
     public int PorcentajeProfundidad { get; set; }
     public int PorcentajeHoras { get; set; }
 
-    /// <summary>HOMOLOGABLE, NO_HOMOLOGABLE o REQUIERE_REVISION (la calcula el código, no el agente).</summary>
+    /// <summary>Propuesta del agente: HOMOLOGABLE, NO_HOMOLOGABLE o REQUIERE_REVISION.</summary>
     public string Decision { get; set; } = string.Empty;
 
     public string Justificacion { get; set; } = string.Empty;
     public bool RequiereRevision { get; set; }
+
+    /// <summary>Decisión del Coordinador en su informe técnico: HOMOLOGABLE o NO_HOMOLOGABLE.</summary>
+    public string? DecisionCoordinador { get; set; }
+
+    /// <summary>Observación del Coordinador para esta asignatura.</summary>
+    public string? ObservacionCoordinador { get; set; }
 }

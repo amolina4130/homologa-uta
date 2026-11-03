@@ -48,10 +48,18 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("DecisionCoordinador")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<string>("Justificacion")
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ObservacionCoordinador")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<int>("PorcentajeContenido")
                         .HasColumnType("int");
@@ -80,6 +88,10 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CoordinadorCorreo")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -88,10 +100,15 @@ namespace HomologaUTA.Homologacion.Migrations
                     b.Property<DateTime>("FechaAnalisis")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("FechaInforme")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("SolicitudId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Estado");
 
                     b.HasIndex("SolicitudId")
                         .IsUnique();

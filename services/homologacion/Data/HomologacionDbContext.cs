@@ -15,9 +15,13 @@ public class HomologacionDbContext : DbContext
         modelBuilder.Entity<AnalisisSolicitud>(e =>
         {
             e.Property(a => a.Estado).IsRequired().HasMaxLength(50);
+            e.Property(a => a.CoordinadorCorreo).HasMaxLength(200);
 
             // Un solo análisis vigente por solicitud
             e.HasIndex(a => a.SolicitudId).IsUnique();
+
+            // La lista del Coordinador filtra por estado
+            e.HasIndex(a => a.Estado);
         });
 
         modelBuilder.Entity<AnalisisAsignatura>(e =>
@@ -26,6 +30,8 @@ public class HomologacionDbContext : DbContext
             e.Property(a => a.AsignaturaDestino).IsRequired().HasMaxLength(200);
             e.Property(a => a.Decision).IsRequired().HasMaxLength(30);
             e.Property(a => a.Justificacion).IsRequired().HasMaxLength(2000);
+            e.Property(a => a.DecisionCoordinador).HasMaxLength(30);
+            e.Property(a => a.ObservacionCoordinador).HasMaxLength(1000);
 
             e.HasOne(a => a.AnalisisSolicitud)
              .WithMany(s => s.Asignaturas)
