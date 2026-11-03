@@ -30,7 +30,7 @@ namespace HomologaUTA.Solicitudes.Tests
             
             var request = new SolicitudRequest
             {
-                Tipo = "Cambio de carrera",
+                Tipo = "Homologación", // <-- Cambiado
                 CarreraOrigenId = 1,
                 CarreraDestinoId = 1, // Carreras iguales (esto debe fallar)
                 AsignaturasIds = new List<int> { 1, 2 }
@@ -51,7 +51,7 @@ namespace HomologaUTA.Solicitudes.Tests
             var correoEstudiante1 = "estudiante1@uta.edu.ec";
             var correoEstudiante2 = "estudiante2@uta.edu.ec";
             
-            context.Solicitudes.Add(new Solicitud { Id = 1, EstudianteCorreo = correoEstudiante1, Tipo = "Cambio de carrera" });
+            context.Solicitudes.Add(new Solicitud { Id = 1, EstudianteCorreo = correoEstudiante1, Tipo = "Homologación" }); // <-- Cambiado
             context.Solicitudes.Add(new Solicitud { Id = 2, EstudianteCorreo = correoEstudiante2, Tipo = "Homologación" });
             await context.SaveChangesAsync();
 
