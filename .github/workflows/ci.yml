@@ -47,10 +47,16 @@ jobs:
       run: dotnet test services/HomologaUTA.Homologacion.Tests/HomologaUTA.Homologacion.Tests.csproj --no-build
 
     # ==============================
-    # OTROS SERVICIOS (solo compilar)
+    # DOCUMENTOS
     # ==============================
     - name: Compilar Documentos
-      run: dotnet build services/documentos/HomologaUTA.Documentos.csproj
+      run: dotnet build services/documentos/HomologaUTA.Documentos.Tests/HomologaUTA.Documentos.Tests.csproj
 
+    - name: Probar Documentos
+      run: dotnet test services/documentos/HomologaUTA.Documentos.Tests/HomologaUTA.Documentos.Tests.csproj --no-build
+
+    # ==============================
+    # REGLAS (solo compilar)
+    # ==============================
     - name: Compilar Reglas
       run: dotnet build services/reglas/HomologaUTA.Reglas.csproj
