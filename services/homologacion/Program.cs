@@ -53,7 +53,7 @@ builder.Services.AddScoped<AnalisisExternoService>();
 
 var app = builder.Build();
 
-// 7. ConfiguraciÃ³n de la app
+// 7. Configuración de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
@@ -73,7 +73,7 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de homologaciÃ³n.");
+        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de homologación.");
     }
 }
 
