@@ -9,12 +9,11 @@ namespace HomologaUTA.Solicitudes.Controllers;
 
 [ApiController]
 [Route("solicitudes")]
-// [Authorize] <--- Lo dejamos comentado como lo tenías para tus pruebas
+// [Authorize] <--- Lo dejamos comentado para tus pruebas
 public class SolicitudesController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
 
-    // 1. Quitamos la inyección de ReglasClient
     public SolicitudesController(SolicitudesDbContext db)
     {
         _db = db;
@@ -23,7 +22,8 @@ public class SolicitudesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CrearSolicitud([FromBody] SolicitudRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Tipo) || request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
+        // 1. Validaciones (Ya no validamos el Tipo, porque es fijo)
+        if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
             return BadRequest(new { error = "Faltan campos obligatorios." });
 
         if (request.CarreraOrigenId == request.CarreraDestinoId)
@@ -32,15 +32,14 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        // 2. Eliminamos la llamada a _reglasClient.ObtenerReglasActivasAsync()
-
         var correo = User.FindFirstValue(ClaimTypes.Email) 
                      ?? User.FindFirstValue("email") 
                      ?? "estudiante@uta.edu.ec"; // Fallback para pruebas
 
+        // 2. El tipo se fuerza a "Homologación"
         var solicitud = new Solicitud
         {
-            Tipo = request.Tipo,
+            Tipo = "Homologación",
             CarreraOrigenId = request.CarreraOrigenId,
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
