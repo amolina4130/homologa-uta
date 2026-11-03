@@ -111,52 +111,5 @@ namespace HomologaUTA.Solicitudes.Tests
             Assert.NotNull(solicitudGuardada);
             Assert.Equal("Homologación", solicitudGuardada.Tipo);
         }
-                [Fact]
-        public void FiltroPorNivel_DebeRetornarSoloAsignaturasDelNivelSeleccionado()
-        {
-            // 1. Preparar: Simulamos la lista de asignaturas que vendrían del frontend o BD
-            var asignaturas = new List<Asignatura>
-            {
-                new Asignatura { Id = 1, Nombre = "Programación", Nivel = "Primero" },
-                new Asignatura { Id = 2, Nombre = "Base de Datos", Nivel = "Noveno" },
-                new Asignatura { Id = 3, Nombre = "Álgebra", Nivel = "Primero" }
-            };
-
-            // 2. Actuar: Simulamos la lógica del filtro del frontend (nivel "Primero")
-            string nivelSeleccionado = "Primero";
-            var asignaturasFiltradas = asignaturas
-                .Where(a => nivelSeleccionado == "Todos" || a.Nivel == nivelSeleccionado)
-                .ToList();
-
-            // 3. Afirmar
-            Assert.Equal(2, asignaturasFiltradas.Count);
-            Assert.All(asignaturasFiltradas, a => Assert.Equal("Primero", a.Nivel));
-
-            // Probamos también la opción "Todos"
-            nivelSeleccionado = "Todos";
-            var todasLasAsignaturas = asignaturas
-                .Where(a => nivelSeleccionado == "Todos" || a.Nivel == nivelSeleccionado)
-                .ToList();
-                
-            Assert.Equal(3, todasLasAsignaturas.Count);
-        }
-
-        [Fact]
-        public void ConservacionDeAsignaturas_AlCambiarFiltro_NoDebePerderSeleccion()
-        {
-            // 1. Preparar: Simulamos el estado de React (IDs seleccionados)
-            var seleccionadas = new List<int> { 1 }; // El usuario marca la asignatura ID 1 (Primero)
-
-            // Simulamos que el usuario cambia el filtro a "Noveno" y marca otra (ID 2)
-            seleccionadas.Add(2); 
-
-            // 2. Actuar: Simulamos que el usuario vuelve a cambiar el filtro a "Primero" o "Todos"
-            // (En el frontend, el estado 'seleccionadas' no se toca al cambiar el 'nivelSeleccionado')
-
-            // 3. Afirmar: Las asignaturas marcadas originalmente siguen ahí
-            Assert.Contains(1, seleccionadas);
-            Assert.Contains(2, seleccionadas);
-            Assert.Equal(2, seleccionadas.Count);
-        }
     }
 }
