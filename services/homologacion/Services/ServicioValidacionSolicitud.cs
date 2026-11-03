@@ -22,7 +22,7 @@ public class ServicioValidacionSolicitud
     public string? ValidarEntrada(ValidarSolicitudRequest request)
     {
         if (!EsTipoReconocido(request.Tipo))
-            return "Tipo de solicitud no reconocido. Use: Cambio de carrera, Cambio de universidad o Movilidad.";
+            return "Tipo de solicitud no reconocido. Use: Homologación, Cambio de carrera, Cambio de universidad o Movilidad.";
 
         if (request.Asignaturas.Count == 0 || request.Asignaturas.Any(a => a is null))
             return "Debe enviar al menos una asignatura y ninguna puede estar vacía.";
@@ -163,6 +163,7 @@ public class ServicioValidacionSolicitud
     private static bool EsTipoReconocido(string tipo)
     {
         var t = Normalizar(tipo);
-        return t.Contains("CARRERA") || t.Contains("UNIVERSIDAD") || t.Contains("MOVILIDAD");
+        // AGREGADO "HOMOLOGACION" a la lista de tipos reconocidos
+        return t.Contains("CARRERA") || t.Contains("UNIVERSIDAD") || t.Contains("MOVILIDAD") || t.Contains("HOMOLOGACION");
     }
 }
