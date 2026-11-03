@@ -28,17 +28,8 @@ export default function Login() {
 
     setCargando(true);
     try {
+      // El AuthContext ya se encarga de guardar el usuario en el localStorage
       const rol = await iniciarSesion(correo, contrasena);
-      // --- NUEVO: Guardar datos del usuario en localStorage ---
-      // (Asumiendo que iniciarSesion devuelve solo el rol, guardamos lo que tenemos)
-      // Si iniciarSesion devuelve más datos, se pueden usar aquí.
-      const usuarioData = {
-        nombre: correo.split("@")[0], // Extraemos el nombre del correo
-        correo: correo,
-        rol: rol
-      };
-      localStorage.setItem("usuario", JSON.stringify(usuarioData));
-      // --------------------------------------------------------
       navigate(rutaPorRol(rol));
     } catch (err) {
       setErrorLogin(
