@@ -12,6 +12,7 @@ import Carreras from "./pages/Carreras";
 import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import PanelReglas from "./pages/PanelReglas"; 
 import PanelCoordinador from "./pages/PanelCoordinador"; 
+import ResultadoAnalisis from "./pages/ResultadoAnalisis";
 
 function Inicio() {
   const { rol } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
+            <Route path="/resultado/:id" element={<><Menu /><ResultadoAnalisis /></>} />
           </Route>
 
           {/* Rutas restringidas por rol */}

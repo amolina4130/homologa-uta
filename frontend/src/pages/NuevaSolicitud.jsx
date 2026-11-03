@@ -1,22 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FiltroNivel from '../components/FiltroNivel';
 
 export default function NuevaSolicitud() {
   const navigate = useNavigate();
   const [carreras, setCarreras] = useState([]);
   const [asignaturasDisponibles, setAsignaturasDisponibles] = useState([]);
   
+  // VOLVEMOS A PONER EL DESPLEGABLE (para que Estefania apruebe TA-11.2)
   const [tipo, setTipo] = useState("Cambio de carrera");
-  const [modulo, setModulo] = useState("INTERNO"); // <-- NUEVO ESTADO
+  
+  const [modulo, setModulo] = useState("INTERNO");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
   
+  // ESTADO DEL FILTRO
+  const [nivelSeleccionado, setNivelSeleccionado] = useState("Todos");
+  
   const [mensaje, setMensaje] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [errorReintento, setErrorReintento] = useState(false); // <-- NUEVO ESTADO
+  const [errorReintento, setErrorReintento] = useState(false);
 
-  // 1. Cargar las carreras al inicio
   useEffect(() => {
     const token = localStorage.getItem("token");
     fetch("http://localhost:8080/carreras", {
@@ -27,7 +32,6 @@ export default function NuevaSolicitud() {
       .catch(() => console.error("Error cargando carreras"));
   }, []);
 
-  // 2. Cuando cambia la carrera de origen, cargar sus asignaturas
   useEffect(() => {
     if (!origen) {
       const timer = setTimeout(() => {
@@ -45,11 +49,11 @@ export default function NuevaSolicitud() {
       .then(data => {
         setAsignaturasDisponibles(data);
         setSeleccionadas([]);
+        setNivelSeleccionado("Todos");
       })
       .catch(() => console.error("Error cargando asignaturas"));
   }, [origen]);
 
-  // 3. Lógica para cambiar el módulo (forzar INTERNO si es cambio de carrera)
   const handleTipoChange = (e) => {
     const nuevoTipo = e.target.value;
     setTipo(nuevoTipo);
@@ -66,6 +70,10 @@ export default function NuevaSolicitud() {
     }
   };
 
+  const asignaturasFiltradas = asignaturasDisponibles.filter(
+    (a) => nivelSeleccionado === "Todos" || a.nivel === nivelSeleccionado
+  );
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     
@@ -75,7 +83,7 @@ export default function NuevaSolicitud() {
     
     setCargando(true);
     setMensaje("");
-    setErrorReintento(false); // <-- Limpia el error anterior al reintentar
+    setErrorReintento(false);
     const token = localStorage.getItem("token");
     
     try {
@@ -83,8 +91,8 @@ export default function NuevaSolicitud() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ 
-          tipo, 
-          modulo, // <-- ENVIAMOS EL MÓDULO
+          tipo,
+          modulo,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
           asignaturasIds: seleccionadas 
@@ -100,7 +108,7 @@ export default function NuevaSolicitud() {
       }
     } catch {
       setMensaje("El agente externo no respondió (tiempo de espera agotado). Tus datos se conservan.");
-      setErrorReintento(true); // <-- Activamos el estado de reintento
+      setErrorReintento(true);
     } finally {
       setCargando(false);
     }
@@ -116,7 +124,6 @@ export default function NuevaSolicitud() {
             </div>
             <div className="card-body p-4">
               
-              {/* MENSAJE DE ERROR CON BOTÓN DE REINTENTAR */}
               {errorReintento && (
                 <div className="alert alert-warning d-flex justify-content-between align-items-center">
                   <span>{mensaje}</span>
@@ -130,7 +137,6 @@ export default function NuevaSolicitud() {
                 </div>
               )}
 
-              {/* MENSAJE DE ÉXITO O ERROR NORMAL */}
               {!errorReintento && mensaje && (
                 <div className={`alert ${mensaje.includes("éxito") ? "alert-success" : "alert-danger"}`}>
                   {mensaje}
@@ -139,18 +145,16 @@ export default function NuevaSolicitud() {
               
               <form onSubmit={handleSubmit}>
                 <div className="row">
-                  {/* COLUMNA IZQUIERDA */}
                   <div className="col-md-6 border-end">
+                    {/* DESPLEGABLE DE TIPO (vuelve para TA-11.2) */}
                     <div className="mb-3">
                       <label className="form-label fw-bold">Tipo de solicitud</label>
                       <select className="form-select" value={tipo} onChange={handleTipoChange}>
                         <option value="Cambio de carrera">Cambio de carrera</option>
                         <option value="Homologación">Homologación</option>
-                        <option value="Cambio de universidad">Cambio de universidad</option>
                       </select>
                     </div>
 
-                    {/* SELECTOR DE MÓDULO */}
                     <div className="mb-3">
                       <label className="form-label fw-bold">Módulo de análisis</label>
                       <select 
@@ -162,11 +166,6 @@ export default function NuevaSolicitud() {
                         <option value="INTERNO">Agente interno (reglas normativas UTA)</option>
                         <option value="EXTERNO">Agente externo (universidades externas)</option>
                       </select>
-                      <small className="text-muted">
-                        {tipo === "Cambio de carrera" 
-                          ? "En un cambio de carrera interna se usa siempre el agente interno." 
-                          : "Seleccione el agente para analizar su caso."}
-                      </small>
                     </div>
                     
                     <div className="mb-3">
@@ -186,16 +185,23 @@ export default function NuevaSolicitud() {
                     </div>
                   </div>
 
-                  {/* COLUMNA DERECHA (Asignaturas) */}
                   <div className="col-md-6 ps-md-4">
                     <label className="form-label fw-bold">Asignaturas a homologar</label>
+                    
+                    <FiltroNivel 
+                      nivelSeleccionado={nivelSeleccionado} 
+                      onChange={setNivelSeleccionado} 
+                    />
+
                     <div className="border rounded p-3 bg-light" style={{ maxHeight: '250px', overflowY: 'auto' }}>
                       {!origen ? (
                         <p className="text-muted small">Seleccione una carrera de origen para ver las asignaturas.</p>
                       ) : asignaturasDisponibles.length === 0 ? (
                         <p className="text-muted small">Cargando asignaturas...</p>
+                      ) : asignaturasFiltradas.length === 0 ? (
+                        <p className="text-muted small">No hay asignaturas en este nivel.</p>
                       ) : (
-                        asignaturasDisponibles.map(a => (
+                        asignaturasFiltradas.map(a => (
                           <div className="form-check mb-2" key={a.id}>
                             <input 
                               className="form-check-input" 
