@@ -5,8 +5,7 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
   const [carreras, setCarreras] = useState([]);
   const [asignaturas, setAsignaturas] = useState([]);
   const [formData, setFormData] = useState({
-    tipo: "Cambio de carrera",
-    modulo: "INTERNO", // <-- Nuevo campo
+    tipo: "Homologación", // Tipo fijo
     carreraOrigenId: "",
     carreraDestinoId: "",
     asignaturasIds: [],
@@ -32,14 +31,7 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      const nuevoEstado = { ...prev, [name]: value };
-      // Si el tipo es cambio de carrera, forzamos el módulo interno
-      if (name === "tipo" && value === "Cambio de carrera") {
-        nuevoEstado.modulo = "INTERNO";
-      }
-      return nuevoEstado;
-    });
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleAsignaturaCheck = (id) => {
@@ -75,39 +67,14 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
   const campo = { width: "100%", padding: 10, boxSizing: "border-box", border: "2px solid #000", marginBottom: "5px" };
   const error = { color: "red", fontSize: 14, margin: "0 0 10px" };
 
-  // Verificamos si el tipo es cambio de carrera para bloquear el selector
-  const esCambioInterno = formData.tipo === "Cambio de carrera";
-
   return (
     <form onSubmit={handleSubmit} noValidate style={{ display: "flex", gap: "30px", border: "2px solid #000", padding: "20px", marginTop: "20px" }}>
       {/* Columna Izquierda */}
       <div style={{ flex: 1 }}>
         <h3>Nueva solicitud de homologación</h3>
         
-        <label>Tipo de solicitud</label>
-        <select name="tipo" value={formData.tipo} onChange={handleChange} style={campo}>
-          <option value="Cambio de carrera">Cambio de carrera</option>
-          <option value="Cambio de universidad">Cambio de universidad</option>
-          <option value="Movilidad">Movilidad</option>
-        </select>
-
-        {/* SELECTOR DE MÓDULO */}
-        <label>Módulo de análisis</label>
-        <select 
-          name="modulo" 
-          value={formData.modulo} 
-          onChange={handleChange} 
-          style={campo}
-          disabled={esCambioInterno}
-        >
-          <option value="INTERNO">Agente interno (reglas normativas de la UTA)</option>
-          <option value="EXTERNO">Agente externo (universidades externas, sin reglas fijas)</option>
-        </select>
-        <small style={{ display: "block", marginBottom: "10px", color: "#555" }}>
-          {esCambioInterno 
-            ? "En un cambio de carrera interna se usa siempre el agente interno." 
-            : "Seleccione el agente para analizar su caso."}
-        </small>
+        {/* EL SELECTOR DE TIPO YA NO EXISTE (es fijo) */}
+        {/* EL SELECTOR DE MÓDULO YA NO EXISTE */}
 
         <label>Carrera de origen</label>
         <select name="carreraOrigenId" value={formData.carreraOrigenId} onChange={handleChange} style={campo}>
