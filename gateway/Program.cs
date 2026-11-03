@@ -45,19 +45,28 @@ builder.Services
             NameClaimType = "sub"
         };
     });
-
 // ---------------------------------------------------------------
 // 3) Políticas de autorización por rol
 // ---------------------------------------------------------------
-builder.Services.AddAuthorizationBuilder()
+var authBuilder = builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
     .AddPolicy("autenticado", p => p.RequireAuthenticatedUser())
     .AddPolicy("estudiante", p => p.RequireRole("ESTUDIANTE"))
-    .AddPolicy("coordinador", p => p.RequireRole("COORDINADOR"))
     .AddPolicy("secretaria", p => p.RequireRole("SECRETARIA"))
     .AddPolicy("consejo", p => p.RequireRole("CONSEJO"))
     .AddPolicy("administrador", p => p.RequireRole("ADMINISTRADOR"));
 
+// Leemos la política del Coordinador desde appsettings.json
+var coordinadorRoles = builder.Configuration.GetSection("AuthorizationPolicies:coordinador:Roles").Get<string[]>();
+if (coordinadorRoles != null && coordinadorRoles.Length > 0)
+{
+    authBuilder.AddPolicy("coordinador", p => p.RequireRole(coordinadorRoles));
+}
+else
+{
+    // Respaldo por si no está en el JSON
+    authBuilder.AddPolicy("coordinador", p => p.RequireRole("COORDINADOR"));
+}
 // ---------------------------------------------------------------
 // 4) CORS: FORZADO PARA EL FRONTEND
 // ---------------------------------------------------------------
