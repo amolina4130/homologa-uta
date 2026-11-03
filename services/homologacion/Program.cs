@@ -1,12 +1,10 @@
-using HomologaUTA.Homologacion.Agents;
+﻿using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
-=======
-using HomologaUTA.Homologacion.Validadores; // <-- NUEVO: Para los validadores
-using HomologaUTA.Homologacion.Services;    // <-- NUEVO: Para el ServicioValidacionSolicitud
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,9 +16,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new()
     {
-        Title = "HomologaUTA - Homologación",
+        Title = "HomologaUTA - HomologaciÃ³n",
         Version = "v1",
-        Description = "Validación de reglas objetivas y análisis de homologación"
+        Description = "ValidaciÃ³n de reglas objetivas y anÃ¡lisis de homologaciÃ³n"
     });
 
     // Comentarios XML de los controladores y DTOs (se generan al compilar)
@@ -28,7 +26,7 @@ builder.Services.AddSwaggerGen(c =>
     if (File.Exists(xml)) c.IncludeXmlComments(xml);
 });
 
-// 2. Base de datos del servicio (resultados del análisis)
+// 2. Base de datos del servicio (resultados del anÃ¡lisis)
 builder.Services.AddDbContext<HomologacionDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -43,14 +41,19 @@ builder.Services.AddHttpClient<OllamaClient>();
 // 5. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
 
-// 6. Análisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
+// 6. AnÃ¡lisis de la solicitud y publicaciÃ³n del evento AnalisisCompletado (TA-08.4)
 builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>();
 builder.Services.AddScoped<AnalisisService>();
 
 
+// 7. Conector del agente externo y su servicio (TA-09.2)
+builder.Services.AddHttpClient<AgenteExternoConnector>();
+builder.Services.AddScoped<AnalisisExternoService>();
+
+
 var app = builder.Build();
 
-// 7. Configuración de la app
+// 7. ConfiguraciÃ³n de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
@@ -70,7 +73,7 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de homologación.");
+        logger.LogError(ex, "OcurriÃ³ un error al aplicar las migraciones de homologaciÃ³n.");
     }
 }
 
