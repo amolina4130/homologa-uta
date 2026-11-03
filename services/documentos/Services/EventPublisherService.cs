@@ -13,7 +13,7 @@ public class EventPublisherService
         _hostname = config["RabbitMQ:Host"] ?? "rabbitmq";
     }
 
-    public async Task PublicarDocumentoProcesadoAsync(int documentoId, int solicitudId, string textoExtraido)
+    public virtual async Task PublicarDocumentoProcesadoAsync(int documentoId, int solicitudId, string textoExtraido)
     {
         var factory = new ConnectionFactory() { HostName = _hostname };
         
