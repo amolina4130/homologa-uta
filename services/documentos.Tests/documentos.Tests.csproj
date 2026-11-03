@@ -22,4 +22,10 @@
     <ProjectReference Include="..\documentos\HomologaUTA.Documentos.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="prueba.pdf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

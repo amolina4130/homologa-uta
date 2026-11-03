@@ -4,6 +4,7 @@ using HomologaUTA.Documentos.Data;
 using HomologaUTA.Documentos.Models;
 using HomologaUTA.Documentos.Services;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims; // <-- NUEVO para leer el token
 
 namespace HomologaUTA.Documentos.Controllers;
 
@@ -15,14 +16,14 @@ public class DocumentosController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly DocumentosDbContext _db;
     private readonly ExtractorPdfService _extractor;
-    private readonly EventPublisherService _eventPublisher; // <--- NUEVO
+    private readonly EventPublisherService _eventPublisher;
 
     public DocumentosController(
         IConfiguration config, 
         IWebHostEnvironment env, 
         DocumentosDbContext db, 
         ExtractorPdfService extractor,
-        EventPublisherService eventPublisher) // <--- NUEVO
+        EventPublisherService eventPublisher)
     {
         _config = config;
         _env = env;
@@ -44,6 +45,11 @@ public class DocumentosController : ControllerBase
         var tamanioMaximoMB = _config.GetValue<int>("TamanioMaximoPdfMB", 10);
         if (request.Archivo.Length > tamanioMaximoMB * 1024 * 1024)
             return BadRequest(new { error = $"El archivo no debe superar los {tamanioMaximoMB} MB." });
+
+        // Extraer el correo del estudiante desde el token
+        var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
+                           ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value 
+                           ?? "anonimo";
 
         // 2. Guardar archivo en disco
         var carpetaPdfs = Path.Combine(_env.ContentRootPath, "pdfs");
@@ -69,7 +75,8 @@ public class DocumentosController : ControllerBase
             NombreArchivo = nombreArchivo,
             TextoExtraido = textoExtraido,
             Estado = "PROCESADO",
-            FechaSubida = DateTime.UtcNow
+            FechaSubida = DateTime.UtcNow,
+            EstudianteId = estudianteId // <-- NUEVO
         };
 
         _db.Documentos.Add(documento);
@@ -93,8 +100,16 @@ public class DocumentosController : ControllerBase
     [HttpGet("solicitud/{solicitudId}")]
     public async Task<IActionResult> ObtenerDocumentosPorSolicitud(int solicitudId)
     {
+        // Extraer el correo del estudiante del token
+        var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
+                           ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+
+        if (string.IsNullOrEmpty(estudianteId))
+            return Unauthorized(new { error = "No autorizado." });
+
+        // Buscar los documentos y verificar que pertenezcan al estudiante
         var documentos = await _db.Documentos
-            .Where(d => d.SolicitudId == solicitudId)
+            .Where(d => d.SolicitudId == solicitudId && d.EstudianteId == estudianteId)
             .Select(d => new { d.Id, d.TipoDocumento, d.NombreArchivo, d.Estado, d.FechaSubida })
             .ToListAsync();
 
