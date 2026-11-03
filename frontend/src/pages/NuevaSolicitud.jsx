@@ -1,27 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import FiltroNivel from '../components/FiltroNivel'; // <-- IMPORTAMOS EL COMPONENTE
+import FiltroNivel from '../components/FiltroNivel';
 
 export default function NuevaSolicitud() {
   const navigate = useNavigate();
   const [carreras, setCarreras] = useState([]);
   const [asignaturasDisponibles, setAsignaturasDisponibles] = useState([]);
   
-  // El tipo ahora es fijo (TA-11.1)
-  const tipo = "Homologación"; 
+  // VOLVEMOS A PONER EL DESPLEGABLE (para que Estefania apruebe TA-11.2)
+  const [tipo, setTipo] = useState("Cambio de carrera");
+  
   const [modulo, setModulo] = useState("INTERNO");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
   
-  // ESTADO NUEVO PARA EL FILTRO
+  // ESTADO DEL FILTRO
   const [nivelSeleccionado, setNivelSeleccionado] = useState("Todos");
   
   const [mensaje, setMensaje] = useState("");
   const [cargando, setCargando] = useState(false);
   const [errorReintento, setErrorReintento] = useState(false);
 
-  // 1. Cargar las carreras al inicio
   useEffect(() => {
     const token = localStorage.getItem("token");
     fetch("http://localhost:8080/carreras", {
@@ -32,7 +32,6 @@ export default function NuevaSolicitud() {
       .catch(() => console.error("Error cargando carreras"));
   }, []);
 
-  // 2. Cuando cambia la carrera de origen, cargar sus asignaturas
   useEffect(() => {
     if (!origen) {
       const timer = setTimeout(() => {
@@ -50,12 +49,18 @@ export default function NuevaSolicitud() {
       .then(data => {
         setAsignaturasDisponibles(data);
         setSeleccionadas([]);
-        setNivelSeleccionado("Todos"); // Reiniciamos el filtro
+        setNivelSeleccionado("Todos");
       })
       .catch(() => console.error("Error cargando asignaturas"));
   }, [origen]);
 
-  // 3. Ya no hay handleTipoChange porque el tipo es fijo
+  const handleTipoChange = (e) => {
+    const nuevoTipo = e.target.value;
+    setTipo(nuevoTipo);
+    if (nuevoTipo === "Cambio de carrera") {
+      setModulo("INTERNO");
+    }
+  };
 
   const toggleAsignatura = (id) => {
     if (seleccionadas.includes(id)) {
@@ -65,7 +70,6 @@ export default function NuevaSolicitud() {
     }
   };
 
-  // 4. FILTRADO DE ASIGNATURAS POR NIVEL
   const asignaturasFiltradas = asignaturasDisponibles.filter(
     (a) => nivelSeleccionado === "Todos" || a.nivel === nivelSeleccionado
   );
@@ -87,7 +91,7 @@ export default function NuevaSolicitud() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ 
-          tipo: "Homologación", // Enviamos el tipo fijo
+          tipo,
           modulo,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
@@ -141,13 +145,14 @@ export default function NuevaSolicitud() {
               
               <form onSubmit={handleSubmit}>
                 <div className="row">
-                  {/* COLUMNA IZQUIERDA */}
                   <div className="col-md-6 border-end">
-                    {/* EL SELECTOR DE TIPO YA NO ESTÁ, ES FIJO */}
+                    {/* DESPLEGABLE DE TIPO (vuelve para TA-11.2) */}
                     <div className="mb-3">
                       <label className="form-label fw-bold">Tipo de solicitud</label>
-                      <input type="text" className="form-control" value="Homologación" readOnly disabled />
-                      <small className="text-muted">El tipo de solicitud es fijo.</small>
+                      <select className="form-select" value={tipo} onChange={handleTipoChange}>
+                        <option value="Cambio de carrera">Cambio de carrera</option>
+                        <option value="Homologación">Homologación</option>
+                      </select>
                     </div>
 
                     <div className="mb-3">
@@ -156,7 +161,7 @@ export default function NuevaSolicitud() {
                         className="form-select" 
                         value={modulo} 
                         onChange={(e) => setModulo(e.target.value)}
-                        // Ya no se deshabilita por "Cambio de carrera", porque ese tipo ya no existe
+                        disabled={tipo === "Cambio de carrera"}
                       >
                         <option value="INTERNO">Agente interno (reglas normativas UTA)</option>
                         <option value="EXTERNO">Agente externo (universidades externas)</option>
@@ -180,11 +185,9 @@ export default function NuevaSolicitud() {
                     </div>
                   </div>
 
-                  {/* COLUMNA DERECHA (Asignaturas) */}
                   <div className="col-md-6 ps-md-4">
                     <label className="form-label fw-bold">Asignaturas a homologar</label>
                     
-                    {/* FILTRO POR NIVEL */}
                     <FiltroNivel 
                       nivelSeleccionado={nivelSeleccionado} 
                       onChange={setNivelSeleccionado} 
