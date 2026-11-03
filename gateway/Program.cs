@@ -49,14 +49,21 @@ builder.Services
 // ---------------------------------------------------------------
 // 3) Políticas de autorización por rol
 // ---------------------------------------------------------------
-builder.Services.AddAuthorizationBuilder()
+var authBuilder = builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
     .AddPolicy("autenticado", p => p.RequireAuthenticatedUser())
     .AddPolicy("estudiante", p => p.RequireRole("ESTUDIANTE"))
-    .AddPolicy("coordinador", p => p.RequireRole("COORDINADOR"))
     .AddPolicy("secretaria", p => p.RequireRole("SECRETARIA"))
     .AddPolicy("consejo", p => p.RequireRole("CONSEJO"))
     .AddPolicy("administrador", p => p.RequireRole("ADMINISTRADOR"));
+
+// Leemos la política del Coordinador desde appsettings.json. 
+// Si no viene en el JSON, por defecto asigna "COORDINADOR".
+var coordinadorRoles = builder.Configuration
+    .GetSection("AuthorizationPolicies:coordinador:Roles")
+    .Get<string[]>() ?? new[] { "COORDINADOR" };
+
+authBuilder.AddPolicy("coordinador", p => p.RequireRole(coordinadorRoles));
 
 // ---------------------------------------------------------------
 // 4) CORS: FORZADO PARA EL FRONTEND
