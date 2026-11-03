@@ -10,7 +10,7 @@ public static class SeedData
 {
     public static async Task InitializeAsync(AuthDbContext context, IPasswordHasher<Usuario> hasher, IConfiguration config)
     {
-        // Arreglo con los 5 usuarios, usando los mismos correos de ejemplo
+        // Arreglo con los 5 usuarios
         var usuariosSeed = new[]
         {
             new { Correo = "estudiante@uta.edu.ec", RolId = 1, Pass = config["SEED_ESTUDIANTE_PASSWORD"] },
@@ -22,7 +22,6 @@ public static class SeedData
 
         foreach (var u in usuariosSeed)
         {
-            // Idempotente: solo crea si el correo no existe en la base de datos
             if (!await context.Usuarios.AnyAsync(x => x.Correo == u.Correo))
             {
                 var nuevoUsuario = new Usuario
@@ -31,8 +30,10 @@ public static class SeedData
                     RolId = u.RolId
                 };
 
-                // Encriptamos la contraseña
-                nuevoUsuario.PasswordHash = hasher.HashPassword(nuevoUsuario, u.Pass);
+                // SOLUCIÓN: Si la contraseña del .env es nula, usar "Demo123!" por defecto
+                var passwordSegura = string.IsNullOrEmpty(u.Pass) ? "Demo123!" : u.Pass;
+
+                nuevoUsuario.PasswordHash = hasher.HashPassword(nuevoUsuario, passwordSegura);
                 context.Usuarios.Add(nuevoUsuario);
             }
         }
