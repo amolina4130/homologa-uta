@@ -33,8 +33,10 @@ public class SolicitudesController : ControllerBase
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
         var correo = User.FindFirstValue(ClaimTypes.Email)
-                     ?? User.FindFirstValue("email")
-                     ?? "estudiante@uta.edu.ec"; // Fallback para pruebas
+                     ?? User.FindFirstValue("email");
+
+        if (string.IsNullOrEmpty(correo))
+            return Unauthorized(new { error = "El token no incluye el correo del usuario." });
 
         // 2. El tipo se fuerza a "Homologación"
         var solicitud = new Solicitud
@@ -71,8 +73,10 @@ public class SolicitudesController : ControllerBase
     public async Task<IActionResult> ObtenerMisSolicitudes()
     {
         var correo = User.FindFirstValue(ClaimTypes.Email)
-                     ?? User.FindFirstValue("email")
-                     ?? "estudiante@uta.edu.ec"; // Fallback
+                     ?? User.FindFirstValue("email");
+
+        if (string.IsNullOrEmpty(correo))
+            return Unauthorized(new { error = "El token no incluye el correo del usuario." });
 
         var solicitudes = await _db.Solicitudes
             .Include(s => s.CarreraOrigen)
