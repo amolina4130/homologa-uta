@@ -16,9 +16,9 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new()
     {
-        Title = "HomologaUTA - HomologaciÃ³n",
+        Title = "HomologaUTA - Homologación",
         Version = "v1",
-        Description = "ValidaciÃ³n de reglas objetivas y anÃ¡lisis de homologaciÃ³n"
+        Description = "Validación de reglas objetivas y análisis de homologación"
     });
 
     // Comentarios XML de los controladores y DTOs (se generan al compilar)
@@ -26,7 +26,7 @@ builder.Services.AddSwaggerGen(c =>
     if (File.Exists(xml)) c.IncludeXmlComments(xml);
 });
 
-// 2. Base de datos del servicio (resultados del anÃ¡lisis)
+// 2. Base de datos del servicio (resultados del análisis)
 builder.Services.AddDbContext<HomologacionDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -41,7 +41,7 @@ builder.Services.AddHttpClient<OllamaClient>();
 // 5. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
 
-// 6. AnÃ¡lisis de la solicitud y publicaciÃ³n del evento AnalisisCompletado (TA-08.4)
+// 6. AnÃ¡lisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
 builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>();
 builder.Services.AddScoped<AnalisisService>();
 
@@ -73,7 +73,7 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "OcurriÃ³ un error al aplicar las migraciones de homologaciÃ³n.");
+        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de homologaciÃ³n.");
     }
 }
 
