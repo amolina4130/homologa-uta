@@ -32,8 +32,8 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        var correo = User.FindFirstValue(ClaimTypes.Email) 
-                     ?? User.FindFirstValue("email") 
+        var correo = User.FindFirstValue(ClaimTypes.Email)
+                     ?? User.FindFirstValue("email")
                      ?? "estudiante@uta.edu.ec"; // Fallback para pruebas
 
         // 2. El tipo se fuerza a "Homologación"
@@ -52,6 +52,16 @@ public class SolicitudesController : ControllerBase
         }
 
         _db.Solicitudes.Add(solicitud);
+
+        _db.HistorialEstados.Add(new HistorialEstado
+        {
+            Solicitud = solicitud,
+            EstadoAnterior = null,
+            EstadoNuevo = solicitud.Estado,
+            UsuarioCorreo = correo,
+            FechaCambio = DateTime.UtcNow
+        });
+
         await _db.SaveChangesAsync();
 
         return Created($"/solicitudes/{solicitud.Id}", new { id = solicitud.Id, mensaje = "Solicitud registrada exitosamente." });
@@ -60,8 +70,8 @@ public class SolicitudesController : ControllerBase
     [HttpGet("mias")]
     public async Task<IActionResult> ObtenerMisSolicitudes()
     {
-        var correo = User.FindFirstValue(ClaimTypes.Email) 
-                     ?? User.FindFirstValue("email") 
+        var correo = User.FindFirstValue(ClaimTypes.Email)
+                     ?? User.FindFirstValue("email")
                      ?? "estudiante@uta.edu.ec"; // Fallback
 
         var solicitudes = await _db.Solicitudes
@@ -81,5 +91,28 @@ public class SolicitudesController : ControllerBase
             .ToListAsync();
 
         return Ok(solicitudes);
+    }
+
+    [HttpGet("{id:int}/historial")]
+    public async Task<IActionResult> ObtenerHistorial(int id)
+    {
+        var existe = await _db.Solicitudes.AnyAsync(s => s.Id == id);
+        if (!existe)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        var historial = await _db.HistorialEstados
+            .Where(h => h.SolicitudId == id)
+            .OrderBy(h => h.FechaCambio)
+            .Select(h => new
+            {
+                h.Id,
+                h.EstadoAnterior,
+                h.EstadoNuevo,
+                Usuario = h.UsuarioCorreo,
+                Fecha = h.FechaCambio
+            })
+            .ToListAsync();
+
+        return Ok(historial);
     }
 }
