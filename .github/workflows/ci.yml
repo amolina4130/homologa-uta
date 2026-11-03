@@ -50,10 +50,10 @@ jobs:
     # DOCUMENTOS
     # ==============================
     - name: Compilar Documentos
-      run: dotnet build services/documentos/HomologaUTA.Documentos.Tests/HomologaUTA.Documentos.Tests.csproj
+      run: dotnet build services/documentos/documentos.Tests/documentos.Tests.csproj
 
     - name: Probar Documentos
-      run: dotnet test services/documentos/HomologaUTA.Documentos.Tests/HomologaUTA.Documentos.Tests.csproj --no-build
+      run: dotnet test services/documentos/documentos.Tests/documentos.Tests.csproj --no-build
 
     # ==============================
     # REGLAS (solo compilar)
