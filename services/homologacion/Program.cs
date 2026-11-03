@@ -27,6 +27,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddSingleton<ValidadorReglas>();
 builder.Services.AddSingleton<ValidadorDocumentos>();
 builder.Services.AddSingleton<ServicioValidacionSolicitud>();
+builder.Services.AddSingleton<DecisionHomologacion>();
 
 // 3. Registrar el cliente de Ollama
 builder.Services.AddHttpClient<OllamaClient>();
