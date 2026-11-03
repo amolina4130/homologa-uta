@@ -51,6 +51,11 @@ builder.Services.AddHttpClient<AgenteExternoConnector>();
 builder.Services.AddScoped<AnalisisExternoService>();
 
 
+// Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
+builder.Services.AddHttpClient<SolicitudesClient>();
+builder.Services.AddScoped<CoordinadorService>();
+
+
 var app = builder.Build();
 
 // 7. ConfiguraciÃ³n de la app

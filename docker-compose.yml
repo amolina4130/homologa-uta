@@ -110,11 +110,13 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - Ollama__Url=http://ollama:11434
       - RabbitMQ__Host=rabbitmq
+      - Solicitudes__Url=http://solicitudes-service:8080
     ports:
       - "5005:8080"
     depends_on:
       - sqlserver
       - reglas-service
+      - solicitudes-service
       - ollama
       - rabbitmq
     networks:

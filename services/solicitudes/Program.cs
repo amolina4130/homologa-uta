@@ -1,4 +1,4 @@
-using HomologaUTA.Solicitudes.Data;
+﻿using HomologaUTA.Solicitudes.Data;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,8 +30,6 @@ builder.Services.AddSwaggerGen(c =>
 // --- 3. BASE DE DATOS ---
 builder.Services.AddDbContext<SolicitudesDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-builder.Services.AddScoped<HomologaUTA.Solicitudes.Services.ReglasClient>();
 
 var app = builder.Build();
 

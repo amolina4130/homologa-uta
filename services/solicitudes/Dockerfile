@@ -18,4 +18,4 @@ COPY --from=build /app/publish .
 # Exponer el puerto por defecto de .NET
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "HomologaUTA.Homologacion.dll"]
+ENTRYPOINT ["dotnet", "HomologaUTA.Solicitudes.dll"]
