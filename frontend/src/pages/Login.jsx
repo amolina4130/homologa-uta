@@ -29,6 +29,16 @@ export default function Login() {
     setCargando(true);
     try {
       const rol = await iniciarSesion(correo, contrasena);
+      // --- NUEVO: Guardar datos del usuario en localStorage ---
+      // (Asumiendo que iniciarSesion devuelve solo el rol, guardamos lo que tenemos)
+      // Si iniciarSesion devuelve más datos, se pueden usar aquí.
+      const usuarioData = {
+        nombre: correo.split("@")[0], // Extraemos el nombre del correo
+        correo: correo,
+        rol: rol
+      };
+      localStorage.setItem("usuario", JSON.stringify(usuarioData));
+      // --------------------------------------------------------
       navigate(rutaPorRol(rol));
     } catch (err) {
       setErrorLogin(
@@ -46,7 +56,6 @@ export default function Login() {
       <div className="card shadow-lg p-4" style={{ maxWidth: "450px", width: "100%" }}>
         
         <div className="text-center mb-4">
-          {/* Aquí puedes poner el logo de la UTA con una etiqueta img si lo tienes */}
           <h2 className="fw-bold text-primary">HomologaUTA</h2>
           <p className="text-muted">Sistema de Homologación - UTA</p>
         </div>
