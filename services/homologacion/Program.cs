@@ -53,7 +53,7 @@ builder.Services.AddScoped<AnalisisExternoService>();
 
 var app = builder.Build();
 
-// 7. Configuración de la app
+// 8. Configuración de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
@@ -62,7 +62,7 @@ app.MapControllers();
 
 app.Urls.Add("http://0.0.0.0:8080");
 
-// 8. Aplicar migraciones al arrancar
+// 9. Aplicar migraciones al arrancar
 using (var scope = app.Services.CreateScope())
 {
     try
