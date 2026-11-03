@@ -1,5 +1,10 @@
-using HomologaUTA.Homologacion.Agents; 
+using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Data;
+using HomologaUTA.Homologacion.Services;
+using HomologaUTA.Homologacion.Validadores;
+using Microsoft.EntityFrameworkCore;
+=======
 using HomologaUTA.Homologacion.Validadores; // <-- NUEVO: Para los validadores
 using HomologaUTA.Homologacion.Services;    // <-- NUEVO: Para el ServicioValidacionSolicitud
 
@@ -23,25 +28,50 @@ builder.Services.AddSwaggerGen(c =>
     if (File.Exists(xml)) c.IncludeXmlComments(xml);
 });
 
-// 2. Validadores de reglas objetivas (TA-07.1 y TA-07.2) y el servicio que los ejecuta (TA-07.4)
+// 2. Base de datos del servicio (resultados del análisis)
+builder.Services.AddDbContext<HomologacionDbContext>(o =>
+    o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// 3. Validadores de reglas objetivas (TA-07.1 y TA-07.2) y el servicio que los ejecuta (TA-07.4)
 builder.Services.AddSingleton<ValidadorReglas>();
 builder.Services.AddSingleton<ValidadorDocumentos>();
 builder.Services.AddSingleton<ServicioValidacionSolicitud>();
 builder.Services.AddSingleton<DecisionHomologacion>();
 
-// 3. Registrar el cliente de Ollama
+// 4. Registrar el cliente de Ollama
 builder.Services.AddHttpClient<OllamaClient>();
-// 4. Registrar el Agente Interno
+// 5. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
+
+// 6. Análisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
+builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>();
+builder.Services.AddScoped<AnalisisService>();
+
 
 var app = builder.Build();
 
-// 5. Configuración de la app
-app.UseSwagger();
+// 7. Configuración de la app
+// SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
+app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
 
 app.MapControllers();
 
 app.Urls.Add("http://0.0.0.0:8080");
+
+// 8. Aplicar migraciones al arrancar
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<HomologacionDbContext>();
+        context.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de homologación.");
+    }
+}
 
 app.Run();
