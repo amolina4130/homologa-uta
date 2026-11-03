@@ -1,12 +1,10 @@
-using HomologaUTA.Homologacion.Agents;
+﻿using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
-=======
-using HomologaUTA.Homologacion.Validadores; // <-- NUEVO: Para los validadores
-using HomologaUTA.Homologacion.Services;    // <-- NUEVO: Para el ServicioValidacionSolicitud
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,9 +46,14 @@ builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>()
 builder.Services.AddScoped<AnalisisService>();
 
 
+// 7. Conector del agente externo y su servicio (TA-09.2)
+builder.Services.AddHttpClient<AgenteExternoConnector>();
+builder.Services.AddScoped<AnalisisExternoService>();
+
+
 var app = builder.Build();
 
-// 7. Configuración de la app
+// 8. Configuración de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
@@ -59,7 +62,7 @@ app.MapControllers();
 
 app.Urls.Add("http://0.0.0.0:8080");
 
-// 8. Aplicar migraciones al arrancar
+// 9. Aplicar migraciones al arrancar
 using (var scope = app.Services.CreateScope())
 {
     try
