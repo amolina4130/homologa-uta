@@ -3,9 +3,10 @@ import EstadoSistema from "./pages/EstadoSistema";
 import Login from "./pages/Login";
 import Menu from "./components/Menu";
 import RutaProtegida from "./components/RutaProtegida";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext"; 
 
 // Importamos las pantallas
+import Inicio from "./pages/Inicio"; 
 import MisSolicitudes from "./pages/MisSolicitudes"; 
 import NuevaSolicitud from "./pages/NuevaSolicitud";
 import Carreras from "./pages/Carreras";
@@ -13,16 +14,6 @@ import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import PanelReglas from "./pages/PanelReglas"; 
 import PanelCoordinador from "./pages/PanelCoordinador"; 
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
-
-function Inicio() {
-  const { rol } = useAuth();
-  return (
-    <div style={{ padding: 40, fontFamily: "sans-serif" }}>
-      <h2>¡Bienvenido!</h2>
-      <p>Sesión iniciada con el rol: <strong>{rol ?? "desconocido"}</strong></p>
-    </div>
-  );
-}
 
 export default function App() {
   return (
@@ -34,6 +25,7 @@ export default function App() {
 
           {/* Rutas protegidas generales */}
           <Route element={<RutaProtegida />}>
+            {/* Ahora usa el componente Inicio importado */}
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />

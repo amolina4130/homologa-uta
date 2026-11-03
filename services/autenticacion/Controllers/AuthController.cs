@@ -45,6 +45,7 @@ public class AuthController : ControllerBase
         return Ok(new LoginResponse
         {
             Token = _tokens.GenerarToken(usuario),
+            Nombre = usuario.Correo.Split('@')[0],
             Correo = usuario.Correo,
             Rol = usuario.Rol.Nombre
         });

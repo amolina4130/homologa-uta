@@ -28,6 +28,7 @@ export default function Login() {
 
     setCargando(true);
     try {
+      // El AuthContext ya se encarga de guardar el usuario en el localStorage
       const rol = await iniciarSesion(correo, contrasena);
       navigate(rutaPorRol(rol));
     } catch (err) {
@@ -46,7 +47,6 @@ export default function Login() {
       <div className="card shadow-lg p-4" style={{ maxWidth: "450px", width: "100%" }}>
         
         <div className="text-center mb-4">
-          {/* Aquí puedes poner el logo de la UTA con una etiqueta img si lo tienes */}
           <h2 className="fw-bold text-primary">HomologaUTA</h2>
           <p className="text-muted">Sistema de Homologación - UTA</p>
         </div>
