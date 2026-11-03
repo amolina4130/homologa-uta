@@ -15,6 +15,8 @@ public class SolicitudesDbContext : DbContext
     public DbSet<Solicitud> Solicitudes => Set<Solicitud>();
     public DbSet<SolicitudAsignatura> SolicitudAsignaturas => Set<SolicitudAsignatura>();
 
+   public DbSet<HistorialEstado> HistorialEstados => Set<HistorialEstado>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Configuración 1
@@ -62,5 +64,19 @@ public class SolicitudesDbContext : DbContext
              .WithMany()
              .HasForeignKey(sa => sa.AsignaturaId);
         });
+        
+        modelBuilder.Entity<HistorialEstado>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.EstadoAnterior).HasMaxLength(50);
+            e.Property(h => h.EstadoNuevo).IsRequired().HasMaxLength(50);
+            e.Property(h => h.UsuarioCorreo).IsRequired().HasMaxLength(150);
+            e.HasOne(h => h.Solicitud)
+             .WithMany()
+             .HasForeignKey(h => h.SolicitudId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(h => h.SolicitudId);
+        });
+
     }
 }
