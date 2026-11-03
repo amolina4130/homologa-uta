@@ -4,6 +4,9 @@ using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
+=======
+using HomologaUTA.Homologacion.Validadores; // <-- NUEVO: Para los validadores
+using HomologaUTA.Homologacion.Services;    // <-- NUEVO: Para el ServicioValidacionSolicitud
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +46,7 @@ builder.Services.AddScoped<AgenteInterno>();
 // 6. Análisis de la solicitud y publicación del evento AnalisisCompletado (TA-08.4)
 builder.Services.AddSingleton<IAnalisisEventPublisher, AnalisisEventPublisher>();
 builder.Services.AddScoped<AnalisisService>();
+
 
 var app = builder.Build();
 
