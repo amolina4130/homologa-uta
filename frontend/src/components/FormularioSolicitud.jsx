@@ -5,8 +5,7 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
   const [carreras, setCarreras] = useState([]);
   const [asignaturas, setAsignaturas] = useState([]);
   const [formData, setFormData] = useState({
-    tipo: "Homologación", // <-- Tipo fijo
-    modulo: "INTERNO",
+    tipo: "Homologación", // Tipo fijo
     carreraOrigenId: "",
     carreraDestinoId: "",
     asignaturasIds: [],
@@ -68,33 +67,14 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
   const campo = { width: "100%", padding: 10, boxSizing: "border-box", border: "2px solid #000", marginBottom: "5px" };
   const error = { color: "red", fontSize: 14, margin: "0 0 10px" };
 
-  // Verificamos si el tipo es cambio de universidad (para mostrar el selector de módulo)
-  const esCambioUniversidad = formData.tipo === "Cambio de universidad";
-
   return (
     <form onSubmit={handleSubmit} noValidate style={{ display: "flex", gap: "30px", border: "2px solid #000", padding: "20px", marginTop: "20px" }}>
       {/* Columna Izquierda */}
       <div style={{ flex: 1 }}>
         <h3>Nueva solicitud de homologación</h3>
         
-        {/* SELECTOR DE MÓDULO (solo visible si NO es homologación interna) */}
-        {esCambioUniversidad && (
-          <>
-            <label>Módulo de análisis</label>
-            <select 
-              name="modulo" 
-              value={formData.modulo} 
-              onChange={handleChange} 
-              style={campo}
-            >
-              <option value="INTERNO">Agente interno (reglas normativas de la UTA)</option>
-              <option value="EXTERNO">Agente externo (universidades externas, sin reglas fijas)</option>
-            </select>
-            <small style={{ display: "block", marginBottom: "10px", color: "#555" }}>
-              Seleccione el agente para analizar su caso.
-            </small>
-          </>
-        )}
+        {/* EL SELECTOR DE TIPO YA NO EXISTE (es fijo) */}
+        {/* EL SELECTOR DE MÓDULO YA NO EXISTE */}
 
         <label>Carrera de origen</label>
         <select name="carreraOrigenId" value={formData.carreraOrigenId} onChange={handleChange} style={campo}>
