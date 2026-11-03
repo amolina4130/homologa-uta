@@ -4,7 +4,7 @@ namespace HomologaUTA.Documentos.Services;
 
 public class ExtractorPdfService
 {
-    public string ExtraerTexto(string rutaPdf)
+    public virtual string ExtraerTexto(string rutaPdf)
     {
         if (!File.Exists(rutaPdf))
             throw new FileNotFoundException("El archivo PDF no existe.");

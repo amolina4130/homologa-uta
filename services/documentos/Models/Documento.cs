@@ -9,4 +9,7 @@ public class Documento
     public string TextoExtraido { get; set; } = string.Empty;
     public string Estado { get; set; } = "PENDIENTE"; // PENDIENTE o PROCESADO
     public DateTime FechaSubida { get; set; } = DateTime.UtcNow;
+    
+    // Para saber a quién pertenece el documento
+    public string EstudianteId { get; set; } = string.Empty;
 }

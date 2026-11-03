@@ -34,6 +34,10 @@ namespace HomologaUTA.Documentos.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("EstudianteId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("FechaSubida")
                         .HasColumnType("datetime2");
 

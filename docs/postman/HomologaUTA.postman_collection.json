@@ -1,242 +1,196 @@
 {
-	"info": {
-		"name": "HomologaUTA",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "1. Auth",
-			"item": [
-				{
-					"name": "1.1 Login Exitoso",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"var jsonData = pm.response.json();",
-									"pm.collectionVariables.set(\"token\", jsonData.token);"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"correo\": \"estudiante@uta.edu.ec\",\n    \"contrasena\": \"Demo123!\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "http://localhost:8080/auth/login",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["auth", "login"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "2. Pruebas de Seguridad",
-			"item": [
-				{
-					"name": "2.1 Acceso con Token Válido (200)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{token}}",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "http://localhost:8080/carreras",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["carreras"]
-						}
-					}
-				},
-				{
-					"name": "2.2 Acceso sin Token (401)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "http://localhost:8080/carreras",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["carreras"]
-						}
-					}
-				},
-				{
-					"name": "2.3 Acceso con Token Vencido (401)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJ0ZXN0QHV0YS5lZHUuZWMiLCJleHAiOjE1MTYyMzkwMjJ9.4S1pX2V4cGlyZWRUb2tlblNpZ25hdHVyZQ",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "http://localhost:8080/carreras",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["carreras"]
-						}
-					}
-				},
-				{
-					"name": "2.4 Acceso con Rol Incorrecto (403)",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{token}}",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"comentario\": \"Intento de accion de coordinador\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "http://localhost:8080/solicitudes/revision",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["solicitudes", "revision"]
-						}
-					}
-				}
-			]
-		},
-		{
-			"name": "3. Flujo de Solicitudes",
-			"item": [
-				{
-					"name": "3.1 Crear Solicitud (Estudiante)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200 or 201\", function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-									"});",
-									"var jsonData = pm.response.json();",
-									"pm.collectionVariables.set(\"solicitud_id\", jsonData.id);"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{token}}",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"tipo\": \"Cambio de carrera\",\n    \"carreraOrigenId\": 1,\n    \"carreraDestinoId\": 2,\n    \"asignaturasIds\": [1, 2]\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "http://localhost:8080/solicitudes",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["solicitudes"]
-						}
-					}
-				},
-				{
-					"name": "3.2 Consultar Mis Solicitudes (Estudiante)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{token}}",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "http://localhost:8080/solicitudes/mias",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["solicitudes", "mias"]
-						}
-					}
-				},
-				{
-					"name": "3.3 Verificar aislamiento (Estudiante 2 ve vacío)",
-					"request": {
-						"method": "GET",
-						"header": [
-							{
-								"key": "Authorization",
-								"value": "Bearer {{token_otro_estudiante}}",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "http://localhost:8080/solicitudes/mias",
-							"protocol": "http",
-							"host": ["localhost"],
-							"port": "8080",
-							"path": ["solicitudes", "mias"]
-						}
-					}
-				}
-			]
-		}
-	],
-	"variable": [
-		{
-			"key": "token",
-			"value": ""
-		},
-		{
-			"key": "solicitud_id",
-			"value": ""
-		},
-		{
-			"key": "token_otro_estudiante",
-			"value": ""
-		}
-	]
+  "info": {
+    "_postman_id": "b4bcbfc8-16b1-4f16-8f7e-177c8a672c19",
+    "name": "HomologaUTA",
+    "description": "Colección de pruebas para HomologaUTA",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "1.1 Login Exitoso",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.collectionVariables.set(\"token\", jsonData.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"correo\": \"estudiante@uta.edu.ec\",\n    \"contrasena\": \"Demo123!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Pruebas de Seguridad",
+      "item": [
+        {
+          "name": "2.1 Acceso con Token Válido (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/carreras",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["carreras"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Acceso sin Token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/carreras",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["carreras"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Acceso con Token Vencido (401)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJ0ZXN0QHV0YS5lZHUuZWMiLCJleHAiOjE1MTYyMzkwMjJ9.4S1pX2V4cGlyZWRUb2tlblNpZ25hdHVyZQ",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/carreras",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["carreras"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Acceso con Rol Incorrecto (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_estudiante}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"comentario\": \"Intento de accion de coordinador\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/solicitudes/revision",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["solicitudes", "revision"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Documentos",
+      "item": [
+        {
+          "name": "3.1 Subir Documento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "Archivo",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "SolicitudId",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "TipoDocumento",
+                  "value": "MALLA",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "http://localhost:8080/documentos",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["documentos"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "token_estudiante",
+      "value": ""
+    }
+  ]
 }

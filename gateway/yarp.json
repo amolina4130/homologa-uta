@@ -41,6 +41,11 @@
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{**catch-all}" }
+      },
+      "documentos": {
+        "ClusterId": "documentos",
+        "AuthorizationPolicy": "estudiante",
+        "Match": { "Path": "/documentos/{**catch-all}" }
       }
     },
     "Clusters": {
@@ -62,6 +67,11 @@
       "homologacion": {
         "Destinations": {
           "d1": { "Address": "http://homologacion-service:8080/" }
+        }
+      },
+      "documentos": {
+        "Destinations": {
+          "d1": { "Address": "http://documentos-service:8080/" }
         }
       }
     }
