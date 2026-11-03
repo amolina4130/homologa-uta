@@ -1,0 +1,50 @@
+name: CI - Compilación y Pruebas
+
+on:
+  push:
+    branches: [ "develop", "main" ]
+  pull_request:
+    branches: [ "develop", "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout del código
+      uses: actions/checkout@v4
+
+    - name: Configurar .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    # 1. Compilar y probar Autenticación
+    - name: Restaurar Autenticación
+      run: dotnet restore services/autenticacion/HomologaUTA.Autenticacion.csproj
+    - name: Compilar Autenticación
+      run: dotnet build services/autenticacion/HomologaUTA.Autenticacion.csproj --no-restore
+    - name: Probar Autenticación
+      run: dotnet test services/autenticacion/HomologaUTA.Autenticacion.Tests/HomologaUTA.Autenticacion.Tests.csproj --no-build
+
+    # 2. Compilar y probar Solicitudes
+    - name: Restaurar Solicitudes
+      run: dotnet restore services/solicitudes/HomologaUTA.Solicitudes.csproj
+    - name: Compilar Solicitudes
+      run: dotnet build services/solicitudes/HomologaUTA.Solicitudes.csproj --no-restore
+    - name: Probar Solicitudes
+      run: dotnet test services/solicitudes/HomologaUTA.Solicitudes.Tests/HomologaUTA.Solicitudes.Tests.csproj --no-build
+
+    # 3. Compilar y probar Homologación
+    - name: Restaurar Homologación
+      run: dotnet restore services/homologacion/HomologaUTA.Homologacion.csproj
+    - name: Compilar Homologación
+      run: dotnet build services/homologacion/HomologaUTA.Homologacion.csproj --no-restore
+    - name: Probar Homologación
+      run: dotnet test services/HomologaUTA.Homologacion.Tests/HomologaUTA.Homologacion.Tests.csproj --no-build
+
+    # 4. Compilar Documentos y Reglas (solo compilación, sin pruebas por ahora)
+    - name: Compilar Documentos
+      run: dotnet build services/documentos/HomologaUTA.Documentos.csproj
+    - name: Compilar Reglas
+      run: dotnet build services/reglas/HomologaUTA.Reglas.csproj
