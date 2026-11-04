@@ -8,9 +8,6 @@ export default function PanelCoordinador() {
   const { rol } = useAuth();
   const [solicitudes, setSolicitudes] = useState([]);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
-  const [decisiones, setDecisiones] = useState({});
-  const [nuevosResultados, setNuevosResultados] = useState({});
-  const [observaciones, setObservaciones] = useState({});
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
@@ -18,7 +15,6 @@ export default function PanelCoordinador() {
   useEffect(() => {
     if (rol !== "COORDINADOR") return;
 
-    // Envolvemos el setCargando en un setTimeout para evitar el error de ESLint
     const timer = setTimeout(() => {
       setCargando(true);
     }, 0);
@@ -38,18 +34,6 @@ export default function PanelCoordinador() {
     try {
       const detalle = await obtenerDetalleSolicitud(id);
       setSolicitudSeleccionada(detalle);
-      
-      const decIniciales = {};
-      const obsIniciales = {};
-      const resIniciales = {};
-      detalle.asignaturas.forEach((a) => {
-        decIniciales[a.id] = ""; 
-        obsIniciales[a.id] = "";
-        resIniciales[a.id] = "";
-      });
-      setDecisiones(decIniciales);
-      setObservaciones(obsIniciales);
-      setNuevosResultados(resIniciales);
     } catch {
       setError("Error al cargar el detalle.");
     } finally {
@@ -57,55 +41,33 @@ export default function PanelCoordinador() {
     }
   };
 
-  const guardarInforme = async () => {
+  // Esta función ahora recibe el informe ya armado desde el componente hijo
+  const guardarInforme = async (informeArmado) => {
     if (!solicitudSeleccionada) return;
 
-    const todasValidas = solicitudSeleccionada.asignaturas.every((asig) => {
-      const decision = decisiones[asig.id];
-      const nuevoResultado = nuevosResultados[asig.id];
-      const observacion = observaciones[asig.id];
-
-      if (!decision) return false;
-      if (decision === "MODIFICAR") {
-        if (!nuevoResultado) return false;
-        if (!observacion || observacion.trim() === "") return false;
-      }
-      return true;
-    });
-
-    if (!todasValidas) {
-      setError("Debe completar el nuevo resultado y la observación para las asignaturas modificadas.");
-      return;
-    }
-
-    const confirmar = window.confirm("¿Está seguro de emitir el informe técnico? Esta acción no se puede deshacer.");
+    const confirmar = window.confirm("¿Está seguro de emitir el informe técnico?");
     if (!confirmar) return;
 
     setCargando(true);
     setError("");
     setExito("");
 
-    const decisionesFormateadas = Object.keys(decisiones).map((id) => ({
-      asignaturaId: Number(id),
-      decision: decisiones[id],
-      nuevoResultado: nuevosResultados[id] || null,
-      observacion: observaciones[id],
-    }));
-
     try {
-      await emitirInforme(solicitudSeleccionada.id, decisionesFormateadas);
+      // Llamamos al servicio enviando el ID de la solicitud y el arreglo
+      await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
       setExito("Informe técnico emitido correctamente.");
       setSolicitudSeleccionada(null);
       
+      // Recargamos la lista
       try {
         const data = await obtenerSolicitudesPendientes();
         setSolicitudes(data);
       } catch {
-        console.error("No se pudo recargar la lista de solicitudes.");
+        console.error("No se pudo recargar la lista.");
       }
 
-    } catch {
-      setError("Error al emitir el informe. Verifique la conexión.");
+    } catch (e) {
+      setError("Error al emitir el informe: " + e.message);
     } finally {
       setCargando(false);
     }
@@ -118,19 +80,6 @@ export default function PanelCoordinador() {
       </div>
     );
   }
-
-  const todasDecididas = solicitudSeleccionada?.asignaturas.every((asig) => {
-    const decision = decisiones[asig.id];
-    const nuevoResultado = nuevosResultados[asig.id];
-    const observacion = observaciones[asig.id];
-
-    if (!decision) return false;
-    if (decision === "MODIFICAR") {
-      if (!nuevoResultado) return false;
-      if (!observacion || observacion.trim() === "") return false;
-    }
-    return true;
-  });
 
   return (
     <div className="container mt-4">
@@ -148,16 +97,9 @@ export default function PanelCoordinador() {
       ) : (
         <DetalleSolicitud
           solicitud={solicitudSeleccionada}
-          decisiones={decisiones}
-          nuevosResultados={nuevosResultados}
-          observaciones={observaciones}
-          onDecisionChange={(id, valor) => setDecisiones((prev) => ({ ...prev, [id]: valor }))}
-          onResultadoChange={(id, valor) => setNuevosResultados((prev) => ({ ...prev, [id]: valor }))}
-          onObservacionChange={(id, valor) => setObservaciones((prev) => ({ ...prev, [id]: valor }))}
           onVolver={() => setSolicitudSeleccionada(null)}
           onGuardar={guardarInforme}
           cargando={cargando}
-          todasDecididas={todasDecididas}
         />
       )}
     </div>

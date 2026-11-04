@@ -22,23 +22,30 @@ export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
             ) : solicitudes.length === 0 ? (
               <tr><td colSpan="6" className="text-center py-4">No hay solicitudes pendientes.</td></tr>
             ) : (
-              solicitudes.map((sol) => (
-                <tr key={sol.id}>
-                  <td>{new Date(sol.fecha).toLocaleDateString("es-EC")}</td>
-                  <td>{sol.estudiante}</td>
-                  <td>{sol.tipo}</td>
-                  <td>{sol.origen} → {sol.destino}</td>
-                  <td>
-                    {/* TODO: Calcular desde el backend usando la fecha límite */}
-                    <span className="badge bg-warning text-dark" title="Plazo máximo normativo (5 días término)">5 días</span>
-                  </td>
-                  <td>
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => onAbrir(sol.id)}>
-                      Abrir
-                    </button>
-                  </td>
-                </tr>
-              ))
+              solicitudes.map((sol) => {
+                // Usamos los nombres EXACTOS que devuelve tu CoordinadorService.cs
+                const idSolicitud = sol.solicitudId;
+                const origen = sol.carreraOrigen || "-";
+                const destino = sol.carreraDestino || "-";
+                const fecha = sol.fecha ? new Date(sol.fecha).toLocaleDateString("es-EC") : "-";
+                
+                return (
+                  <tr key={idSolicitud}>
+                    <td>{fecha}</td>
+                    <td>{sol.estudiante}</td>
+                    <td>{sol.tipo}</td>
+                    <td>{origen} → {destino}</td>
+                    <td>
+                      <span className="badge bg-warning text-dark" title="Plazo máximo normativo (5 días término)">5 días</span>
+                    </td>
+                    <td>
+                      <button className="btn btn-sm btn-outline-primary" onClick={() => onAbrir(idSolicitud)}>
+                        Abrir
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
