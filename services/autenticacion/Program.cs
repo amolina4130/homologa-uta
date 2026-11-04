@@ -39,7 +39,7 @@ using (var scope = app.Services.CreateScope())
     var context = services.GetRequiredService<AuthDbContext>();
     
     // 1. Crear la base de datos (esto soluciona el error 4060)
-    context.Database.EnsureCreated();
+    context.Database.Migrate();
 
     // 2. Cargar los usuarios semilla
     var hasher = services.GetRequiredService<IPasswordHasher<Usuario>>();

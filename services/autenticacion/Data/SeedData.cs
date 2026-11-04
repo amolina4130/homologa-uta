@@ -2,6 +2,7 @@ using HomologaUTA.Autenticacion.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Threading.Tasks;
 
 namespace HomologaUTA.Autenticacion.Data;
@@ -30,8 +31,22 @@ public static class SeedData
                     RolId = u.RolId
                 };
 
-                // SOLUCIÓN: Si la contraseña del .env es nula, usar "Demo123!" por defecto
-                var passwordSegura = string.IsNullOrEmpty(u.Pass) ? "Demo123!" : u.Pass;
+                // SOLUCIÓN: Validar que la contraseña exista o usar por defecto solo en Desarrollo
+                var passwordSegura = u.Pass;
+                
+                if (string.IsNullOrEmpty(passwordSegura))
+                {
+                    var entorno = config["ASPNETCORE_ENVIRONMENT"] ?? "Production";
+                    
+                    if (entorno == "Development")
+                    {
+                        passwordSegura = "Demo123!";
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"La variable de entorno para el usuario {u.Correo} no está definida.");
+                    }
+                }
 
                 nuevoUsuario.PasswordHash = hasher.HashPassword(nuevoUsuario, passwordSegura);
                 context.Usuarios.Add(nuevoUsuario);
