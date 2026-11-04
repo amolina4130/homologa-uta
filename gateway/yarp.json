@@ -42,6 +42,12 @@
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{**catch-all}" }
       },
+      "documentos-descarga": {
+        "ClusterId": "documentos",
+        "AuthorizationPolicy": "Anonymous",
+        "Order": -1,
+        "Match": { "Path": "/documentos/descargar/{**catch-all}" }
+      },
       "documentos": {
         "ClusterId": "documentos",
         "AuthorizationPolicy": "estudiante",

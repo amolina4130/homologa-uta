@@ -1,5 +1,3 @@
-//import React from 'react';
-
 export const TablaSolicitudes = ({ solicitudes }) => {
   if (!solicitudes || solicitudes.length === 0) {
     return (
@@ -25,7 +23,8 @@ export const TablaSolicitudes = ({ solicitudes }) => {
         <tbody>
           {solicitudes.map((sol) => (
             <tr key={sol.id}>
-              <td className="text-center fw-bold">{sol.id}</td>
+              {/* Mostramos el Numero (SOL-0001) o el ID */}
+              <td className="text-center fw-bold">{sol.numero || sol.id}</td>
               
               {/* Formateo de fecha seguro */}
               <td>
@@ -38,8 +37,9 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               
               <td>{sol.tipo || '-'}</td>
               
-              <td>{sol.carreraOrigenNombre || sol.carreraOrigen || sol.carreraOrigenId || '-'}</td>
-              <td>{sol.carreraDestinoNombre || sol.carreraDestino || sol.carreraDestinoId || '-'}</td>
+              {/* Buscamos sol.origen y sol.destino (como los manda el backend ahora) */}
+              <td>{sol.origen || sol.carreraOrigen || '-'}</td>
+              <td>{sol.destino || sol.carreraDestino || '-'}</td>
               
               <td className="text-center">
                 <span className="badge bg-success p-2">

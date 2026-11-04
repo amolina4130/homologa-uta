@@ -59,7 +59,7 @@ export default function AdjuntarDocumentos() {
         nombre: archivo.name,
         tipo: etiqueta,
         tamano: `${(archivo.size / (1024 * 1024)).toFixed(1)} MB`,
-        estado: "PROCEADO",
+        estado: "PROCESADO",
       };
       setDocumentosPorSolicitud((prev) => ({
         ...prev,
@@ -75,65 +75,103 @@ export default function AdjuntarDocumentos() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", fontFamily: "sans-serif", border: "2px solid #000" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #000", padding: "8px 16px", fontWeight: "bold" }}>
-        <span>ADJUNTAR DOCUMENTOS</span>
-        <span>Rol: {rol === "ESTUDIANTE" ? "Estudiante" : rol}</span>
-      </div>
+    <div className="container mt-4">
+      <div className="row justify-content-center">
+        <div className="col-md-10">
+          <div className="card shadow-sm border-0">
+            
+            {/* ENCABEZADO */}
+            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+              <h5 className="mb-0 fw-bold">ADJUNTAR DOCUMENTOS</h5>
+              <span className="badge bg-light text-primary fs-6">
+                Rol: {rol === "ESTUDIANTE" ? "Estudiante" : rol}
+              </span>
+            </div>
 
-      <div style={{ padding: 24 }}>
-        <h1 style={{ textAlign: "center" }}>SISTEMA DE HOMOLOGACIÓN - UTA</h1>
+            <div className="card-body p-4">
+              <h3 className="text-center fw-bold mb-4">SISTEMA DE HOMOLOGACIÓN - UTA</h3>
 
-        <label htmlFor="solicitud"><strong>Solicitud</strong></label>
-        <select
-          id="solicitud"
-          className="form-control mb-3"
-          value={solicitudId}
-          onChange={(e) => { setSolicitudId(e.target.value); setError(""); }}
-        >
-          <option value="">Seleccione una solicitud</option>
-          {solicitudes.map((s) => (
-            <option key={s.id} value={s.id}>
-              SOL-{s.numero} · {s.origen} → {s.destino}
-            </option>
-          ))}
-        </select>
+              {/* SELECTOR DE SOLICITUD */}
+              <div className="mb-4">
+                <label htmlFor="solicitud" className="form-label fw-bold">Solicitud</label>
+                <select
+                  id="solicitud"
+                  className="form-select"
+                  value={solicitudId}
+                  onChange={(e) => { setSolicitudId(e.target.value); setError(""); }}
+                >
+                  <option value="">Seleccione una solicitud</option>
+                  {solicitudes.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.numero} · {s.origen} → {s.destino}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-        <div className="p-3 mb-3" style={{ border: "2px solid #000" }}>
-          <h3 style={{ marginTop: 0 }}>Nuevo documento</h3>
+              {/* SECCIÓN NUEVO DOCUMENTO */}
+              <div className="border rounded p-4 bg-light mb-4">
+                <h5 className="fw-bold mb-3">Nuevo documento</h5>
 
-          <label htmlFor="tipo"><strong>Tipo de documento</strong></label>
-          <select id="tipo" className="form-control mb-3" value={tipoCodigo} onChange={(e) => setTipoCodigo(e.target.value)}>
-            {TIPOS.map((t) => (
-              <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
-            ))}
-          </select>
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="tipo" className="form-label fw-bold">Tipo de documento</label>
+                    <select 
+                      id="tipo" 
+                      className="form-select" 
+                      value={tipoCodigo} 
+                      onChange={(e) => setTipoCodigo(e.target.value)}
+                    >
+                      {TIPOS.map((t) => (
+                        <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
+                      ))}
+                    </select>
+                  </div>
 
-          <label htmlFor="archivo"><strong>Archivo PDF</strong></label>
-          <div>
-            <input key={claveInput} id="archivo" type="file" className="form-control mb-3" accept=".pdf" onChange={cambiarArchivo} />
+                  <div className="col-md-6 mb-3">
+                    <label htmlFor="archivo" className="form-label fw-bold">Archivo PDF</label>
+                    <input 
+                      key={claveInput} 
+                      id="archivo" 
+                      type="file" 
+                      className="form-control" 
+                      accept=".pdf" 
+                      onChange={cambiarArchivo} 
+                    />
+                    <div className="form-text">
+                      Solo se aceptan archivos PDF. Tamaño máximo configurable (por ejemplo, 10 MB).
+                    </div>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="alert alert-danger d-flex align-items-center mt-3 mb-0 py-2">
+                    <span className="me-2">✖</span> {error}
+                  </div>
+                )}
+
+                <div className="text-end mt-4">
+                  <button onClick={subir} disabled={cargando || !archivo} className="btn btn-primary px-4 fw-bold">
+                    {cargando ? "Subiendo..." : "Adjuntar documento"}
+                  </button>
+                </div>
+              </div>
+
+              {/* LISTA DE DOCUMENTOS */}
+              <div className="mb-4">
+                <h5 className="fw-bold mb-3">Documentos de la solicitud</h5>
+                <ListaDocumentos documentos={documentosPorSolicitud[solicitudId] ?? []} />
+              </div>
+
+              <div className="alert alert-secondary small mb-0">
+                El texto de cada PDF se extrae con PdfPig y el documento pasa a PROCESADO.
+                <br />
+                Solo ves los documentos de tus propias solicitudes.
+              </div>
+            </div>
+            
           </div>
-          <p style={{ fontSize: 14 }}>
-            Solo se aceptan archivos PDF. Tamaño máximo configurable (por ejemplo, 10 MB).
-          </p>
-
-          {error && (
-            <p style={{ border: "1px dashed #000", padding: 12 }}>✖ {error}</p>
-          )}
-
-          <button onClick={subir} disabled={cargando || !archivo} className="btn btn-primary mt-2">
-            {cargando ? "Subiendo..." : "Adjuntar documento"}
-          </button>
         </div>
-
-        <h3>Documentos de la solicitud</h3>
-        <ListaDocumentos documentos={documentosPorSolicitud[solicitudId] ?? []} />
-
-        <p style={{ marginTop: 24 }}>
-          El texto de cada PDF se extrae con PdfPig y el documento pasa a PROCESADO.
-          <br />
-          Solo ves los documentos de tus propias solicitudes.
-        </p>
       </div>
     </div>
   );
