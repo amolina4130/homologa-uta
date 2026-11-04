@@ -28,6 +28,7 @@ public class TokenService
         {
             new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, usuario.Correo),
+            new Claim(ClaimTypes.Email, usuario.Correo), // <-- LA CLAVE PARA QUE FUNCIONE
             new Claim("rol", usuario.Rol.Nombre)
         };
 

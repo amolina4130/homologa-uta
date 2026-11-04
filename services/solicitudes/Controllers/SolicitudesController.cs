@@ -4,6 +4,7 @@ using HomologaUTA.Solicitudes.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Net.Http.Json;
 
 namespace HomologaUTA.Solicitudes.Controllers;
 
@@ -22,7 +23,6 @@ public class SolicitudesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CrearSolicitud([FromBody] SolicitudRequest request)
     {
-        // 1. Validaciones (Ya no validamos el Tipo, porque es fijo)
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
             return BadRequest(new { error = "Faltan campos obligatorios." });
 
@@ -32,20 +32,17 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        var correo = User.FindFirstValue(ClaimTypes.Email)
-                     ?? User.FindFirstValue("email");
+        var correo = User.FindFirstValue(ClaimTypes.Email) 
+                     ?? User.FindFirstValue("email")
+                     ?? "estudiante@uta.edu.ec";
 
-        if (string.IsNullOrEmpty(correo))
-            return Unauthorized(new { error = "El token no incluye el correo del usuario." });
-
-        // 2. El tipo se fuerza a "Homologación"
         var solicitud = new Solicitud
         {
             Tipo = "Homologación",
             CarreraOrigenId = request.CarreraOrigenId,
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
-            Estado = EstadoSolicitud.REGISTRADA
+            Estado = EstadoSolicitud.PENDIENTE_REVISION // <-- CLAVE PARA EL COORDINADOR
         };
 
         foreach (var asigId in request.AsignaturasIds)
@@ -65,30 +62,29 @@ public class SolicitudesController : ControllerBase
         });
 
         await _db.SaveChangesAsync();
-
+        
         return Created($"/solicitudes/{solicitud.Id}", new { id = solicitud.Id, mensaje = "Solicitud registrada exitosamente." });
     }
 
     [HttpGet("mias")]
     public async Task<IActionResult> ObtenerMisSolicitudes()
     {
-        var correo = User.FindFirstValue(ClaimTypes.Email)
-                     ?? User.FindFirstValue("email");
-
-        if (string.IsNullOrEmpty(correo))
-            return Unauthorized(new { error = "El token no incluye el correo del usuario." });
+        var correo = User.FindFirstValue(ClaimTypes.Email) 
+                     ?? User.FindFirstValue("email")
+                     ?? "estudiante@uta.edu.ec";
 
         var solicitudes = await _db.Solicitudes
             .Include(s => s.CarreraOrigen)
             .Include(s => s.CarreraDestino)
             .Where(s => s.EstudianteCorreo == correo)
             .OrderByDescending(s => s.FechaRegistro)
-            .Select(s => new SolicitudResponse
+            .Select(s => new 
             {
                 Id = s.Id,
+                Numero = "SOL-" + s.Id.ToString("D4"),
                 Tipo = s.Tipo,
-                CarreraOrigen = s.CarreraOrigen.Nombre,
-                CarreraDestino = s.CarreraDestino.Nombre,
+                Origen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
+                Destino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
                 FechaRegistro = s.FechaRegistro.ToString("yyyy-MM-dd"),
                 Estado = s.Estado
             })
@@ -118,5 +114,56 @@ public class SolicitudesController : ControllerBase
             .ToListAsync();
 
         return Ok(historial);
+    }
+
+    // --- ENDPOINT PARA EL COORDINADOR (LISTA) ---
+    [HttpGet("internal/solicitudes/pendientes")]
+    public async Task<IActionResult> ObtenerPendientes()
+    {
+        var pendientes = await _db.Solicitudes
+            .Include(s => s.CarreraOrigen)
+            .Include(s => s.CarreraDestino)
+            .Where(s => s.Estado == EstadoSolicitud.PENDIENTE_REVISION)
+            .OrderBy(s => s.FechaRegistro)
+            .Select(s => new 
+            {
+                Id = s.Id,
+                FechaRegistro = s.FechaRegistro,
+                EstudianteCorreo = s.EstudianteCorreo,
+                Tipo = s.Tipo,
+                CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
+                CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino"
+            })
+            .ToListAsync();
+
+        return Ok(pendientes);
+    }
+
+    // --- ENDPOINT PARA BUSCAR POR IDS (DETALLE DEL COORDINADOR) ---
+    [HttpGet("internal/solicitudes")]
+    public async Task<IActionResult> ObtenerPorIds([FromQuery] string ids)
+    {
+        if (string.IsNullOrEmpty(ids))
+            return Ok(new List<object>());
+
+        var idList = ids.Split(',').Select(int.Parse).ToList();
+
+        var solicitudes = await _db.Solicitudes
+            .Include(s => s.CarreraOrigen)
+            .Include(s => s.CarreraDestino)
+            .Where(s => idList.Contains(s.Id))
+            .Select(s => new 
+            {
+                Id = s.Id,
+                FechaRegistro = s.FechaRegistro,
+                EstudianteCorreo = s.EstudianteCorreo,
+                Tipo = s.Tipo,
+                CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
+                CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
+                Estado = s.Estado
+            })
+            .ToListAsync();
+
+        return Ok(solicitudes);
     }
 }

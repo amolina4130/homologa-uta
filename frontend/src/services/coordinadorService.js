@@ -8,35 +8,33 @@ const getAuthHeaders = () => {
   };
 };
 
-// Función auxiliar para extraer los datos de la respuesta del backend
 const extraerDatos = (json) => {
-  // Si el backend devuelve { data: [...] }, retornamos data; si no, el json directo
   return json.data !== undefined ? json.data : json;
 };
 
 export async function obtenerSolicitudesPendientes() {
-  const res = await fetch(`${GATEWAY_URL}/solicitudes/pendientes`, {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/pendientes`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Error al cargar solicitudes pendientes");
   const json = await res.json();
-  return extraerDatos(json); // <-- Siempre devuelve un arreglo
+  return extraerDatos(json); 
 }
 
 export async function obtenerDetalleSolicitud(id) {
-  const res = await fetch(`${GATEWAY_URL}/solicitudes/${id}/detalle`, {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/detalle`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Error al cargar el detalle");
   const json = await res.json();
-  return extraerDatos(json); // <-- Siempre devuelve el objeto
+  return extraerDatos(json); 
 }
 
-export async function emitirInforme(id, decisiones) {
-  const res = await fetch(`${GATEWAY_URL}/solicitudes/${id}/informe`, {
+export async function emitirInforme(id, informeCompleto) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe`, {
     method: "POST",
     headers: getAuthHeaders(),
-    body: JSON.stringify({ decisiones }),
+    body: JSON.stringify(informeCompleto),
   });
   if (!res.ok) throw new Error("Error al emitir el informe");
   const json = await res.json();

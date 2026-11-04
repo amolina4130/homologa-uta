@@ -1,101 +1,113 @@
-export default function DetalleSolicitudComponente({
-  solicitud,
-  decisiones,
-  nuevosResultados,
-  observaciones,
-  onDecisionChange,
-  onResultadoChange,
-  onObservacionChange,
-  onVolver,
-  onGuardar,
-  cargando,
-  todasDecididas,
+import { useState } from "react";
+
+export default function DetalleSolicitud({ 
+  solicitud, 
+  onVolver, 
+  onGuardar, 
+  cargando 
 }) {
+  // Guardamos las decisiones y observaciones en el estado
+  const [decisiones, setDecisiones] = useState({});
+  const [observaciones, setObservaciones] = useState({});
+
+  if (!solicitud) return null;
+  const asignaturas = solicitud.asignaturas || [];
+
+  const handleDecisionChange = (id, valor) => {
+    setDecisiones(prev => ({ ...prev, [id]: valor }));
+  };
+
+  const handleObservacionChange = (id, valor) => {
+    setObservaciones(prev => ({ ...prev, [id]: valor }));
+  };
+
+  const handleGuardar = () => {
+    // Armamos el objeto EXACTO que espera el backend (con mayúsculas)
+    const informe = {
+      asignaturas: asignaturas.map(asig => ({
+        asignaturaId: asig.id,
+        decision: decisiones[asig.id] || "HOMOLOGABLE",
+        observacion: observaciones[asig.id] || "Sin observaciones"
+      }))
+    };
+
+    // Llamamos a la función del componente padre (PanelCoordinador)
+    onGuardar(informe);
+  };
+
   return (
-    <div className="card shadow-sm border-0">
-      <div className="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-        <h5 className="mb-0">
-          Detalle SOL-{solicitud.numero || solicitud.id} — {solicitud.estudiante}
-        </h5>
-        <button className="btn btn-sm btn-light" onClick={onVolver}>Volver</button>
+    <div className="card shadow-sm border-0 mt-3">
+      <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 className="mb-0">Detalle de la Solicitud SOL-{solicitud.solicitudId}</h5>
+        <button className="btn btn-sm btn-outline-light" onClick={onVolver}>
+          Volver a la lista
+        </button>
       </div>
       <div className="card-body">
-        <table className="table table-bordered align-middle">
-          <thead className="table-light">
-            <tr>
-              <th>Asignatura</th>
-              <th>Propuesta del agente</th>
-              <th>Justificación</th>
-              <th>Decisión final</th>
-              <th>Nuevo Resultado</th>
-              <th>Observación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {solicitud.asignaturas.map((asig) => (
-              <tr key={asig.id}>
-                <td>{asig.nombre}</td>
-                <td>
-                  <span className={`badge ${asig.propuestaAgente ? "bg-success" : "bg-danger"}`}>
-                    {asig.propuestaAgente ? "Homologable" : "No homologable"}
-                  </span>
-                </td>
-                <td><small>{asig.justificacion}</small></td>
-                <td>
-                  <select 
-                    className="form-select form-select-sm"
-                    value={decisiones[asig.id] || ""}
-                    onChange={(e) => onDecisionChange(asig.id, e.target.value)}
-                    aria-label={`Decisión para ${asig.nombre}`}
-                  >
-                    <option value="">Seleccione...</option>
-                    <option value="ACEPTAR">Aceptar</option>
-                    <option value="MODIFICAR">Modificar</option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    className="form-select form-select-sm"
-                    value={nuevosResultados[asig.id] || ""}
-                    onChange={(e) => onResultadoChange(asig.id, e.target.value)}
-                    disabled={decisiones[asig.id] !== "MODIFICAR"}
-                    aria-label={`Nuevo resultado para ${asig.nombre}`}
-                  >
-                    <option value="">N/A</option>
-                    <option value="HOMOLOGABLE">Homologable</option>
-                    <option value="NO_HOMOLOGABLE">No homologable</option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    placeholder={decisiones[asig.id] === "MODIFICAR" ? "Obligatoria..." : "Opcional..."}
-                    value={observaciones[asig.id] || ""}
-                    onChange={(e) => onObservacionChange(asig.id, e.target.value)}
-                    aria-label={`Observación para ${asig.nombre}`}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="text-end mt-3">
-          <button className="btn btn-secondary me-2" onClick={onVolver}>Cancelar</button>
-          <button 
-            className="btn btn-primary" 
-            onClick={onGuardar} 
-            disabled={cargando || !todasDecididas}
-          >
-            {cargando ? "Emitiendo..." : "Emitir informe técnico"}
-          </button>
-        </div>
-        {!todasDecididas && (
-          <div className="text-end text-muted small mt-2">
-            * Debe completar la decisión, el nuevo resultado y la observación (si modifica).
+        <p><strong>Estudiante:</strong> {solicitud.estudiante}</p>
+        <p><strong>Carrera Origen:</strong> {solicitud.carreraOrigen}</p>
+        <p><strong>Carrera Destino:</strong> {solicitud.carreraDestino}</p>
+        
+        <h6 className="mt-4 fw-bold">Asignaturas para análisis:</h6>
+        {asignaturas.length === 0 ? (
+          <p className="text-muted">No hay asignaturas registradas en este análisis.</p>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-bordered">
+              <thead className="table-light">
+                <tr>
+                  <th>Asignatura</th>
+                  <th>Decisión del Agente</th>
+                  <th>Decisión Coordinador</th>
+                  <th>Observación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {asignaturas.map((asig) => (
+                  <tr key={asig.id}>
+                    <td>
+                      <strong>{asig.asignaturaOrigen}</strong> → {asig.asignaturaDestino}
+                    </td>
+                    <td>
+                      <span className="badge bg-info text-dark">
+                        {asig.propuesta?.decision || "Pendiente"}
+                      </span>
+                    </td>
+                    <td>
+                      <select 
+                        className="form-select form-select-sm"
+                        value={decisiones[asig.id] || "HOMOLOGABLE"}
+                        onChange={(e) => handleDecisionChange(asig.id, e.target.value)}
+                      >
+                        <option value="HOMOLOGABLE">HOMOLOGABLE</option>
+                        <option value="NO_HOMOLOGABLE">NO HOMOLOGABLE</option>
+                      </select>
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        className="form-control form-control-sm" 
+                        placeholder="Observación..."
+                        value={observaciones[asig.id] || ""}
+                        onChange={(e) => handleObservacionChange(asig.id, e.target.value)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+
+        <div className="text-end mt-3">
+          <button 
+            className="btn btn-success fw-bold" 
+            onClick={handleGuardar}
+            disabled={cargando}
+          >
+            {cargando ? "Emitiendo..." : "Emitir Informe Técnico"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -7,15 +7,14 @@ export default function NuevaSolicitud() {
   const [carreras, setCarreras] = useState([]);
   const [asignaturasDisponibles, setAsignaturasDisponibles] = useState([]);
   
-  // VOLVEMOS A PONER EL DESPLEGABLE (para que Estefania apruebe TA-11.2)
-  const [tipo, setTipo] = useState("Cambio de carrera");
+  // TIPO ESTÁTICO (FIJO)
+  const tipo = "Homologación";
   
   const [modulo, setModulo] = useState("INTERNO");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
   
-  // ESTADO DEL FILTRO
   const [nivelSeleccionado, setNivelSeleccionado] = useState("Todos");
   
   const [mensaje, setMensaje] = useState("");
@@ -54,14 +53,6 @@ export default function NuevaSolicitud() {
       .catch(() => console.error("Error cargando asignaturas"));
   }, [origen]);
 
-  const handleTipoChange = (e) => {
-    const nuevoTipo = e.target.value;
-    setTipo(nuevoTipo);
-    if (nuevoTipo === "Cambio de carrera") {
-      setModulo("INTERNO");
-    }
-  };
-
   const toggleAsignatura = (id) => {
     if (seleccionadas.includes(id)) {
       setSeleccionadas(seleccionadas.filter(a => a !== id));
@@ -91,11 +82,12 @@ export default function NuevaSolicitud() {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ 
-          tipo,
+          tipo: "Homologación",
           modulo,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
-          asignaturasIds: seleccionadas 
+          asignaturasIds: seleccionadas
+          // ELIMINADO: estudianteCorreo (el backend lo saca del token)
         })
       });
       
@@ -146,13 +138,11 @@ export default function NuevaSolicitud() {
               <form onSubmit={handleSubmit}>
                 <div className="row">
                   <div className="col-md-6 border-end">
-                    {/* DESPLEGABLE DE TIPO (vuelve para TA-11.2) */}
+                    
+                    {/* CAMPO ESTÁTICO HOMOLOGACIÓN */}
                     <div className="mb-3">
                       <label className="form-label fw-bold">Tipo de solicitud</label>
-                      <select className="form-select" value={tipo} onChange={handleTipoChange}>
-                        <option value="Cambio de carrera">Cambio de carrera</option>
-                        <option value="Homologación">Homologación</option>
-                      </select>
+                      <input type="text" className="form-control" value="Homologación" readOnly disabled />
                     </div>
 
                     <div className="mb-3">
@@ -161,7 +151,6 @@ export default function NuevaSolicitud() {
                         className="form-select" 
                         value={modulo} 
                         onChange={(e) => setModulo(e.target.value)}
-                        disabled={tipo === "Cambio de carrera"}
                       >
                         <option value="INTERNO">Agente interno (reglas normativas UTA)</option>
                         <option value="EXTERNO">Agente externo (universidades externas)</option>

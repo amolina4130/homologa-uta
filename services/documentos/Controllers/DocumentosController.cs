@@ -4,7 +4,7 @@ using HomologaUTA.Documentos.Data;
 using HomologaUTA.Documentos.Models;
 using HomologaUTA.Documentos.Services;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims; // <-- NUEVO para leer el token
+using System.Security.Claims;
 
 namespace HomologaUTA.Documentos.Controllers;
 
@@ -35,7 +35,6 @@ public class DocumentosController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> SubirDocumento([FromForm] DocumentoUploadRequest request)
     {
-        // 1. Validaciones
         if (request.Archivo == null || request.Archivo.Length == 0)
             return BadRequest(new { error = "No se envió ningún archivo." });
 
@@ -46,12 +45,10 @@ public class DocumentosController : ControllerBase
         if (request.Archivo.Length > tamanioMaximoMB * 1024 * 1024)
             return BadRequest(new { error = $"El archivo no debe superar los {tamanioMaximoMB} MB." });
 
-        // Extraer el correo del estudiante desde el token
         var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
                            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value 
                            ?? "anonimo";
 
-        // 2. Guardar archivo en disco
         var carpetaPdfs = Path.Combine(_env.ContentRootPath, "pdfs");
         if (!Directory.Exists(carpetaPdfs))
             Directory.CreateDirectory(carpetaPdfs);
@@ -64,10 +61,8 @@ public class DocumentosController : ControllerBase
             await request.Archivo.CopyToAsync(stream);
         }
 
-        // 3. Extraer texto (PdfPig)
         var textoExtraido = _extractor.ExtraerTexto(rutaCompleta);
 
-        // 4. Guardar en la base de datos
         var documento = new Documento
         {
             SolicitudId = request.SolicitudId,
@@ -76,13 +71,12 @@ public class DocumentosController : ControllerBase
             TextoExtraido = textoExtraido,
             Estado = "PROCESADO",
             FechaSubida = DateTime.UtcNow,
-            EstudianteId = estudianteId // <-- NUEVO
+            EstudianteId = estudianteId
         };
 
         _db.Documentos.Add(documento);
         await _db.SaveChangesAsync();
 
-        // 5. PUBLICAR EVENTO EN RABBITMQ
         await _eventPublisher.PublicarDocumentoProcesadoAsync(
             documento.Id, 
             documento.SolicitudId, 
@@ -93,6 +87,7 @@ public class DocumentosController : ControllerBase
         {
             mensaje = "Archivo subido, procesado, guardado y evento publicado.",
             documentoId = documento.Id,
+            nombreArchivo = nombreArchivo,
             textoExtraido = textoExtraido.Substring(0, Math.Min(50, textoExtraido.Length)) + "..."
         });
     }
@@ -100,19 +95,53 @@ public class DocumentosController : ControllerBase
     [HttpGet("solicitud/{solicitudId}")]
     public async Task<IActionResult> ObtenerDocumentosPorSolicitud(int solicitudId)
     {
-        // Extraer el correo del estudiante del token
         var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
                            ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
 
         if (string.IsNullOrEmpty(estudianteId))
             return Unauthorized(new { error = "No autorizado." });
 
-        // Buscar los documentos y verificar que pertenezcan al estudiante
         var documentos = await _db.Documentos
             .Where(d => d.SolicitudId == solicitudId && d.EstudianteId == estudianteId)
-            .Select(d => new { d.Id, d.TipoDocumento, d.NombreArchivo, d.Estado, d.FechaSubida })
+            .Select(d => new { 
+                d.Id, 
+                d.TipoDocumento, 
+                d.NombreArchivo, 
+                d.Estado, 
+                d.FechaSubida 
+            })
             .ToListAsync();
 
         return Ok(documentos);
+    }
+
+    // --- ENDPOINT DEFINITIVO Y A PRUEBA DE BALAS ---
+    [HttpGet("descargar/{identificador}")]
+    public async Task<IActionResult> DescargarPdf(string identificador)
+    {
+        Documento documento = null;
+
+        // 1. Si el frontend envía un número (ID), buscamos por ID
+        if (int.TryParse(identificador, out int id))
+        {
+            documento = await _db.Documentos.FindAsync(id);
+        }
+        // 2. Si el frontend envía el nombre del archivo, buscamos por NombreArchivo
+        else
+        {
+            documento = await _db.Documentos.FirstOrDefaultAsync(d => d.NombreArchivo == identificador);
+        }
+
+        if (documento == null)
+            return NotFound(new { error = "El documento no existe en la base de datos." });
+
+        var carpetaPdfs = Path.Combine(_env.ContentRootPath, "pdfs");
+        var rutaCompleta = Path.Combine(carpetaPdfs, documento.NombreArchivo);
+
+        if (!System.IO.File.Exists(rutaCompleta))
+            return NotFound(new { error = "El archivo físico no existe en el servidor. Intenta subirlo de nuevo." });
+
+        // Devolvemos el archivo con un nombre genérico para que el navegador lo abra bien
+        return PhysicalFile(rutaCompleta, "application/pdf", "Documento_PDF.pdf");
     }
 }

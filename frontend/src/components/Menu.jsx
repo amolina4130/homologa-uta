@@ -14,7 +14,7 @@ export default function Menu() {
     "Carreras y mallas": "/carreras",
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
-    "Panel Coordinador": "/panel-coordinador"
+    "Solicitudes pendientes": "/panel-coordinador" // <-- CORREGIDO AQUÍ
   };
 
   const opciones = {
@@ -33,7 +33,6 @@ export default function Menu() {
   };  
 
   return (
-    // Cambiamos bg-dark por bg-primary (Azul Bootstrap) y agregamos shadow
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow-sm mb-4">
       <div className="container-fluid">
         <span className="navbar-brand fw-bold text-white">HomologaUTA</span>
@@ -47,7 +46,6 @@ export default function Menu() {
               <Link 
                 key={opcion} 
                 to={ruta} 
-                // La opción activa se resalta en blanco, las demás en un blanco más suave
                 className={`nav-link ${isActive ? 'active fw-bold text-white border-bottom border-2 border-white' : 'text-white-50'}`}
               >
                 {opcion}

@@ -4,24 +4,48 @@ export default function ListaDocumentos({ documentos }) {
   }
 
   return (
-    <table className="table table-bordered mt-3">
+    <table className="table table-bordered mt-3 align-middle">
       <thead className="table-secondary">
         <tr>
           <th>Documento</th>
           <th>Tipo</th>
           <th>Tamaño</th>
           <th>Estado</th>
+          <th className="text-center">Acciones</th>
         </tr>
       </thead>
       <tbody>
-        {documentos.map((doc) => (
-          <tr key={doc.id || doc.nombre}>
-            <td>{doc.nombre}</td>
-            <td>{doc.tipo}</td>
-            <td>{doc.tamano}</td>
-            <td>{doc.estado === "PROCESADO" ? "● PROCESADO" : "○ CARGADO"}</td>
-          </tr>
-        ))}
+        {documentos.map((doc, index) => {
+          // Buscamos el ID en cualquiera de sus formatos
+          const idDoc = doc.id || doc.Id;
+          
+          // Buscamos el nombre original para mostrarlo en la tabla
+          const nombreArchivo = doc.nombre || doc.Nombre || doc.nombreArchivo || doc.NombreArchivo || "Documento.pdf";
+
+          return (
+            <tr key={index}>
+              <td>{nombreArchivo}</td>
+              <td>{doc.tipoDocumento || doc.TipoDocumento || "Malla"}</td>
+              <td>{doc.tamano || "-"}</td>
+              <td>
+                <span className="badge bg-success">
+                  ● {doc.estado || doc.Estado || "PROCESADO"}
+                </span>
+              </td>
+              <td className="text-center">
+                {/* ENLACE DIRECTO POR ID */}
+                <a 
+                  href={`http://localhost:8080/documentos/descargar/${idDoc}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="btn btn-sm btn-outline-primary"
+                >
+                  Ver PDF
+                </a>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

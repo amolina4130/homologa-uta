@@ -4,13 +4,11 @@ using HomologaUTA.Homologacion.DTOs;
 
 namespace HomologaUTA.Homologacion.Clients;
 
-/// <summary>El servicio de Solicitudes no respondió o devolvió algo inválido.</summary>
 public class SolicitudesNoDisponibleException : Exception
 {
     public SolicitudesNoDisponibleException(string mensaje, Exception? inner = null) : base(mensaje, inner) { }
 }
 
-/// <summary>Consulta al servicio de Solicitudes los datos de las solicitudes (fecha, estudiante, tipo y carreras).</summary>
 public class SolicitudesClient
 {
     private readonly HttpClient _http;
@@ -35,19 +33,35 @@ public class SolicitudesClient
 
         try
         {
+            // ESTA ERA LA RUTA ORIGINAL (NO TOCAR)
             var resultado = await _http.GetFromJsonAsync<List<SolicitudInfoDto>>(
                 $"internal/solicitudes?ids={string.Join(",", lista)}", ct);
             return resultado ?? new List<SolicitudInfoDto>();
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            _logger.LogWarning("Tiempo de espera agotado consultando el servicio de Solicitudes");
             throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
             _logger.LogError(ex, "No se pudo consultar el servicio de Solicitudes");
             throw new SolicitudesNoDisponibleException("No se pudo consultar el servicio de Solicitudes.", ex);
+        }
+    }
+
+    public async Task<List<SolicitudInfoDto>> ObtenerPendientesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            // LA RUTA CORRECTA (con el prefijo del controlador)
+            var resultado = await _http.GetFromJsonAsync<List<SolicitudInfoDto>>(
+                "solicitudes/internal/solicitudes/pendientes", ct);
+            return resultado ?? new List<SolicitudInfoDto>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo consultar las solicitudes pendientes");
+            throw new SolicitudesNoDisponibleException("No se pudo consultar las solicitudes pendientes.", ex);
         }
     }
 }
