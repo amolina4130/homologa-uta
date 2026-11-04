@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export const TablaSolicitudes = ({ solicitudes }) => {
   if (!solicitudes || solicitudes.length === 0) {
     return (
@@ -18,6 +20,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
             <th>Carrera Origen</th>
             <th>Carrera Destino</th>
             <th className="text-center">Estado</th>
+            <th className="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -37,7 +40,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               
               <td>{sol.tipo || '-'}</td>
               
-              {/* Buscamos sol.origen y sol.destino (como los manda el backend ahora) */}
+              {/* Buscamos sol.origen y sol.destino */}
               <td>{sol.origen || sol.carreraOrigen || '-'}</td>
               <td>{sol.destino || sol.carreraDestino || '-'}</td>
               
@@ -45,6 +48,16 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                 <span className="badge bg-success p-2">
                   {sol.estado || 'REGISTRADA'}
                 </span>
+              </td>
+
+              {/* NUEVA COLUMNA DE ACCIONES */}
+              <td className="text-center">
+                <Link 
+                  to={`/resultado/${sol.id}`} 
+                  className="btn btn-sm btn-outline-primary fw-bold"
+                >
+                  Ver Análisis
+                </Link>
               </td>
             </tr>
           ))}

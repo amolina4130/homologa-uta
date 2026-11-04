@@ -31,6 +31,12 @@
         "AuthorizationPolicy": "administrador",
         "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
       },
+      "homologacion-estudiante": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "estudiante",
+        "Order": -1,
+        "Match": { "Path": "/homologacion/estudiante/{**catch-all}" }
+      },
       "homologacion-coordinador": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "coordinador",

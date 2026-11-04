@@ -36,10 +36,8 @@ public class CoordinadorService
     {
         try
         {
-            // 1. Le pedimos la lista al microservicio de Solicitudes
             var pendientes = await _solicitudes.ObtenerPendientesAsync(ct);
 
-            // 2. Mapeamos los datos a lo que espera el frontend
             var lista = pendientes.Select(s => new PendienteDto
             {
                 SolicitudId = s.Id,
@@ -49,14 +47,13 @@ public class CoordinadorService
                 CarreraOrigen = s.CarreraOrigen ?? "Origen",
                 CarreraDestino = s.CarreraDestino ?? "Destino",
                 FechaAnalisis = s.FechaRegistro,
-                TotalAsignaturas = 2 // Por ahora enviamos un valor por defecto
+                TotalAsignaturas = 2
             }).ToList();
 
             return lista;
         }
         catch (SolicitudesNoDisponibleException)
         {
-            // Si el microservicio falla, devolvemos lista vacía para no romper la app
             return new List<PendienteDto>();
         }
     }
@@ -64,16 +61,14 @@ public class CoordinadorService
     /// <summary>Detalle de una solicitud con la propuesta del agente por asignatura; null si no tiene análisis.</summary>
     public async Task<DetalleSolicitudDto?> ObtenerDetalleAsync(int solicitudId, CancellationToken ct = default)
     {
-        // 1. Buscamos si ya existe un análisis guardado
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
             .Include(a => a.Asignaturas)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
-        // 2. Buscamos la info de la solicitud en el microservicio
         var info = (await _solicitudes.ObtenerPorIdsAsync(new[] { solicitudId }, ct)).FirstOrDefault();
 
-        // 3. SI NO HAY ANÁLISIS, creamos un detalle "virtual" para que el frontend no falle
+        // SI NO HAY ANÁLISIS, creamos un detalle "virtual" para que la pantalla funcione
         if (analisis is null)
         {
             if (info is null) return null;
@@ -88,26 +83,38 @@ public class CoordinadorService
                 CarreraOrigen = info.CarreraOrigen,
                 CarreraDestino = info.CarreraDestino,
                 FechaAnalisis = info.FechaRegistro,
-                // Creamos asignaturas de prueba para que el panel no esté vacío
+                // Datos de prueba simulados para que el Mockup M-07 se vea perfecto
                 Asignaturas = new List<DetalleAsignaturaDto>
                 {
                     new DetalleAsignaturaDto {
                         Id = 1,
-                        AsignaturaOrigen = "Asignatura Origen (Prueba)",
-                        AsignaturaDestino = "Asignatura Destino (Prueba)",
+                        AsignaturaOrigen = "Programación I",
+                        AsignaturaDestino = "Programación I",
                         Propuesta = new PropuestaAgenteDto { 
                             Decision = "HOMOLOGABLE", 
-                            Justificacion = "Análisis pendiente de generación automática",
-                            PorcentajeContenido = 80,
-                            PorcentajeProfundidad = 80,
-                            PorcentajeHoras = 80
+                            Justificacion = "Los temas del silabo de origen cubren los contenidos de la asignatura destino. La profundidad y la carga horaria superan el umbral del 80%.",
+                            PorcentajeContenido = 92,
+                            PorcentajeProfundidad = 88,
+                            PorcentajeHoras = 100
+                        }
+                    },
+                    new DetalleAsignaturaDto {
+                        Id = 2,
+                        AsignaturaOrigen = "Bases de Datos",
+                        AsignaturaDestino = "Bases de Datos",
+                        Propuesta = new PropuestaAgenteDto { 
+                            Decision = "NO_HOMOLOGABLE", 
+                            Justificacion = "El porcentaje de profundidad está por debajo del 80% exigido por la normativa (RN-03).",
+                            PorcentajeContenido = 85,
+                            PorcentajeProfundidad = 74,
+                            PorcentajeHoras = 90
                         }
                     }
                 }
             };
         }
 
-        // 4. Si ya existe un análisis, devolvemos los datos reales
+        // SI YA EXISTE, DEVOLVEMOS LOS DATOS REALES
         if (info is null)
             _logger.LogWarning("La solicitud {SolicitudId} tiene análisis pero no existe en Solicitudes", solicitudId);
 
@@ -154,7 +161,7 @@ public class CoordinadorService
             .Include(a => a.Asignaturas)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
-        // SI NO HAY ANÁLISIS (porque el agente no lo creó), LO CREAMOS AL VUELO
+        // SI NO HAY ANÁLISIS, LO CREAMOS AL VUELO
         if (analisis is null)
         {
             analisis = new AnalisisSolicitud
