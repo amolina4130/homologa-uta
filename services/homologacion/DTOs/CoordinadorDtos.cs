@@ -12,6 +12,40 @@ public class SolicitudInfoDto
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
     public string Estado { get; set; } = string.Empty;
+
+    /// <summary>INTERNO (agente UTA) o EXTERNO (agente de otra universidad).</summary>
+    public string Modulo { get; set; } = "INTERNO";
+
+    public string? UniversidadOrigen { get; set; }
+    public string? UniversidadDestino { get; set; }
+
+    /// <summary>Número de asignaturas que el estudiante pidió homologar.</summary>
+    public int TotalAsignaturas { get; set; }
+}
+
+/// <summary>Solicitud completa con las asignaturas de origen y su equivalente en destino.</summary>
+public class SolicitudCompletaDto : SolicitudInfoDto
+{
+    public List<AsignaturaSolicitudDto> Asignaturas { get; set; } = new();
+}
+
+public class AsignaturaSolicitudDto
+{
+    public int SolicitudAsignaturaId { get; set; }
+
+    public int AsignaturaOrigenId { get; set; }
+    public string AsignaturaOrigen { get; set; } = string.Empty;
+    public string NivelOrigen { get; set; } = string.Empty;
+    public int CreditosOrigen { get; set; }
+    public int HorasOrigen { get; set; }
+    public string ContenidoOrigen { get; set; } = string.Empty;
+
+    public int AsignaturaDestinoId { get; set; }
+    public string AsignaturaDestino { get; set; } = string.Empty;
+    public string NivelDestino { get; set; } = string.Empty;
+    public int CreditosDestino { get; set; }
+    public int HorasDestino { get; set; }
+    public string ContenidoDestino { get; set; } = string.Empty;
 }
 
 /// <summary>Fila de la lista de solicitudes pendientes de revisión.</summary>
@@ -46,6 +80,9 @@ public class DetalleSolicitudDto
     public string Tipo { get; set; } = string.Empty;
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
+    public string Modulo { get; set; } = "INTERNO";
+    public string? UniversidadOrigen { get; set; }
+    public string? UniversidadDestino { get; set; }
     public DateTime FechaAnalisis { get; set; }
 
     /// <summary>Solo si el informe ya se emitió.</summary>
@@ -112,6 +149,13 @@ public class ResultadoInformeDto
     public string Estado { get; set; } = string.Empty;
     public string CoordinadorCorreo { get; set; } = string.Empty;
     public DateTime FechaInforme { get; set; }
+
+    /// <summary>
+    /// true si el servicio de Solicitudes confirmó el cambio a INFORME_EMITIDO.
+    /// El informe queda guardado aunque este valor sea false.
+    /// </summary>
+    public bool EstadoSolicitudActualizado { get; set; }
+
     public List<InformeAsignaturaResultadoDto> Asignaturas { get; set; } = new();
 }
 

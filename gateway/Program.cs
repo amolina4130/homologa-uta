@@ -68,7 +68,11 @@ authBuilder.AddPolicy("coordinador", p => p.RequireRole(coordinadorRoles));
 // ---------------------------------------------------------------
 // 4) CORS: FORZADO PARA EL FRONTEND
 // ---------------------------------------------------------------
-var origins = new[] { "http://localhost:3000", "http://127.0.0.1:3000" };
+var origins = new[]
+{
+    "http://localhost:3000", "http://127.0.0.1:3000",   // Docker / preview
+    "http://localhost:5173", "http://127.0.0.1:5173"    // Vite en desarrollo
+};
 builder.Services.AddCors(options =>
     options.AddPolicy("frontend", policy => policy
         .WithOrigins(origins)

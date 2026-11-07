@@ -14,7 +14,7 @@ export default function Menu() {
     "Carreras y mallas": "/carreras",
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
-    "Solicitudes pendientes": "/panel-coordinador" // <-- CORREGIDO AQUÍ
+    "Solicitudes pendientes": "/panel-coordinador"
   };
 
   const opciones = {

@@ -12,22 +12,36 @@ const extraerDatos = (json) => {
   return json.data !== undefined ? json.data : json;
 };
 
+const lanzarError = async (res, mensajePorDefecto) => {
+  let mensaje = mensajePorDefecto;
+  try {
+    const cuerpo = await res.json();
+    if (cuerpo && cuerpo.error) mensaje = cuerpo.error;
+  } catch {
+    // La respuesta no trae JSON; se conserva el mensaje por defecto.
+  }
+
+  const error = new Error(mensaje);
+  error.status = res.status;
+  throw error;
+};
+
 export async function obtenerSolicitudesPendientes() {
   const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/pendientes`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error("Error al cargar solicitudes pendientes");
+  if (!res.ok) await lanzarError(res, "Error al cargar solicitudes pendientes");
   const json = await res.json();
-  return extraerDatos(json); 
+  return extraerDatos(json);
 }
 
 export async function obtenerDetalleSolicitud(id) {
   const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/detalle`, {
     headers: getAuthHeaders(),
   });
-  if (!res.ok) throw new Error("Error al cargar el detalle");
+  if (!res.ok) await lanzarError(res, "Error al cargar el detalle");
   const json = await res.json();
-  return extraerDatos(json); 
+  return extraerDatos(json);
 }
 
 export async function emitirInforme(id, informeCompleto) {
@@ -36,7 +50,7 @@ export async function emitirInforme(id, informeCompleto) {
     headers: getAuthHeaders(),
     body: JSON.stringify(informeCompleto),
   });
-  if (!res.ok) throw new Error("Error al emitir el informe");
+  if (!res.ok) await lanzarError(res, "Error al emitir el informe");
   const json = await res.json();
   return extraerDatos(json);
 }

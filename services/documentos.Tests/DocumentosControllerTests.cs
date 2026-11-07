@@ -54,7 +54,7 @@ namespace documentos.Tests
             var controller = new DocumentosController(config, env, dbContext, extractor, mockEventPublisher.Object);
 
             // Simulamos el token del estudiante
-            var claims = new List<Claim> { new Claim("correo", correoEstudiante) };
+            var claims = new List<Claim> { new Claim("email", correoEstudiante) };
             var identity = new ClaimsIdentity(claims, "TestAuth");
             controller.ControllerContext = new ControllerContext
             {

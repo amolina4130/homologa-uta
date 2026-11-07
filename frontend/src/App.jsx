@@ -25,7 +25,6 @@ export default function App() {
 
           {/* Rutas protegidas generales */}
           <Route element={<RutaProtegida />}>
-            {/* Ahora usa el componente Inicio importado */}
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />

@@ -54,7 +54,25 @@ export async function crearSolicitud(solicitudData) {
     headers: getAuthHeaders(),
     body: JSON.stringify(solicitudData),
   });
-  if (!res.ok) throw new Error("Error al registrar la solicitud");
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(errorData.error || "Error al registrar la solicitud");
+    err.status = res.status;
+    throw err;
+  }
+  return await res.json();
+}
+
+export async function obtenerSolicitud(id) {
+  const res = await fetch(`${GATEWAY_URL}/solicitudes/${id}`, {
+    method: "GET",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const err = new Error("No se pudo cargar la solicitud");
+    err.status = res.status;
+    throw err;
+  }
   return await res.json();
 }
 

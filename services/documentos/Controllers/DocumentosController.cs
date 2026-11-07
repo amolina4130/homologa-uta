@@ -45,8 +45,9 @@ public class DocumentosController : ControllerBase
         if (request.Archivo.Length > tamanioMaximoMB * 1024 * 1024)
             return BadRequest(new { error = $"El archivo no debe superar los {tamanioMaximoMB} MB." });
 
-        var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
-                           ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value 
+        var estudianteId = User.FindFirstValue("email")
+                           ?? User.FindFirstValue(ClaimTypes.Email)
+                           ?? User.FindFirstValue("sub")
                            ?? "anonimo";
 
         var carpetaPdfs = Path.Combine(_env.ContentRootPath, "pdfs");
@@ -95,8 +96,9 @@ public class DocumentosController : ControllerBase
     [HttpGet("solicitud/{solicitudId}")]
     public async Task<IActionResult> ObtenerDocumentosPorSolicitud(int solicitudId)
     {
-        var estudianteId = User.Claims.FirstOrDefault(c => c.Type == "correo")?.Value 
-                           ?? User.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+        var estudianteId = User.FindFirstValue("email")
+                           ?? User.FindFirstValue(ClaimTypes.Email)
+                           ?? User.FindFirstValue("sub");
 
         if (string.IsNullOrEmpty(estudianteId))
             return Unauthorized(new { error = "No autorizado." });

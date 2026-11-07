@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using HomologaUTA.Homologacion.DTOs;
@@ -25,6 +26,7 @@ public class SolicitudesClient
         _http.Timeout = TimeSpan.FromSeconds(config.GetValue<int?>("Solicitudes:TimeoutSegundos") ?? 10);
     }
 
+    /// <summary>Datos básicos de varias solicitudes.</summary>
     public async Task<List<SolicitudInfoDto>> ObtenerPorIdsAsync(IEnumerable<int> ids, CancellationToken ct = default)
     {
         var lista = ids.Distinct().ToList();
@@ -33,7 +35,6 @@ public class SolicitudesClient
 
         try
         {
-            // ESTA ERA LA RUTA ORIGINAL (NO TOCAR)
             var resultado = await _http.GetFromJsonAsync<List<SolicitudInfoDto>>(
                 $"internal/solicitudes?ids={string.Join(",", lista)}", ct);
             return resultado ?? new List<SolicitudInfoDto>();
@@ -49,19 +50,80 @@ public class SolicitudesClient
         }
     }
 
+    /// <summary>Solicitudes en estado PENDIENTE_REVISION.</summary>
     public async Task<List<SolicitudInfoDto>> ObtenerPendientesAsync(CancellationToken ct = default)
     {
         try
         {
-            // LA RUTA CORRECTA (con el prefijo del controlador)
             var resultado = await _http.GetFromJsonAsync<List<SolicitudInfoDto>>(
-                "solicitudes/internal/solicitudes/pendientes", ct);
+                "internal/solicitudes/pendientes", ct);
             return resultado ?? new List<SolicitudInfoDto>();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
             _logger.LogError(ex, "No se pudo consultar las solicitudes pendientes");
             throw new SolicitudesNoDisponibleException("No se pudo consultar las solicitudes pendientes.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Solicitud completa con sus asignaturas de origen y el equivalente en destino.
+    /// Devuelve null si la solicitud no existe.
+    /// </summary>
+    public async Task<SolicitudCompletaDto?> ObtenerCompletaAsync(int id, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.GetAsync($"internal/solicitudes/{id}/completa", ct);
+            if (respuesta.StatusCode == HttpStatusCode.NotFound)
+                return null;
+
+            respuesta.EnsureSuccessStatusCode();
+            return await respuesta.Content.ReadFromJsonAsync<SolicitudCompletaDto>(cancellationToken: ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo obtener la solicitud {SolicitudId}", id);
+            throw new SolicitudesNoDisponibleException("No se pudo obtener la solicitud completa.", ex);
+        }
+    }
+
+    /// <summary>
+    /// Cambia el estado de la solicitud y registra el historial. Devuelve false si la
+    /// solicitud no existe.
+    /// </summary>
+    public async Task<bool> CambiarEstadoAsync(
+        int id, string estado, string usuario, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.PostAsJsonAsync(
+                $"internal/solicitudes/{id}/estado",
+                new { estado, usuario },
+                ct);
+
+            if (respuesta.StatusCode == HttpStatusCode.NotFound)
+                return false;
+
+            respuesta.EnsureSuccessStatusCode();
+            return true;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo cambiar el estado de la solicitud {SolicitudId}", id);
+            throw new SolicitudesNoDisponibleException("No se pudo actualizar el estado de la solicitud.", ex);
         }
     }
 }

@@ -1,3 +1,6 @@
+const formatoFecha = (valor) =>
+  valor ? new Date(valor).toLocaleString("es-EC") : "-";
+
 export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
   return (
     <div className="card shadow-sm border-0">
@@ -8,39 +11,43 @@ export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
         <table className="table table-hover mb-0">
           <thead className="table-light">
             <tr>
-              <th>Fecha</th>
+              <th>N°</th>
+              <th>Fecha de registro</th>
               <th>Estudiante</th>
               <th>Tipo</th>
               <th>Carreras</th>
-              <th>Plazo</th>
+              <th className="text-center">Asignaturas</th>
+              <th>Fecha del análisis</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan="6" className="text-center py-4">Cargando solicitudes...</td></tr>
+              <tr><td colSpan="8" className="text-center py-4">Cargando solicitudes...</td></tr>
             ) : solicitudes.length === 0 ? (
-              <tr><td colSpan="6" className="text-center py-4">No hay solicitudes pendientes.</td></tr>
+              <tr><td colSpan="8" className="text-center py-4">No hay solicitudes pendientes.</td></tr>
             ) : (
               solicitudes.map((sol) => {
-                // Usamos los nombres EXACTOS que devuelve tu CoordinadorService.cs
                 const idSolicitud = sol.solicitudId;
                 const origen = sol.carreraOrigen || "-";
                 const destino = sol.carreraDestino || "-";
-                const fecha = sol.fecha ? new Date(sol.fecha).toLocaleDateString("es-EC") : "-";
-                
+
                 return (
                   <tr key={idSolicitud}>
-                    <td>{fecha}</td>
+                    <td className="fw-bold">SOL-{String(idSolicitud).padStart(4, "0")}</td>
+                    <td>{formatoFecha(sol.fecha)}</td>
                     <td>{sol.estudiante}</td>
                     <td>{sol.tipo}</td>
                     <td>{origen} → {destino}</td>
-                    <td>
-                      <span className="badge bg-warning text-dark" title="Plazo máximo normativo (5 días término)">5 días</span>
+                    <td className="text-center">
+                      <span className="badge bg-secondary">
+                        {sol.totalAsignaturas ?? 0}
+                      </span>
                     </td>
+                    <td>{formatoFecha(sol.fechaAnalisis)}</td>
                     <td>
                       <button className="btn btn-sm btn-outline-primary" onClick={() => onAbrir(idSolicitud)}>
-                        Abrir
+                        Ver detalle
                       </button>
                     </td>
                   </tr>

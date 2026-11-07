@@ -72,6 +72,8 @@ public class AgenteInterno
         ""justificacion"": ""(una breve explicación)""
         }}
 
+        No agregues texto fuera del JSON.
+
         Asignatura Origen: {asignaturaOrigen}
         Contenido: {contenidoOrigen}
 
@@ -86,7 +88,13 @@ public class AgenteInterno
                 var promptCompleto = $"{systemPrompt}\n\n{userPrompt}";
                 var respuestaRaw = await _ollamaClient.GenerarRespuestaAsync(promptCompleto);
                 var jsonLimpio = respuestaRaw.Replace("```json", "").Replace("```", "").Trim();
-                
+
+                // Algunos modelos agregan texto antes o después del JSON: se recorta el objeto.
+                var inicio = jsonLimpio.IndexOf('{');
+                var fin = jsonLimpio.LastIndexOf('}');
+                if (inicio >= 0 && fin > inicio)
+                    jsonLimpio = jsonLimpio.Substring(inicio, fin - inicio + 1);
+
                 var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var resultado = JsonSerializer.Deserialize<ResultadoAgente>(jsonLimpio, opciones);
 
