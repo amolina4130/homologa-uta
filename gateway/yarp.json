@@ -1,4 +1,4 @@
-{
+﻿{
   "ReverseProxy": {
     "Routes": {
       "auth-login": {
@@ -77,6 +77,10 @@
         }
       },
       "homologacion": {
+        "HttpRequest": {
+          "RequestTimeout": "00:15:00",
+          "ActivityTimeout": "00:15:00"
+        },
         "Destinations": {
           "d1": { "Address": "http://homologacion-service:8080/" }
         }

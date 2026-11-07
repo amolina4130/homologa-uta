@@ -45,7 +45,15 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               <td>{sol.destino || sol.carreraDestino || '-'}</td>
               
               <td className="text-center">
-                <span className="badge bg-success p-2">
+                <span
+                  className={`badge p-2 ${
+                    sol.estado === "INFORME_EMITIDO"
+                      ? "bg-success"
+                      : sol.estado === "PENDIENTE_REVISION"
+                      ? "bg-warning text-dark"
+                      : "bg-secondary"
+                  }`}
+                >
                   {sol.estado || 'REGISTRADA'}
                 </span>
               </td>
@@ -56,7 +64,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                   to={`/resultado/${sol.id}`} 
                   className="btn btn-sm btn-outline-primary fw-bold"
                 >
-                  Ver Análisis
+                  Ver detalle
                 </Link>
               </td>
             </tr>

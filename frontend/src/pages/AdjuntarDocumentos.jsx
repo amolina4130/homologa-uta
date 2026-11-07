@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerMisSolicitudes, subirDocumento } from "../services/documentosService";
 import ListaDocumentos from "../components/ListaDocumentos";
@@ -13,8 +14,12 @@ const TIPOS = [
 
 export default function AdjuntarDocumentos() {
   const { rol } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const solicitudIdParam = searchParams.get("solicitudId") || "";
+  const volverResultado = searchParams.get("volver") === "resultado";
   const [solicitudes, setSolicitudes] = useState([]);
-  const [solicitudId, setSolicitudId] = useState("");
+  const [solicitudId, setSolicitudId] = useState(solicitudIdParam);
   const [tipoCodigo, setTipoCodigo] = useState(TIPOS[0].codigo);
   const [archivo, setArchivo] = useState(null);
   const [claveInput, setClaveInput] = useState(0);
@@ -162,6 +167,21 @@ export default function AdjuntarDocumentos() {
                 <h5 className="fw-bold mb-3">Documentos de la solicitud</h5>
                 <ListaDocumentos documentos={documentosPorSolicitud[solicitudId] ?? []} />
               </div>
+
+              {volverResultado && solicitudId && (
+                <div className="alert alert-info d-flex justify-content-between align-items-center">
+                  <span>
+                    Suba al menos un documento procesado. Después continúe para generar el análisis externo.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={() => navigate(`/resultado/${solicitudId}`)}
+                  >
+                    Continuar al resultado
+                  </button>
+                </div>
+              )}
 
               <div className="alert alert-secondary small mb-0">
                 El texto de cada PDF se extrae con PdfPig y el documento pasa a PROCESADO.

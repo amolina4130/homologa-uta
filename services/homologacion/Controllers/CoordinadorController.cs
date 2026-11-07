@@ -92,6 +92,10 @@ public class CoordinadorController : ControllerBase
         {
             return StatusCode(ex.StatusCode, new { error = ex.Message });
         }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
     }
 
     private string? ObtenerCorreoDelToken()

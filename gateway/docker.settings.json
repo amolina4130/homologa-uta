@@ -11,6 +11,10 @@
         "Destinations": { "d1": { "Address": "http://reglas-service:8080/" } }
       },
       "homologacion": {
+        "HttpRequest": {
+          "RequestTimeout": "00:15:00",
+          "ActivityTimeout": "00:15:00"
+        },
         "Destinations": { "d1": { "Address": "http://homologacion-service:8080/" } }
       }
     }

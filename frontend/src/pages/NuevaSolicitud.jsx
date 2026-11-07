@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FiltroNivel from '../components/FiltroNivel';
+import { analizarSolicitud, analizarSolicitudExterna } from '../services/homologacionService';
 
 export default function NuevaSolicitud() {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ export default function NuevaSolicitud() {
   const tipo = "Homologación";
   
   const [modulo, setModulo] = useState("INTERNO");
+  const [universidadOrigen, setUniversidadOrigen] = useState("");
+  const [universidadDestino, setUniversidadDestino] = useState("");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
@@ -18,6 +21,7 @@ export default function NuevaSolicitud() {
   const [nivelSeleccionado, setNivelSeleccionado] = useState("Todos");
   
   const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState("danger");
   const [cargando, setCargando] = useState(false);
   const [errorReintento, setErrorReintento] = useState(false);
 
@@ -71,6 +75,11 @@ export default function NuevaSolicitud() {
     if (!origen || !destino) return alert("Seleccione carrera de origen y destino");
     if (origen === destino) return alert("La carrera de origen y destino no pueden ser iguales");
     if (seleccionadas.length === 0) return alert("Seleccione al menos una asignatura para homologar");
+
+    const esExterno = modulo === "EXTERNO";
+    if (esExterno && (!universidadOrigen.trim() || !universidadDestino.trim())) {
+      return alert("Para el agente externo indique la universidad de origen y la de destino");
+    }
     
     setCargando(true);
     setMensaje("");
@@ -84,6 +93,8 @@ export default function NuevaSolicitud() {
         body: JSON.stringify({ 
           tipo: "Homologación",
           modulo,
+          universidadOrigen: esExterno ? universidadOrigen.trim() : null,
+          universidadDestino: esExterno ? universidadDestino.trim() : null,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
           asignaturasIds: seleccionadas
@@ -92,15 +103,48 @@ export default function NuevaSolicitud() {
       });
       
       if (res.ok) {
-        setMensaje("¡Solicitud registrada con éxito!");
-        setTimeout(() => navigate("/mis-solicitudes"), 1500);
+        const creada = await res.json().catch(() => ({}));
+        const solicitudId = creada?.id ?? creada?.data?.id;
+
+        if (!solicitudId) {
+          setTipoMensaje("warning");
+          setMensaje("La solicitud se registró, pero no se recibió su identificador. Revise Mis solicitudes.");
+          setTimeout(() => navigate("/mis-solicitudes"), 2000);
+          return;
+        }
+
+        // Flujo externo: primero hay que subir los documentos procesados y luego el agente externo analiza.
+        if (esExterno) {
+          setTipoMensaje("success");
+          setMensaje("Solicitud externa registrada. Adjunte la malla, el historial y los sílabos para analizarla.");
+          setTimeout(() => navigate(`/adjuntar-documentos?solicitudId=${solicitudId}&volver=resultado`), 1200);
+          return;
+        }
+
+        // Encadenamos el análisis con las asignaturas reales de la solicitud.
+        setTipoMensaje("info");
+        setMensaje("Solicitud registrada. Generando el análisis del agente...");
+        try {
+          await analizarSolicitud(solicitudId);
+          setTipoMensaje("success");
+          setMensaje("¡Solicitud registrada y analizada con éxito!");
+        } catch (e) {
+          // La solicitud ya existe: el estudiante puede reintentar el análisis en la pantalla de resultado.
+          setTipoMensaje("warning");
+          setMensaje(
+            `Solicitud registrada, pero el análisis no se pudo generar: ${e.message || "error desconocido"}.`
+          );
+        }
+
+        setTimeout(() => navigate(`/resultado/${solicitudId}`), 1200);
       } else {
         const errorData = await res.json().catch(() => ({}));
+        setTipoMensaje("danger");
         setMensaje(errorData.error || "Error al registrar la solicitud.");
       }
-    } catch {
-      setMensaje("El agente externo no respondió (tiempo de espera agotado). Tus datos se conservan.");
-      setErrorReintento(true);
+    } catch (err) {
+      setTipoMensaje("danger");
+      setMensaje(err.message || "No se pudo registrar la solicitud. Intente nuevamente.");
     } finally {
       setCargando(false);
     }
@@ -130,7 +174,7 @@ export default function NuevaSolicitud() {
               )}
 
               {!errorReintento && mensaje && (
-                <div className={`alert ${mensaje.includes("éxito") ? "alert-success" : "alert-danger"}`}>
+                <div className={`alert alert-${tipoMensaje}`}>
                   {mensaje}
                 </div>
               )}
@@ -156,6 +200,37 @@ export default function NuevaSolicitud() {
                         <option value="EXTERNO">Agente externo (universidades externas)</option>
                       </select>
                     </div>
+
+                    {modulo === "EXTERNO" && (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold">Universidad de origen</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Ej.: Universidad Nacional de Colombia"
+                            value={universidadOrigen}
+                            onChange={(e) => setUniversidadOrigen(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold">Universidad de destino</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Ej.: Universidad Técnica de Ambato"
+                            value={universidadDestino}
+                            onChange={(e) => setUniversidadDestino(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="alert alert-info small py-2">
+                          Tras registrar la solicitud deberá adjuntar la malla, el historial y los sílabos.
+                          El agente externo analizará esos documentos sin reglas fijas.
+                        </div>
+                      </>
+                    )}
                     
                     <div className="mb-3">
                       <label className="form-label fw-bold">Carrera Origen</label>

@@ -1,109 +1,299 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { obtenerResultadoAnalisis, validarReglasObjetivas } from "../services/homologacionService";
+import {
+  obtenerResultadoAnalisis,
+  analizarSolicitud,
+  analizarSolicitudExterna,
+} from "../services/homologacionService";
+import { obtenerSolicitud } from "../services/solicitudesService";
+
+const claseDecision = (decision) => {
+  if (decision === "HOMOLOGABLE") return "bg-success";
+  if (decision === "NO_HOMOLOGABLE") return "bg-danger";
+  return "bg-warning text-dark";
+};
+
+const textoDecision = (decision) => {
+  if (decision === "HOMOLOGABLE") return "Homologable";
+  if (decision === "NO_HOMOLOGABLE") return "No homologable";
+  if (decision === "REQUIERE_REVISION") return "Requiere revisión";
+  return decision || "Pendiente";
+};
 
 export default function ResultadoAnalisis() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [resultado, setResultado] = useState(null);
-  const [validacion, setValidacion] = useState(null);
+  const [solicitud, setSolicitud] = useState(null);
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState(null);
-  
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-  
-  // NUEVOS ESTADOS para la validación
-  const [validando, setValidando] = useState(false);
-  const [errorValidacion, setErrorValidacion] = useState("");
+  const [sinAnalisis, setSinAnalisis] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const [errorGenerando, setErrorGenerando] = useState("");
+  const [reintentable, setReintentable] = useState(false);
+
+  const esExterno =
+    (resultado?.moduloSolicitud || solicitud?.modulo) === "EXTERNO";
 
   const cargarResultado = useCallback(async () => {
     setCargando(true);
     setError("");
+    setSinAnalisis(false);
+    setErrorGenerando("");
+    setReintentable(false);
     try {
       const data = await obtenerResultadoAnalisis(id);
       setResultado(data);
-      if (data.asignaturas && data.asignaturas.length > 0) {
-        setAsignaturaSeleccionada(data.asignaturas[0]);
+      setAsignaturaSeleccionada(data.asignaturas?.[0] ?? null);
+    } catch (e) {
+      if (e.status === 404) {
+        // El resultado no existe todavía: se consulta la solicitud para saber
+        // si debe analizarse con el agente interno o con el externo.
+        try {
+          setSolicitud(await obtenerSolicitud(id));
+        } catch {
+          // Si tampoco se puede consultar la solicitud, se muestra el flujo interno.
+        }
+        setSinAnalisis(true);
+      } else {
+        setError(e.message || "No se pudo cargar el resultado del análisis.");
       }
-    } catch {
-      setError("No se pudo cargar el resultado del análisis.");
     } finally {
       setCargando(false);
     }
   }, [id]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      cargarResultado();
-    }, 0);
+    const timer = setTimeout(() => cargarResultado(), 0);
     return () => clearTimeout(timer);
   }, [cargarResultado]);
 
-  // FUNCIÓN MODIFICADA: separa el error y activa el estado "validando"
-  const handleValidar = async () => {
-    setValidando(true);
-    setErrorValidacion("");
+  const generarAnalisis = async () => {
+    setGenerando(true);
+    setErrorGenerando("");
+    setReintentable(false);
     try {
-      const data = await validarReglasObjetivas(id);
-      setValidacion(data);
-    } catch {
-      setErrorValidacion("Error al validar las reglas. Intente nuevamente.");
+      if (esExterno) {
+        await analizarSolicitudExterna(id);
+      } else {
+        await analizarSolicitud(id);
+      }
+      await cargarResultado();
+    } catch (e) {
+      setErrorGenerando(
+        e.message || "No se pudo generar el análisis. Intente nuevamente."
+      );
+      setReintentable(Boolean(e.reintentable));
     } finally {
-      setValidando(false);
+      setGenerando(false);
     }
   };
 
-  if (cargando) return <div className="container mt-4"><div className="alert alert-info">Cargando...</div></div>;
-  if (error) return <div className="container mt-4"><div className="alert alert-danger">{error}</div></div>;
+  if (cargando) {
+    return (
+      <div className="container mt-4">
+        <div className="alert alert-info">Cargando análisis...</div>
+      </div>
+    );
+  }
+
+  if (sinAnalisis) {
+    return (
+      <div className="container mt-4">
+        <div className="card shadow-sm border-0">
+          <div className="card-header bg-warning text-dark">
+            <h4 className="mb-0">Solicitud SOL-{id}</h4>
+          </div>
+          <div className="card-body">
+            {esExterno ? (
+              <>
+                <p className="mb-3">
+                  Esta solicitud usa el <strong>agente externo</strong>. Primero adjunte la
+                  malla, el historial y los sílabos (documentos procesados); después genere
+                  el análisis externo.
+                </p>
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    className="btn btn-outline-primary"
+                    onClick={() =>
+                      navigate(`/adjuntar-documentos?solicitudId=${id}&volver=resultado`)
+                    }
+                    disabled={generando}
+                  >
+                    Adjuntar documentos
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={generarAnalisis}
+                    disabled={generando}
+                  >
+                    {generando ? "Analizando documentos..." : "Generar análisis externo"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mb-3">
+                  Esta solicitud todavía no tiene un análisis del agente. Puedes generarlo
+                  ahora con las asignaturas que registraste.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={generarAnalisis}
+                  disabled={generando}
+                >
+                  {generando ? "Analizando asignaturas..." : "Generar análisis"}
+                </button>
+              </>
+            )}
+
+            {errorGenerando && (
+              <div className="alert alert-danger mt-3">
+                <div>{errorGenerando}</div>
+                {reintentable && (
+                  <button
+                    className="btn btn-sm btn-outline-dark mt-2"
+                    onClick={generarAnalisis}
+                    disabled={generando}
+                  >
+                    Reintentar
+                  </button>
+                )}
+              </div>
+            )}
+
+            <button
+              className="btn btn-outline-secondary ms-2 mt-3 mt-sm-0"
+              onClick={() => navigate("/mis-solicitudes")}
+              disabled={generando}
+            >
+              Volver a Mis solicitudes
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mt-4">
+        <div className="alert alert-danger">{error}</div>
+        <button className="btn btn-outline-primary me-2" onClick={cargarResultado}>
+          Reintentar
+        </button>
+        <button className="btn btn-outline-secondary" onClick={() => navigate("/mis-solicitudes")}>
+          Volver a Mis solicitudes
+        </button>
+      </div>
+    );
+  }
+
+  const informeEmitido = resultado?.estado === "INFORME_EMITIDO";
 
   return (
     <div className="container mt-4">
       <h2 className="mb-4 text-center">SISTEMA DE HOMOLOGACIÓN - UTA</h2>
 
-      {/* Cabecera */}
-      <div className="mb-4">
-        <div className="row mb-2">
-          <div className="col-md-2 fw-bold">Solicitud</div>
-          <div className="col-md-10">SOL-{resultado?.numero || id} · {resultado?.carreraOrigen} → {resultado?.carreraDestino}</div>
-        </div>
-        <div className="row">
-          <div className="col-md-2 fw-bold">Estado</div>
-          <div className="col-md-4">
-            <span className="badge bg-warning text-dark border">{resultado?.estado}</span>
+      <div className="card shadow-sm border-0 mb-4">
+        <div className="card-body">
+          <div className="row mb-2">
+            <div className="col-md-2 fw-bold">Solicitud</div>
+            <div className="col-md-10">
+              {resultado?.numero || `SOL-${id}`} · {resultado?.carreraOrigen} → {resultado?.carreraDestino}
+            </div>
           </div>
-          <div className="col-md-2 fw-bold">Módulo</div>
-          <div className="col-md-4">{resultado?.modulo || "Agente interno"}</div>
+          <div className="row mb-2">
+            <div className="col-md-2 fw-bold">Estudiante</div>
+            <div className="col-md-10">{resultado?.estudiante}</div>
+          </div>
+          {esExterno && (resultado?.universidadOrigen || resultado?.universidadDestino) && (
+            <div className="row mb-2">
+              <div className="col-md-2 fw-bold">Universidades</div>
+              <div className="col-md-10">
+                {resultado?.universidadOrigen || "Origen"} →{" "}
+                {resultado?.universidadDestino || "Destino"}
+              </div>
+            </div>
+          )}
+          <div className="row mb-2">
+            <div className="col-md-2 fw-bold">Estado</div>
+            <div className="col-md-4">
+              <span className={`badge ${informeEmitido ? "bg-success" : "bg-warning text-dark"}`}>
+                {resultado?.estado}
+              </span>
+            </div>
+            <div className="col-md-2 fw-bold">Módulo</div>
+            <div className="col-md-4">
+              {resultado?.modulo}
+              {esExterno && (
+                <span className="badge bg-info text-dark ms-2">Sin reglas fijas</span>
+              )}
+            </div>
+          </div>
+          {informeEmitido && (
+            <div className="row mb-2">
+              <div className="col-md-2 fw-bold">Informe</div>
+              <div className="col-md-10">
+                Emitido por {resultado?.coordinadorCorreo}
+                {resultado?.fechaInforme
+                  ? ` el ${new Date(resultado.fechaInforme).toLocaleString("es-EC")}`
+                  : ""}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tabla de asignaturas */}
       <div className="table-responsive mb-4">
         <table className="table table-bordered align-middle">
           <thead className="table-light">
             <tr>
-              <th>Asignatura</th>
+              <th>Asignatura origen</th>
+              <th>Asignatura destino</th>
               <th>Contenido</th>
               <th>Profundidad</th>
               <th>Carga horaria</th>
-              <th>Decisión</th>
-              <th>Justificación</th>
+              <th>Propuesta del agente</th>
+              {informeEmitido && <th>Decisión final</th>}
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {resultado?.asignaturas?.map((asig, index) => (
-              <tr key={index}>
-                <td>{asig.nombre}</td>
-                <td>{asig.contenido != null ? `${asig.contenido} %` : "—"}</td>
-                <td>{asig.profundidad != null ? `${asig.profundidad} %` : "—"}</td>
-                <td>{asig.cargaHoraria != null ? `${asig.cargaHoraria} %` : "—"}</td>
+            {resultado?.asignaturas?.map((asig) => (
+              <tr key={asig.id}>
+                <td>{asig.asignaturaOrigen}</td>
+                <td>{asig.asignaturaDestino}</td>
+                <td>{asig.porcentajeContenido} %</td>
+                <td>{asig.porcentajeProfundidad} %</td>
+                <td>{asig.porcentajeHoras} %</td>
                 <td>
-                  {asig.decision === "HOMOLOGABLE" && <span className="text-success">● Homologable</span>}
-                  {asig.decision === "NO_HOMOLOGABLE" && <span className="text-danger">○ No homologable</span>}
-                  {asig.decision === "REQUIERE_REVISION" && <span className="text-warning">△ Requiere revisión</span>}
+                  <span className={`badge ${claseDecision(asig.decision)}`}>
+                    {textoDecision(asig.decision)}
+                  </span>
+                  {asig.requiereRevision && (
+                    <div className="small text-muted mt-1">El agente no respondió; revisión manual.</div>
+                  )}
                 </td>
+                {informeEmitido && (
+                  <td>
+                    {asig.decisionCoordinador ? (
+                      <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
+                        {textoDecision(asig.decisionCoordinador)}
+                      </span>
+                    ) : (
+                      <span className="text-muted">Sin decisión</span>
+                    )}
+                  </td>
+                )}
                 <td>
-                  <button className="btn btn-sm btn-outline-dark" onClick={() => setAsignaturaSeleccionada(asig)}>
-                    Ver
+                  <button
+                    className="btn btn-sm btn-outline-dark"
+                    onClick={() => setAsignaturaSeleccionada(asig)}
+                  >
+                    Ver justificación
                   </button>
                 </td>
               </tr>
@@ -112,71 +302,41 @@ export default function ResultadoAnalisis() {
         </table>
       </div>
 
-      {/* Cuadro de Justificación */}
       {asignaturaSeleccionada && (
         <div className="card shadow-sm border mb-4">
           <div className="card-body">
-            <h5 className="card-title fw-bold">Justificación — {asignaturaSeleccionada.nombre}</h5>
-            <p className="card-text">{asignaturaSeleccionada.justificacion}</p>
+            <h5 className="card-title fw-bold">
+              Justificación — {asignaturaSeleccionada.asignaturaOrigen}
+            </h5>
+            <p className="card-text">
+              {asignaturaSeleccionada.justificacion || "Sin justificación registrada."}
+            </p>
+
+            {asignaturaSeleccionada.observacionCoordinador && (
+              <>
+                <hr />
+                <h6 className="fw-bold">Observación del Coordinador</h6>
+                <p className="card-text mb-0">{asignaturaSeleccionada.observacionCoordinador}</p>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {/* CORRECCIÓN 1: Textos informativos sin datos fijos */}
       <p className="text-muted small">
-        El sistema calcula la decisión en base a las reglas configuradas. El agente de IA solo entrega los porcentajes de similitud.<br/>
-        "Requiere revisión": el agente no devolvió una respuesta válida.
+        {esExterno
+          ? "El agente externo decide por su cuenta a partir de la documentación procesada: el sistema no le impone reglas ni umbrales."
+          : 'El sistema calcula la decisión con las reglas configuradas. El agente de IA entrega los porcentajes de similitud y su justificación. "Requiere revisión" indica que el agente no devolvió una respuesta válida y la decisión queda en manos del Coordinador.'}
       </p>
 
-      {/* Botones de acción */}
       <div className="d-flex justify-content-between align-items-center mt-4">
         <button className="btn btn-outline-secondary" onClick={() => navigate("/mis-solicitudes")}>
           Volver a Mis solicitudes
         </button>
-
-        <div className="text-end">
-          {/* CORRECCIÓN 3: Botón con estado "validando" y error separado */}
-          <button className="btn btn-primary" onClick={handleValidar} disabled={validando}>
-            {validando ? "Validando..." : "Validar Reglas Objetivas"}
-          </button>
-          {errorValidacion && <div className="text-danger small mt-2">{errorValidacion}</div>}
-        </div>
+        <button className="btn btn-outline-primary" onClick={cargarResultado}>
+          Actualizar
+        </button>
       </div>
-
-      {/* CORRECCIÓN 2: Tabla legible en lugar de JSON crudo */}
-      {validacion && validacion.reglas && (
-        <div className="card shadow-sm border mt-4">
-          <div className="card-header bg-light">
-            <h5 className="mb-0">Validación de Reglas Objetivas</h5>
-          </div>
-          <div className="card-body p-0">
-            <table className="table table-sm table-bordered mb-0">
-              <thead>
-                <tr>
-                  <th>Regla</th>
-                  <th>Resultado</th>
-                  <th>Detalle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {validacion.reglas.map((regla, i) => (
-                  <tr key={i}>
-                    <td>{regla.nombre || regla.codigo}</td>
-                    <td>
-                      {regla.cumple ? (
-                        <span className="text-success">✓ Cumple</span>
-                      ) : (
-                        <span className="text-danger">✗ No cumple</span>
-                      )}
-                    </td>
-                    <td>{regla.detalle || "Sin detalle adicional"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
