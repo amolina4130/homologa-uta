@@ -14,18 +14,21 @@ import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import PanelReglas from "./pages/PanelReglas"; 
 import PanelCoordinador from "./pages/PanelCoordinador"; 
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
+import Registro from './pages/Registro'; // <-- Ya lo tenías importado, ¡bien!
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Ruta pública */}
+          {/* Rutas PÚBLICAS (No requieren estar logueado) */}
           <Route path="/login" element={<Login />} />
+          
+          {/* ¡AQUÍ VA EL REGISTRO! */}
+          <Route path="/registro" element={<Registro />} /> 
 
           {/* Rutas protegidas generales */}
           <Route element={<RutaProtegida />}>
-            {/* Ahora usa el componente Inicio importado */}
             <Route path="/inicio" element={<><Menu /><Inicio /></>} />
             <Route path="/estado" element={<><Menu /><EstadoSistema /></>} />
             <Route path="/mis-solicitudes" element={<><Menu /><MisSolicitudes /></>} />
