@@ -44,14 +44,17 @@ public class CoordinadorService
     /// <summary>Solicitudes pendientes de revisión, las más antiguas primero.</summary>
     public async Task<List<PendienteDto>> ListarPendientesAsync(CancellationToken ct = default)
     {
-        // Fuente 1: análisis que ya están esperando al Coordinador.
+        // Fuente 1: análisis que esperan al Coordinador o que ya tienen informe emitido
+        // (estos últimos se muestran para poder registrar la resolución del Consejo, HU-17).
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
-            .Where(a => a.Estado == EstadoAnalisis.PENDIENTE_REVISION)
+            .Where(a => a.Estado == EstadoAnalisis.PENDIENTE_REVISION
+                        || a.Estado == EstadoAnalisis.INFORME_EMITIDO)
             .Select(a => new
             {
                 a.SolicitudId,
                 a.FechaAnalisis,
+                a.Estado,
                 TotalAsignaturas = a.Asignaturas.Count
             })
             .ToListAsync(ct);
@@ -92,7 +95,8 @@ public class CoordinadorService
                 CarreraOrigen = info.CarreraOrigen,
                 CarreraDestino = info.CarreraDestino,
                 FechaAnalisis = a?.FechaAnalisis ?? info.FechaRegistro,
-                TotalAsignaturas = a?.TotalAsignaturas ?? info.TotalAsignaturas
+                TotalAsignaturas = a?.TotalAsignaturas ?? info.TotalAsignaturas,
+                Estado = a?.Estado ?? info.Estado
             });
         }
 
@@ -126,8 +130,9 @@ public class CoordinadorService
                 }
                 else
                 {
-                    await _analisis.AnalizarSolicitudAsync(
-                        solicitudId, AnalisisService.ConstruirAsignaturas(info), ct);
+                    // Sin cuerpo: el servicio decide si usa las materias aprobadas (preselección
+                    // HU-21) o las asignaturas de la solicitud.
+                    await _analisis.AnalizarSolicitudAsync(solicitudId, null, ct);
                 }
             }
             catch (Exception ex) when (ex is AnalisisSolicitudException
@@ -146,6 +151,16 @@ public class CoordinadorService
         if (analisis is null)
             return null;
 
+        // La resolución del Consejo (si ya existe) se muestra en el mismo detalle y en el
+        // formulario de resolución (HU-17/HU-22).
+        var resolucion = await _db.ResolucionesConsejo
+            .AsNoTracking()
+            .Include(r => r.Decisiones)
+            .FirstOrDefaultAsync(r => r.SolicitudId == solicitudId, ct);
+
+        var decisionesFinales = resolucion?.Decisiones
+            .ToDictionary(d => d.AsignaturaId) ?? new Dictionary<int, DecisionResolucion>();
+
         return new DetalleSolicitudDto
         {
             SolicitudId = solicitudId,
@@ -161,24 +176,39 @@ public class CoordinadorService
             FechaAnalisis = analisis.FechaAnalisis,
             CoordinadorCorreo = analisis.CoordinadorCorreo,
             FechaInforme = analisis.FechaInforme,
+            Resolucion = resolucion is null
+                ? null
+                : ResolucionService.ConstruirDto(resolucion, analisis.Asignaturas, analisis.Estado),
             Asignaturas = analisis.Asignaturas
                 .OrderBy(a => a.Id)
-                .Select(a => new DetalleAsignaturaDto
+                .Select(a =>
                 {
-                    Id = a.Id,
-                    AsignaturaOrigen = a.AsignaturaOrigen,
-                    AsignaturaDestino = a.AsignaturaDestino,
-                    Propuesta = new PropuestaAgenteDto
+                    decisionesFinales.TryGetValue(a.Id, out var final);
+                    return new DetalleAsignaturaDto
                     {
-                        Decision = a.Decision,
-                        Justificacion = a.Justificacion,
-                        PorcentajeContenido = a.PorcentajeContenido,
-                        PorcentajeProfundidad = a.PorcentajeProfundidad,
-                        PorcentajeHoras = a.PorcentajeHoras,
-                        RequiereRevision = a.RequiereRevision
-                    },
-                    DecisionCoordinador = a.DecisionCoordinador,
-                    ObservacionCoordinador = a.ObservacionCoordinador
+                        Id = a.Id,
+                        AsignaturaOrigen = a.AsignaturaOrigen,
+                        AsignaturaDestino = a.AsignaturaDestino,
+                        AsignaturaDestinoId = a.AsignaturaDestinoId,
+                        Combinada = a.Combinada,
+                        MateriasOrigen = a.MateriasOrigen
+                            .Select(m => new MateriaOrigenDto { Nombre = m.Nombre, Nota = m.Nota })
+                            .ToList(),
+                        AreaOrigen = a.AreaOrigen,
+                        AreaDestino = a.AreaDestino,
+                        Propuesta = new PropuestaAgenteDto
+                        {
+                            Decision = a.Decision,
+                            Justificacion = a.Justificacion,
+                            PorcentajeContenido = a.PorcentajeContenido,
+                            PorcentajeProfundidad = a.PorcentajeProfundidad,
+                            PorcentajeHoras = a.PorcentajeHoras,
+                            RequiereRevision = a.RequiereRevision
+                        },
+                        DecisionCoordinador = a.DecisionCoordinador,
+                        ObservacionCoordinador = a.ObservacionCoordinador,
+                        DecisionFinal = final?.DecisionFinal
+                    };
                 })
                 .ToList()
         };
@@ -198,6 +228,10 @@ public class CoordinadorService
 
         if (analisis is null)
             throw new InformeException(404, "La solicitud no tiene un análisis para revisar.");
+
+        if (analisis.Estado == EstadoAnalisis.RESUELTA)
+            throw new InformeException(409,
+                "La solicitud ya fue resuelta por el Consejo Directivo y no admite cambios en el informe.");
 
         if (analisis.Estado == EstadoAnalisis.INFORME_EMITIDO)
             throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
@@ -252,6 +286,7 @@ public class CoordinadorService
     private async Task<AnalisisSolicitud?> CargarAnalisisAsync(int solicitudId, CancellationToken ct) =>
         await _db.AnalisisSolicitudes
             .Include(a => a.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
     /// <summary>Valida que el informe traiga exactamente las asignaturas del análisis, sin repetidas ni ajenas.</summary>

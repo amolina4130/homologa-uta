@@ -126,4 +126,34 @@ public class SolicitudesClient
             throw new SolicitudesNoDisponibleException("No se pudo actualizar el estado de la solicitud.", ex);
         }
     }
+
+    /// <summary>
+    /// Deja constancia de una corrección en el historial de estados sin cambiarlo (HU-20).
+    /// </summary>
+    public async Task<bool> RegistrarHistorialAsync(
+        int id, string estado, string usuario, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.PostAsJsonAsync(
+                $"internal/solicitudes/{id}/historial",
+                new { estado, usuario },
+                ct);
+
+            if (respuesta.StatusCode == HttpStatusCode.NotFound)
+                return false;
+
+            respuesta.EnsureSuccessStatusCode();
+            return true;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo registrar el historial de la solicitud {SolicitudId}", id);
+            throw new SolicitudesNoDisponibleException("No se pudo registrar el historial de la solicitud.", ex);
+        }
+    }
 }

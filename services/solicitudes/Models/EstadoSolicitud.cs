@@ -10,4 +10,7 @@ public static class EstadoSolicitud
 
     public const string APROBADA = "APROBADA";
     public const string RECHAZADA = "RECHAZADA";
+
+    /// <summary>El Consejo Directivo ya registró su resolución (HU-17).</summary>
+    public const string RESUELTA = "RESUELTA";
 }

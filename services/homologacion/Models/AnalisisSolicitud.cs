@@ -7,6 +7,9 @@ public static class EstadoAnalisis
 
     /// <summary>El Coordinador ya emitió su informe técnico.</summary>
     public const string INFORME_EMITIDO = "INFORME_EMITIDO";
+
+    /// <summary>El Consejo Directivo ya registró su resolución (HU-17).</summary>
+    public const string RESUELTA = "RESUELTA";
 }
 
 /// <summary>Decisiones posibles para una asignatura.</summary>
@@ -37,6 +40,9 @@ public class AnalisisSolicitud
     public DateTime? FechaInforme { get; set; }
 
     public List<AnalisisAsignatura> Asignaturas { get; set; } = new();
+
+    /// <summary>Resolución del Consejo Directivo; null mientras no se registre (HU-17).</summary>
+    public ResolucionConsejo? Resolucion { get; set; }
 }
 
 /// <summary>Resultado del análisis de una asignatura: porcentajes, decisión y justificación.</summary>
@@ -49,6 +55,19 @@ public class AnalisisAsignatura
 
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string AsignaturaDestino { get; set; } = string.Empty;
+
+    /// <summary>Id de la asignatura de destino en el catálogo (HU-21).</summary>
+    public int? AsignaturaDestinoId { get; set; }
+
+    /// <summary>Área de la materia de origen y de la asignatura de destino (HU-21).</summary>
+    public string? AreaOrigen { get; set; }
+    public string? AreaDestino { get; set; }
+
+    /// <summary>true cuando la asignatura de destino se cubre con dos materias de origen (HU-22).</summary>
+    public bool Combinada { get; set; }
+
+    /// <summary>Una o dos materias de origen que cubren esta asignatura de destino.</summary>
+    public List<MateriaOrigenResultado> MateriasOrigen { get; set; } = new();
 
     public int PorcentajeContenido { get; set; }
     public int PorcentajeProfundidad { get; set; }

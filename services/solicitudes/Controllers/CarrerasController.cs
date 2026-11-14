@@ -45,6 +45,7 @@ public class CarrerasController : ControllerBase
                 Id = a.Id,
                 Nombre = a.Nombre,
                 Nivel = a.Nivel,
+                Area = a.Area,
                 Creditos = a.Creditos,
                 Horas = a.Horas
             })

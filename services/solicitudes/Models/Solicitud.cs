@@ -3,6 +3,10 @@ namespace HomologaUTA.Solicitudes.Models;
 public class Solicitud
 {
     public int Id { get; set; }
+
+    /// <summary>Número de proceso legible y único, por ejemplo SOL-0004 (HU-16).</summary>
+    public string NumeroProceso { get; set; } = string.Empty;
+
     public string Tipo { get; set; } = string.Empty; 
     
     public int CarreraOrigenId { get; set; }

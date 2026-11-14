@@ -45,9 +45,12 @@ public class InternoController : ControllerBase
             .Select(s => new SolicitudInternaDto
             {
                 Id = s.Id,
+                NumeroProceso = s.NumeroProceso,
                 Tipo = s.Tipo,
                 EstudianteCorreo = s.EstudianteCorreo,
                 FechaRegistro = s.FechaRegistro,
+                CarreraOrigenId = s.CarreraOrigenId,
+                CarreraDestinoId = s.CarreraDestinoId,
                 CarreraOrigen = s.CarreraOrigen.Nombre,
                 CarreraDestino = s.CarreraDestino.Nombre,
                 Estado = s.Estado,
@@ -71,9 +74,12 @@ public class InternoController : ControllerBase
             .Select(s => new SolicitudInternaDto
             {
                 Id = s.Id,
+                NumeroProceso = s.NumeroProceso,
                 Tipo = s.Tipo,
                 EstudianteCorreo = s.EstudianteCorreo,
                 FechaRegistro = s.FechaRegistro,
+                CarreraOrigenId = s.CarreraOrigenId,
+                CarreraDestinoId = s.CarreraDestinoId,
                 CarreraOrigen = s.CarreraOrigen.Nombre,
                 CarreraDestino = s.CarreraDestino.Nombre,
                 Estado = s.Estado,
@@ -115,12 +121,36 @@ public class InternoController : ControllerBase
             .Where(a => a.CarreraId == solicitud.CarreraDestinoId)
             .ToListAsync();
 
+        // HU-14: las equivalencias activas se aplican antes que la coincidencia por nombre.
+        var equivalencias = await _db.Equivalencias
+            .AsNoTracking()
+            .Where(e => e.Activa
+                        && e.CarreraOrigenId == solicitud.CarreraOrigenId
+                        && e.CarreraDestinoId == solicitud.CarreraDestinoId)
+            .ToListAsync();
+
+        // HU-13/HU-19: el contenido real viene del plan analítico cuando está cargado.
+        var idsAsignaturas = solicitud.Asignaturas.Select(a => a.AsignaturaId)
+            .Concat(catalogoDestino.Select(a => a.Id))
+            .Distinct()
+            .ToList();
+
+        var planes = await _db.PlanesAnaliticos
+            .AsNoTracking()
+            .Where(p => idsAsignaturas.Contains(p.AsignaturaId))
+            .ToDictionaryAsync(p => p.AsignaturaId, p => p.Contenido);
+
         var dto = new SolicitudCompletaInternaDto
         {
             Id = solicitud.Id,
+            NumeroProceso = string.IsNullOrEmpty(solicitud.NumeroProceso)
+                ? $"SOL-{solicitud.Id:D4}"
+                : solicitud.NumeroProceso,
             Tipo = solicitud.Tipo,
             EstudianteCorreo = solicitud.EstudianteCorreo,
             FechaRegistro = solicitud.FechaRegistro,
+            CarreraOrigenId = solicitud.CarreraOrigenId,
+            CarreraDestinoId = solicitud.CarreraDestinoId,
             CarreraOrigen = solicitud.CarreraOrigen.Nombre,
             CarreraDestino = solicitud.CarreraDestino.Nombre,
             Estado = solicitud.Estado,
@@ -132,8 +162,19 @@ public class InternoController : ControllerBase
         foreach (var sa in solicitud.Asignaturas.OrderBy(sa => sa.Id))
         {
             var origen = sa.Asignatura;
-            var destino = catalogoDestino.FirstOrDefault(d =>
-                string.Equals(d.Nombre.Trim(), origen.Nombre.Trim(), StringComparison.OrdinalIgnoreCase));
+            var equivalencia = equivalencias.FirstOrDefault(e => e.AsignaturaOrigenId == origen.Id);
+            var destino = equivalencia is not null
+                ? catalogoDestino.FirstOrDefault(d => d.Id == equivalencia.AsignaturaDestinoId)
+                : catalogoDestino.FirstOrDefault(d =>
+                    string.Equals(d.Nombre.Trim(), origen.Nombre.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            var contenidoOrigen = planes.TryGetValue(origen.Id, out var planOrigen)
+                ? planOrigen
+                : DescribirContenido(origen);
+
+            var contenidoDestino = destino is not null && planes.TryGetValue(destino.Id, out var planDestino)
+                ? planDestino
+                : DescribirContenido(destino ?? origen);
 
             dto.Asignaturas.Add(new AsignaturaSolicitudInternaDto
             {
@@ -141,15 +182,26 @@ public class InternoController : ControllerBase
                 AsignaturaOrigenId = origen.Id,
                 AsignaturaOrigen = origen.Nombre,
                 NivelOrigen = origen.Nivel,
+                AreaOrigen = string.IsNullOrWhiteSpace(origen.Area)
+                    ? Services.AreaAsignatura.Detectar(origen.Nombre)
+                    : origen.Area,
                 CreditosOrigen = origen.Creditos,
                 HorasOrigen = origen.Horas,
-                ContenidoOrigen = DescribirContenido(origen),
+                ContenidoOrigen = contenidoOrigen,
                 AsignaturaDestinoId = destino?.Id ?? origen.Id,
                 AsignaturaDestino = destino?.Nombre ?? origen.Nombre,
                 NivelDestino = destino?.Nivel ?? origen.Nivel,
+                AreaDestino = destino is null
+                    ? string.Empty
+                    : string.IsNullOrWhiteSpace(destino.Area)
+                        ? Services.AreaAsignatura.Detectar(destino.Nombre)
+                        : destino.Area,
                 CreditosDestino = destino?.Creditos ?? origen.Creditos,
                 HorasDestino = destino?.Horas ?? origen.Horas,
-                ContenidoDestino = DescribirContenido(destino ?? origen)
+                ContenidoDestino = contenidoDestino,
+                EquivalenciaAplicada = equivalencia is not null
+                    ? $"Equivalencia registrada: {origen.Nombre} → {destino?.Nombre ?? origen.Nombre}"
+                    : null
             });
         }
 
@@ -177,7 +229,8 @@ public class InternoController : ControllerBase
             EstadoSolicitud.PENDIENTE_REVISION,
             EstadoSolicitud.INFORME_EMITIDO,
             EstadoSolicitud.APROBADA,
-            EstadoSolicitud.RECHAZADA
+            EstadoSolicitud.RECHAZADA,
+            EstadoSolicitud.RESUELTA
         };
 
         if (!permitidos.Contains(estado))
@@ -208,6 +261,31 @@ public class InternoController : ControllerBase
     }
 
     /// <summary>
+    /// Deja constancia en el historial de una corrección sin cambiar el estado (HU-20).
+    /// </summary>
+    [HttpPost("{id:int}/historial")]
+    public async Task<IActionResult> RegistrarHistorial(int id, [FromBody] CambiarEstadoSolicitudRequest request)
+    {
+        var solicitud = await _db.Solicitudes.FirstOrDefaultAsync(s => s.Id == id);
+        if (solicitud is null)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        _db.HistorialEstados.Add(new HistorialEstado
+        {
+            SolicitudId = id,
+            EstadoAnterior = solicitud.Estado,
+            EstadoNuevo = string.IsNullOrWhiteSpace(request?.Estado) ? solicitud.Estado : request.Estado,
+            UsuarioCorreo = string.IsNullOrWhiteSpace(request?.Usuario)
+                ? "sistema@homologauta"
+                : request.Usuario.Trim(),
+            FechaCambio = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+        return Ok(new { id, registrado = true });
+    }
+
+    /// <summary>
     /// El catálogo no guarda sílabos, así que se describe la asignatura con sus datos reales
     /// (nombre, nivel, créditos y horas). El agente recibe ese contenido para comparar.
     /// </summary>
@@ -218,9 +296,12 @@ public class InternoController : ControllerBase
 public class SolicitudInternaDto
 {
     public int Id { get; set; }
+    public string NumeroProceso { get; set; } = string.Empty;
     public string Tipo { get; set; } = string.Empty;
     public string EstudianteCorreo { get; set; } = string.Empty;
     public DateTime FechaRegistro { get; set; }
+    public int CarreraOrigenId { get; set; }
+    public int CarreraDestinoId { get; set; }
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
     public string Estado { get; set; } = string.Empty;
@@ -242,6 +323,7 @@ public class AsignaturaSolicitudInternaDto
     public int AsignaturaOrigenId { get; set; }
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string NivelOrigen { get; set; } = string.Empty;
+    public string AreaOrigen { get; set; } = string.Empty;
     public int CreditosOrigen { get; set; }
     public int HorasOrigen { get; set; }
     public string ContenidoOrigen { get; set; } = string.Empty;
@@ -249,9 +331,13 @@ public class AsignaturaSolicitudInternaDto
     public int AsignaturaDestinoId { get; set; }
     public string AsignaturaDestino { get; set; } = string.Empty;
     public string NivelDestino { get; set; } = string.Empty;
+    public string AreaDestino { get; set; } = string.Empty;
     public int CreditosDestino { get; set; }
     public int HorasDestino { get; set; }
     public string ContenidoDestino { get; set; } = string.Empty;
+
+    /// <summary>Regla de equivalencia aplicada, si existe (HU-14).</summary>
+    public string? EquivalenciaAplicada { get; set; }
 }
 
 public class CambiarEstadoSolicitudRequest

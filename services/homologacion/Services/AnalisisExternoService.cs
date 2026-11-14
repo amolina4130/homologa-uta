@@ -11,6 +11,8 @@ namespace HomologaUTA.Homologacion.Services;
 /// <summary>
 /// Envía la documentación al agente externo y guarda su decisión por asignatura con su justificación,
 /// sin imponerle reglas. Si el agente falla, no se guarda nada: se puede reintentar sin perder datos.
+/// Desde HU-21/HU-22 solo se envían las asignaturas candidatas de la preselección y el agente puede
+/// proponer una combinación de hasta dos materias de origen.
 /// </summary>
 public class AnalisisExternoService
 {
@@ -20,6 +22,7 @@ public class AnalisisExternoService
 
     private readonly HomologacionDbContext _db;
     private readonly AgenteExternoConnector _conector;
+    private readonly PreseleccionService _preseleccion;
     private readonly SolicitudesClient _solicitudes;
     private readonly DocumentosClient _documentos;
     private readonly IAnalisisEventPublisher _publisher;
@@ -28,6 +31,7 @@ public class AnalisisExternoService
     public AnalisisExternoService(
         HomologacionDbContext db,
         AgenteExternoConnector conector,
+        PreseleccionService preseleccion,
         SolicitudesClient solicitudes,
         DocumentosClient documentos,
         IAnalisisEventPublisher publisher,
@@ -35,6 +39,7 @@ public class AnalisisExternoService
     {
         _db = db;
         _conector = conector;
+        _preseleccion = preseleccion;
         _solicitudes = solicitudes;
         _documentos = documentos;
         _publisher = publisher;
@@ -46,7 +51,7 @@ public class AnalisisExternoService
     /// incompleto), se arma con los datos reales de la solicitud y el texto extraído de sus PDF.
     /// </summary>
     /// <exception cref="AnalisisSolicitudException">La solicitud no existe o no tiene documentos procesados.</exception>
-    /// <exception cref="AgenteExternoTimeoutException">Vencíó el tiempo de espera; no se guardó nada.</exception>
+    /// <exception cref="AgenteExternoTimeoutException">Venci�� el tiempo de espera; no se guardó nada.</exception>
     /// <exception cref="AgenteExternoException">El agente falló o respondió mal; no se guardó nada.</exception>
     public async Task<ResultadoAnalisisDto> AnalizarSolicitudAsync(
         int solicitudId, AgenteExternoRequest? request, CancellationToken ct = default)
@@ -58,12 +63,15 @@ public class AnalisisExternoService
 
         // 1. Enviar al agente. Si falla o vence el tiempo, sale por excepción antes de tocar la base de datos.
         var respuesta = await _conector.EnviarDocumentacionAsync(entrada, ct);
-        var filas = respuesta.Asignaturas.Select(ConstruirFila).ToList();
+        var filas = respuesta.Asignaturas
+            .Select(a => ConstruirFila(a, entrada))
+            .ToList();
 
         // 2. Guardar: si la solicitud ya tenía un análisis, se reemplaza
         var fecha = DateTime.UtcNow;
         var analisis = await _db.AnalisisSolicitudes
             .Include(x => x.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
             .FirstOrDefaultAsync(x => x.SolicitudId == solicitudId, ct);
 
         if (analisis is null)
@@ -127,6 +135,11 @@ public class AnalisisExternoService
             {
                 AsignaturaOrigen = f.AsignaturaOrigen,
                 AsignaturaDestino = f.AsignaturaDestino,
+                AsignaturaDestinoId = f.AsignaturaDestinoId,
+                Combinada = f.Combinada,
+                MateriasOrigen = f.MateriasOrigen
+                    .Select(m => new MateriaOrigenDto { Nombre = m.Nombre, Nota = m.Nota })
+                    .ToList(),
                 PorcentajeContenido = f.PorcentajeContenido,
                 PorcentajeProfundidad = f.PorcentajeProfundidad,
                 PorcentajeHoras = f.PorcentajeHoras,
@@ -138,8 +151,9 @@ public class AnalisisExternoService
     }
 
     /// <summary>
-    /// Completa la petición del agente con los datos reales de la solicitud. Si no vienen sílabos
-    /// en el cuerpo, se toman de los documentos procesados (texto extraído de los PDF).
+    /// Completa la petición del agente con los datos reales de la solicitud. Si hay materias
+    /// aprobadas, primero hace la preselección por área y nivel (HU-21); si no, usa las
+    /// asignaturas de la solicitud (comportamiento anterior).
     /// </summary>
     private async Task<AgenteExternoRequest> PrepararEntradaAsync(
         int solicitudId, SolicitudCompletaDto info, AgenteExternoRequest? request, CancellationToken ct)
@@ -154,6 +168,65 @@ public class AnalisisExternoService
             entrada.CarreraOrigen = info.CarreraOrigen;
         if (string.IsNullOrWhiteSpace(entrada.CarreraDestino))
             entrada.CarreraDestino = info.CarreraDestino;
+
+        var usaPreseleccion = entrada.MateriasDestino.Count > 0 &&
+                              entrada.MateriasDestino.Any(d => d.MateriasOrigenPermitidas.Count > 0);
+
+        if (entrada.MateriasDestino.Count == 0)
+        {
+            EntradasPreseleccion? preseleccion = null;
+            try
+            {
+                preseleccion = await _preseleccion.ConstruirEntradasAsync(solicitudId, ct);
+            }
+            catch (AnalisisSolicitudException ex) when (ex.StatusCode == 409)
+            {
+                // Sin memoria cargada todavía se puede analizar con las asignaturas de la solicitud;
+                // la preselección se activará en cuanto la memoria esté disponible.
+                _logger.LogWarning(ex,
+                    "El análisis externo de {SolicitudId} no pudo usar la preselección; se usan las asignaturas de la solicitud",
+                    solicitudId);
+            }
+
+            if (preseleccion is { UsaMateriasAprobadas: true, Entradas.Count: > 0 })
+            {
+                entrada.MateriasDestino = preseleccion.Entradas.Select(ConstruirDestino).ToList();
+                entrada.MateriasOrigen = preseleccion.Entradas
+                    .SelectMany(e => e.MateriasOrigenPermitidas)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                usaPreseleccion = true;
+            }
+            else
+            {
+                entrada.MateriasOrigen = info.Asignaturas
+                    .Select(a => a.AsignaturaOrigen)
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                entrada.MateriasDestino = info.Asignaturas.Select(a => new MateriaDestinoAgenteExternoDto
+                {
+                    AsignaturaId = a.AsignaturaDestinoId,
+                    Nombre = a.AsignaturaDestino,
+                    Area = a.AreaDestino,
+                    Nivel = a.NivelDestino,
+                    Contenido = a.ContenidoDestino,
+                    MateriasOrigenPermitidas = new List<string> { a.AsignaturaOrigen }
+                }).ToList();
+
+                usaPreseleccion = false;
+            }
+        }
+        else if (entrada.MateriasOrigen.Count == 0)
+        {
+            entrada.MateriasOrigen = entrada.MateriasDestino
+                .SelectMany(d => d.MateriasOrigenPermitidas)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
 
         // El cuerpo ya trae la documentación: se respeta lo que envió el estudiante.
         if (entrada.Documentos.Silabos.Count > 0)
@@ -171,9 +244,32 @@ public class AnalisisExternoService
         if (string.IsNullOrWhiteSpace(entrada.Documentos.HistorialAcademico))
             entrada.Documentos.HistorialAcademico = UnirTextos(documentos, "HISTORIAL");
 
-        entrada.Documentos.Silabos = ConstruirSilabos(info, documentos);
+        entrada.Documentos.Silabos = usaPreseleccion
+            ? entrada.MateriasDestino
+                .Select(d => new SilaboAgenteExternoDto
+                {
+                    Asignatura = d.Nombre,
+                    Contenido = string.IsNullOrWhiteSpace(d.Contenido) ? d.Nombre : d.Contenido
+                })
+                .ToList()
+            : ConstruirSilabos(info, documentos);
+
         return entrada;
     }
+
+    private static MateriaDestinoAgenteExternoDto ConstruirDestino(AsignaturaAnalisisDto entrada) => new()
+    {
+        AsignaturaId = entrada.AsignaturaDestinoId ?? 0,
+        Nombre = entrada.AsignaturaDestino,
+        Area = entrada.AreaDestino,
+        Nivel = entrada.NivelDestino,
+        Contenido = entrada.ContenidoDestino,
+        MateriasOrigenPermitidas = entrada.MateriasOrigenPermitidas
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList(),
+        NotasMateriasOrigen = entrada.NotasMateriasOrigen
+    };
 
     /// <summary>
     /// Asocia cada asignatura de la solicitud con el texto de un sílabo procesado. Si no hay
@@ -227,28 +323,98 @@ public class AnalisisExternoService
 
     /// <summary>
     /// La decisión y la justificación se guardan tal como las dio el agente (sin umbral ni reglas).
-    /// Solo si faltan se marca la asignatura para revisión manual.
+    /// Solo si faltan se marca la asignatura para revisión manual. Se guardan una o dos materias
+    /// de origen (HU-22) con su nota cuando la preselección la conoce.
     /// </summary>
-    private static AnalisisAsignatura ConstruirFila(AsignaturaAgenteExternoDto a)
+    private static AnalisisAsignatura ConstruirFila(AsignaturaAgenteExternoDto a, AgenteExternoRequest entrada)
     {
+        var destino = BuscarDestino(entrada.MateriasDestino, a);
         var sinDecision = string.IsNullOrWhiteSpace(a.Decision);
         var sinJustificacion = string.IsNullOrWhiteSpace(a.Justificacion);
 
+        var origenes = (a.MateriasOrigen ?? new List<string>())
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Select(m => m.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (origenes.Count == 0 && !string.IsNullOrWhiteSpace(a.NombreOrigen))
+            origenes.Add(a.NombreOrigen.Trim());
+
+        var excedeCombinacion = origenes.Count > 2;
+        if (excedeCombinacion)
+            origenes = origenes.Take(2).ToList();
+
+        if (origenes.Count == 0)
+            origenes.Add("Sin materia de origen");
+
+        var notas = destino?.NotasMateriasOrigen ?? new Dictionary<string, decimal?>();
+
+        var materias = origenes.Select(nombre => new MateriaOrigenResultado
+        {
+            Nombre = Recortar(nombre, MaxNombre),
+            Nota = notas.TryGetValue(nombre, out var nota) ? nota : null
+        }).ToList();
+
+        string decision;
+        string justificacion;
+        bool requiereRevision;
+
+        if (excedeCombinacion)
+        {
+            decision = DecisionAnalisis.REQUIERE_REVISION;
+            justificacion = "El agente externo propuso más de dos materias de origen. Requiere revisión manual.";
+            requiereRevision = true;
+        }
+        else if (sinDecision)
+        {
+            decision = DecisionAnalisis.REQUIERE_REVISION;
+            justificacion = sinJustificacion
+                ? "El agente externo no entregó decisión ni justificación."
+                : Recortar(a.Justificacion.Trim(), MaxJustificacion);
+            requiereRevision = true;
+        }
+        else
+        {
+            decision = Recortar(a.Decision.Trim(), MaxDecision);
+            justificacion = sinJustificacion
+                ? "El agente externo no entregó justificación."
+                : Recortar(a.Justificacion.Trim(), MaxJustificacion);
+            requiereRevision = sinJustificacion;
+        }
+
         return new AnalisisAsignatura
         {
-            AsignaturaOrigen = Recortar(a.NombreOrigen.Trim(), MaxNombre),
+            AsignaturaOrigen = Recortar(string.Join(" + ", origenes), MaxNombre),
             AsignaturaDestino = Recortar(a.NombreDestino.Trim(), MaxNombre),
+            AsignaturaDestinoId = a.AsignaturaDestinoId ?? (destino?.AsignaturaId > 0 ? destino.AsignaturaId : null),
+            AreaDestino = string.IsNullOrWhiteSpace(destino?.Area) ? null : Recortar(destino!.Area!.Trim(), 80),
+            Combinada = materias.Count == 2,
+            MateriasOrigen = materias,
             PorcentajeContenido = a.PorcentajeSimilitud,
             PorcentajeProfundidad = 0,
             PorcentajeHoras = 0,
-            Decision = sinDecision
-                ? DecisionAnalisis.REQUIERE_REVISION
-                : Recortar(a.Decision.Trim(), MaxDecision),
-            Justificacion = sinJustificacion
-                ? "El agente externo no entregó justificación."
-                : Recortar(a.Justificacion.Trim(), MaxJustificacion),
-            RequiereRevision = sinDecision || sinJustificacion
+            Decision = decision,
+            Justificacion = Recortar(justificacion, MaxJustificacion),
+            RequiereRevision = requiereRevision
         };
+    }
+
+    private static MateriaDestinoAgenteExternoDto? BuscarDestino(
+        List<MateriaDestinoAgenteExternoDto>? destinos, AsignaturaAgenteExternoDto asignatura)
+    {
+        if (destinos is null || destinos.Count == 0)
+            return null;
+
+        if (asignatura.AsignaturaDestinoId is > 0)
+        {
+            var porId = destinos.FirstOrDefault(d => d.AsignaturaId == asignatura.AsignaturaDestinoId.Value);
+            if (porId is not null)
+                return porId;
+        }
+
+        return destinos.FirstOrDefault(d =>
+            string.Equals(d.Nombre?.Trim(), asignatura.NombreDestino?.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Recortar(string texto, int max) =>
