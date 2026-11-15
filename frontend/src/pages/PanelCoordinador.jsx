@@ -55,10 +55,17 @@ export default function PanelCoordinador() {
     try {
       // Llamamos al servicio enviando el ID de la solicitud y el arreglo
       await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
-      setExito("Informe técnico emitido correctamente.");
-      setSolicitudSeleccionada(null);
-      
-      // Recargamos la lista
+      setExito("Informe técnico emitido correctamente. Ahora puede registrar la resolución del Consejo.");
+
+      // Recargamos el detalle para mostrar el formulario de resolución
+      try {
+        const detalle = await obtenerDetalleSolicitud(solicitudSeleccionada.solicitudId);
+        setSolicitudSeleccionada(detalle);
+      } catch {
+        setSolicitudSeleccionada(null);
+      }
+
+      // Recargamos la lista de pendientes
       try {
         const data = await obtenerSolicitudesPendientes();
         setSolicitudes(data);
@@ -71,6 +78,17 @@ export default function PanelCoordinador() {
     } finally {
       setCargando(false);
     }
+  };
+
+  const alRegistrarResolucion = async () => {
+    setExito("Resolución registrada. La solicitud pasó a estado RESUELTA.");
+    try {
+      const data = await obtenerSolicitudesPendientes();
+      setSolicitudes(data);
+    } catch {
+      console.error("No se pudo recargar la lista.");
+    }
+    setSolicitudSeleccionada(null);
   };
 
   if (rol !== "COORDINADOR") {
@@ -99,6 +117,7 @@ export default function PanelCoordinador() {
           solicitud={solicitudSeleccionada}
           onVolver={() => setSolicitudSeleccionada(null)}
           onGuardar={guardarInforme}
+          onResolucionRegistrada={alRegistrarResolucion}
           cargando={cargando}
         />
       )}

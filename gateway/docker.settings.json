@@ -12,6 +12,9 @@
       },
       "homologacion": {
         "Destinations": { "d1": { "Address": "http://homologacion-service:8080/" } }
+      },
+      "documentos": {
+        "Destinations": { "d1": { "Address": "http://documentos-service:8080/" } }
       }
     }
   },

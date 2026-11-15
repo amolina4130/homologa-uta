@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth, rutaPorRol } from "../context/AuthContext";
 
 export default function Login() {
@@ -92,6 +92,9 @@ export default function Login() {
 
         <p className="text-center text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
           Al ingresar, el sistema lo redirige a la pantalla según su rol.
+        </p>
+        <p className="text-center mt-2 mb-0" style={{ fontSize: "0.9rem" }}>
+          ¿No tiene cuenta? <Link to="/registro">Regístrese como estudiante</Link>
         </p>
       </div>
     </div>

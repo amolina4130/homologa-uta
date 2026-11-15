@@ -44,8 +44,12 @@ public class ResultadoAnalisisDto
 
 public class ResultadoAnalisisAsignaturaDto
 {
+    public int? AsignaturaDestinoId { get; set; }
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string AsignaturaDestino { get; set; } = string.Empty;
+    public bool Combinada { get; set; }
+    public List<MateriaOrigenDto> MateriasOrigen { get; set; } = new();
+    public string? ReglaAplicada { get; set; }
     public int PorcentajeContenido { get; set; }
     public int PorcentajeProfundidad { get; set; }
     public int PorcentajeHoras { get; set; }

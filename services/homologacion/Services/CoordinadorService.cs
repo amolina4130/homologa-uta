@@ -38,21 +38,30 @@ public class CoordinadorService
         {
             // 1. Le pedimos la lista al microservicio de Solicitudes
             var pendientes = await _solicitudes.ObtenerPendientesAsync(ct);
+            var ids = pendientes.Select(p => p.Id).ToList();
+
+            var analisis = await _db.AnalisisSolicitudes
+                .AsNoTracking()
+                .Include(a => a.Asignaturas)
+                .Where(a => ids.Contains(a.SolicitudId))
+                .ToDictionaryAsync(a => a.SolicitudId, ct);
 
             // 2. Mapeamos los datos a lo que espera el frontend
-            var lista = pendientes.Select(s => new PendienteDto
+            return pendientes.Select(s =>
             {
-                SolicitudId = s.Id,
-                Fecha = s.FechaRegistro,
-                Estudiante = s.EstudianteCorreo,
-                Tipo = s.Tipo,
-                CarreraOrigen = s.CarreraOrigen ?? "Origen",
-                CarreraDestino = s.CarreraDestino ?? "Destino",
-                FechaAnalisis = s.FechaRegistro,
-                TotalAsignaturas = 2 // Por ahora enviamos un valor por defecto
+                analisis.TryGetValue(s.Id, out var a);
+                return new PendienteDto
+                {
+                    SolicitudId = s.Id,
+                    Fecha = s.FechaRegistro,
+                    Estudiante = s.EstudianteCorreo,
+                    Tipo = s.Tipo,
+                    CarreraOrigen = string.IsNullOrWhiteSpace(s.CarreraOrigen) ? "Origen" : s.CarreraOrigen,
+                    CarreraDestino = string.IsNullOrWhiteSpace(s.CarreraDestino) ? "Destino" : s.CarreraDestino,
+                    FechaAnalisis = a?.FechaAnalisis ?? s.FechaRegistro,
+                    TotalAsignaturas = a?.Asignaturas.Count ?? 0
+                };
             }).ToList();
-
-            return lista;
         }
         catch (SolicitudesNoDisponibleException)
         {
@@ -67,13 +76,13 @@ public class CoordinadorService
         // 1. Buscamos si ya existe un análisis guardado
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
-            .Include(a => a.Asignaturas)
+            .Include(a => a.Asignaturas).ThenInclude(x => x.MateriasOrigen)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
         // 2. Buscamos la info de la solicitud en el microservicio
         var info = (await _solicitudes.ObtenerPorIdsAsync(new[] { solicitudId }, ct)).FirstOrDefault();
 
-        // 3. SI NO HAY ANÁLISIS, creamos un detalle "virtual" para que el frontend no falle
+        // 3. Sin análisis mostramos la solicitud con su lista de asignaturas vacía.
         if (analisis is null)
         {
             if (info is null) return null;
@@ -81,29 +90,14 @@ public class CoordinadorService
             return new DetalleSolicitudDto
             {
                 SolicitudId = solicitudId,
-                Estado = EstadoAnalisis.PENDIENTE_REVISION,
+                Estado = info.Estado,
                 Fecha = info.FechaRegistro,
                 Estudiante = info.EstudianteCorreo,
                 Tipo = info.Tipo,
                 CarreraOrigen = info.CarreraOrigen,
                 CarreraDestino = info.CarreraDestino,
                 FechaAnalisis = info.FechaRegistro,
-                // Creamos asignaturas de prueba para que el panel no esté vacío
-                Asignaturas = new List<DetalleAsignaturaDto>
-                {
-                    new DetalleAsignaturaDto {
-                        Id = 1,
-                        AsignaturaOrigen = "Asignatura Origen (Prueba)",
-                        AsignaturaDestino = "Asignatura Destino (Prueba)",
-                        Propuesta = new PropuestaAgenteDto { 
-                            Decision = "HOMOLOGABLE", 
-                            Justificacion = "Análisis pendiente de generación automática",
-                            PorcentajeContenido = 80,
-                            PorcentajeProfundidad = 80,
-                            PorcentajeHoras = 80
-                        }
-                    }
-                }
+                Asignaturas = new List<DetalleAsignaturaDto>()
             };
         }
 
@@ -128,8 +122,19 @@ public class CoordinadorService
                 .Select(a => new DetalleAsignaturaDto
                 {
                     Id = a.Id,
+                    AsignaturaDestinoId = a.AsignaturaDestinoId,
                     AsignaturaOrigen = a.AsignaturaOrigen,
                     AsignaturaDestino = a.AsignaturaDestino,
+                    Combinada = a.Combinada,
+                    ReglaAplicada = a.ReglaAplicada,
+                    MateriasOrigen = a.MateriasOrigen.OrderBy(m => m.Orden).Select(m => new MateriaOrigenDto
+                    {
+                        AsignaturaId = m.AsignaturaId,
+                        Nombre = m.Nombre,
+                        Nota = m.Nota,
+                        EstadoSegunDocumento = m.EstadoSegunDocumento,
+                        Periodo = m.Periodo
+                    }).ToList(),
                     Propuesta = new PropuestaAgenteDto
                     {
                         Decision = a.Decision,
@@ -154,47 +159,27 @@ public class CoordinadorService
             .Include(a => a.Asignaturas)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
-        // SI NO HAY ANÁLISIS (porque el agente no lo creó), LO CREAMOS AL VUELO
-        if (analisis is null)
-        {
-            analisis = new AnalisisSolicitud
-            {
-                SolicitudId = solicitudId,
-                Estado = EstadoAnalisis.INFORME_EMITIDO,
-                CoordinadorCorreo = coordinadorCorreo,
-                FechaAnalisis = DateTime.UtcNow,
-                FechaInforme = DateTime.UtcNow,
-                Asignaturas = request.Asignaturas.Select(a => new AnalisisAsignatura
-                {
-                    AsignaturaOrigen = "Asignatura Origen (S/D)",
-                    AsignaturaDestino = "Asignatura Destino (S/D)",
-                    DecisionCoordinador = a.Decision,
-                    ObservacionCoordinador = a.Observacion
-                }).ToList()
-            };
-            _db.AnalisisSolicitudes.Add(analisis);
-            await _db.SaveChangesAsync(ct);
-        }
-        else
-        {
-            // SI YA EXISTE, VALIDAMOS Y ACTUALIZAMOS
-            if (analisis.Estado != EstadoAnalisis.PENDIENTE_REVISION)
-                throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
+        if (analisis is null || analisis.Asignaturas.Count == 0)
+            throw new InformeException(404, "La solicitud todavía no tiene un análisis del agente.");
 
-            foreach (var item in request.Asignaturas)
-            {
-                var asignatura = analisis.Asignaturas.FirstOrDefault(a => a.Id == item.AsignaturaId);
-                if (asignatura != null)
-                {
-                    asignatura.DecisionCoordinador = item.Decision;
-                    asignatura.ObservacionCoordinador = item.Observacion;
-                }
-            }
-            analisis.Estado = EstadoAnalisis.INFORME_EMITIDO;
-            analisis.CoordinadorCorreo = coordinadorCorreo;
-            analisis.FechaInforme = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
+        // SI YA EXISTE, VALIDAMOS Y ACTUALIZAMOS
+        if (analisis.Estado != EstadoAnalisis.PENDIENTE_REVISION)
+            throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
+
+        var invalida = request.Asignaturas.FirstOrDefault(i => analisis.Asignaturas.All(a => a.Id != i.AsignaturaId));
+        if (invalida is not null)
+            throw new InformeException(400, $"La asignatura {invalida.AsignaturaId} no pertenece al análisis.");
+
+        foreach (var item in request.Asignaturas)
+        {
+            var asignatura = analisis.Asignaturas.First(a => a.Id == item.AsignaturaId);
+            asignatura.DecisionCoordinador = item.Decision;
+            asignatura.ObservacionCoordinador = item.Observacion;
         }
+        analisis.Estado = EstadoAnalisis.INFORME_EMITIDO;
+        analisis.CoordinadorCorreo = coordinadorCorreo;
+        analisis.FechaInforme = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
 
         return new ResultadoInformeDto
         {

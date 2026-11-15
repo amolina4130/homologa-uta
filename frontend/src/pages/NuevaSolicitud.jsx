@@ -13,6 +13,8 @@ export default function NuevaSolicitud() {
   const [modulo, setModulo] = useState("INTERNO");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
+  const [universidadOrigen, setUniversidadOrigen] = useState("");
+  const [universidadDestino, setUniversidadDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
   
   const [nivelSeleccionado, setNivelSeleccionado] = useState("Todos");
@@ -71,6 +73,8 @@ export default function NuevaSolicitud() {
     if (!origen || !destino) return alert("Seleccione carrera de origen y destino");
     if (origen === destino) return alert("La carrera de origen y destino no pueden ser iguales");
     if (seleccionadas.length === 0) return alert("Seleccione al menos una asignatura para homologar");
+    if (modulo === "EXTERNO" && (!universidadOrigen.trim() || !universidadDestino.trim()))
+      return alert("En el módulo externo debe indicar la universidad de origen y de destino");
     
     setCargando(true);
     setMensaje("");
@@ -86,6 +90,8 @@ export default function NuevaSolicitud() {
           modulo,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
+          universidadOrigen: modulo === "EXTERNO" ? universidadOrigen.trim() : null,
+          universidadDestino: modulo === "EXTERNO" ? universidadDestino.trim() : null,
           asignaturasIds: seleccionadas
           // ELIMINADO: estudianteCorreo (el backend lo saca del token)
         })
@@ -156,6 +162,31 @@ export default function NuevaSolicitud() {
                         <option value="EXTERNO">Agente externo (universidades externas)</option>
                       </select>
                     </div>
+
+                    {modulo === "EXTERNO" && (
+                      <>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold">Universidad de origen</label>
+                          <input
+                            className="form-control"
+                            value={universidadOrigen}
+                            onChange={(e) => setUniversidadOrigen(e.target.value)}
+                            placeholder="Ej. Universidad de Cuenca"
+                            required
+                          />
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label fw-bold">Universidad de destino</label>
+                          <input
+                            className="form-control"
+                            value={universidadDestino}
+                            onChange={(e) => setUniversidadDestino(e.target.value)}
+                            placeholder="Ej. Universidad Técnica de Ambato"
+                            required
+                          />
+                        </div>
+                      </>
+                    )}
                     
                     <div className="mb-3">
                       <label className="form-label fw-bold">Carrera Origen</label>

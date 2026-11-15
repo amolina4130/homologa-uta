@@ -96,6 +96,12 @@ public class AnalisisExternoService
             {
                 AsignaturaOrigen = f.AsignaturaOrigen,
                 AsignaturaDestino = f.AsignaturaDestino,
+                Combinada = f.Combinada,
+                MateriasOrigen = f.MateriasOrigen.OrderBy(m => m.Orden).Select(m => new MateriaOrigenDto
+                {
+                    Nombre = m.Nombre,
+                    Nota = m.Nota
+                }).ToList(),
                 PorcentajeContenido = f.PorcentajeContenido,
                 PorcentajeProfundidad = f.PorcentajeProfundidad,
                 PorcentajeHoras = f.PorcentajeHoras,
@@ -108,27 +114,49 @@ public class AnalisisExternoService
 
     /// <summary>
     /// La decisión y la justificación se guardan tal como las dio el agente (sin umbral ni reglas).
-    /// Solo si faltan se marca la asignatura para revisión manual.
+    /// Si el agente reporta una o dos materias de origen se guardan como combinación (HU-22);
+    /// más de dos materias se marcan para revisión manual. Solo si faltan datos se marca para revisión.
     /// </summary>
     private static AnalisisAsignatura ConstruirFila(AsignaturaAgenteExternoDto a)
     {
         var sinDecision = string.IsNullOrWhiteSpace(a.Decision);
         var sinJustificacion = string.IsNullOrWhiteSpace(a.Justificacion);
 
+        var materias = (a.MateriasOrigen ?? new List<MateriaOrigenExternoDto>())
+            .Where(m => !string.IsNullOrWhiteSpace(m.Nombre))
+            .ToList();
+        if (materias.Count == 0)
+            materias.Add(new MateriaOrigenExternoDto { Nombre = a.NombreOrigen });
+
+        var demasiadas = materias.Count > 2;
+        var usadas = materias.Take(2).ToList();
+        var combinada = !demasiadas && usadas.Count == 2;
+
+        var justificacion = demasiadas
+            ? "El agente externo devolvió más de dos materias de origen; requiere revisión manual."
+            : sinJustificacion
+                ? "El agente externo no entregó justificación."
+                : Recortar(a.Justificacion.Trim(), MaxJustificacion);
+
         return new AnalisisAsignatura
         {
-            AsignaturaOrigen = Recortar(a.NombreOrigen.Trim(), MaxNombre),
+            AsignaturaOrigen = Recortar(string.Join(" + ", usadas.Select(m => m.Nombre.Trim())), MaxNombre),
             AsignaturaDestino = Recortar(a.NombreDestino.Trim(), MaxNombre),
-            PorcentajeContenido = a.PorcentajeSimilitud,
-            PorcentajeProfundidad = 0,
-            PorcentajeHoras = 0,
-            Decision = sinDecision
+            Combinada = combinada,
+            PorcentajeContenido = a.PorcentajeContenido ?? a.PorcentajeSimilitud,
+            PorcentajeProfundidad = a.PorcentajeProfundidad ?? 0,
+            PorcentajeHoras = a.PorcentajeCargaHoraria ?? 0,
+            Decision = demasiadas || sinDecision
                 ? DecisionAnalisis.REQUIERE_REVISION
                 : Recortar(a.Decision.Trim(), MaxDecision),
-            Justificacion = sinJustificacion
-                ? "El agente externo no entregó justificación."
-                : Recortar(a.Justificacion.Trim(), MaxJustificacion),
-            RequiereRevision = sinDecision || sinJustificacion
+            Justificacion = justificacion,
+            RequiereRevision = demasiadas || sinDecision || sinJustificacion,
+            MateriasOrigen = usadas.Select((m, i) => new MateriaOrigenAnalisis
+            {
+                Nombre = Recortar(m.Nombre.Trim(), MaxNombre),
+                Nota = m.Nota,
+                Orden = i + 1
+            }).ToList()
         };
     }
 

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using HomologaUTA.Homologacion.DTOs;
@@ -46,6 +47,72 @@ public class SolicitudesClient
         {
             _logger.LogError(ex, "No se pudo consultar el servicio de Solicitudes");
             throw new SolicitudesNoDisponibleException("No se pudo consultar el servicio de Solicitudes.", ex);
+        }
+    }
+
+    /// <summary>Detalle completo de una solicitud (HU-16/HU-20); null si no existe.</summary>
+    public async Task<SolicitudDetalleInfoDto?> ObtenerDetalleAsync(int solicitudId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.GetAsync($"internal/solicitudes/{solicitudId}", ct);
+            if (respuesta.StatusCode == HttpStatusCode.NotFound)
+                return null;
+            respuesta.EnsureSuccessStatusCode();
+            return await respuesta.Content.ReadFromJsonAsync<SolicitudDetalleInfoDto>(cancellationToken: ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo consultar el detalle de la solicitud {SolicitudId}", solicitudId);
+            throw new SolicitudesNoDisponibleException("No se pudo consultar el servicio de Solicitudes.", ex);
+        }
+    }
+
+    /// <summary>Cambia el estado de la solicitud y deja el cambio en su historial.</summary>
+    public async Task CambiarEstadoAsync(int solicitudId, string estado, string usuario, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.PutAsJsonAsync(
+                $"internal/solicitudes/{solicitudId}/estado",
+                new { estado, usuario },
+                ct);
+            respuesta.EnsureSuccessStatusCode();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo cambiar el estado de la solicitud {SolicitudId}", solicitudId);
+            throw new SolicitudesNoDisponibleException("No se pudo cambiar el estado de la solicitud.", ex);
+        }
+    }
+
+    /// <summary>Registra una corrección en el historial de la solicitud.</summary>
+    public async Task RegistrarHistorialAsync(int solicitudId, string usuario, CancellationToken ct = default)
+    {
+        try
+        {
+            using var respuesta = await _http.PostAsJsonAsync(
+                $"internal/solicitudes/{solicitudId}/historial",
+                new { usuario },
+                ct);
+            respuesta.EnsureSuccessStatusCode();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new SolicitudesNoDisponibleException("El servicio de Solicitudes no respondió a tiempo.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            _logger.LogError(ex, "No se pudo registrar el historial de la solicitud {SolicitudId}", solicitudId);
+            throw new SolicitudesNoDisponibleException("No se pudo registrar el historial de la solicitud.", ex);
         }
     }
 

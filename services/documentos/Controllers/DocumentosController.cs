@@ -115,6 +115,30 @@ public class DocumentosController : ControllerBase
         return Ok(documentos);
     }
 
+    /// <summary>Texto extraído de los documentos de una solicitud (uso interno entre servicios)</summary>
+    [HttpGet("internal/documentos/solicitud/{solicitudId:int}")]
+    public async Task<IActionResult> ObtenerTextosInterno(int solicitudId, [FromQuery] string? tipo)
+    {
+        var query = _db.Documentos.AsNoTracking().Where(d => d.SolicitudId == solicitudId);
+        if (!string.IsNullOrWhiteSpace(tipo))
+            query = query.Where(d => d.TipoDocumento.ToUpper() == tipo.ToUpper());
+
+        var documentos = await query
+            .OrderBy(d => d.Id)
+            .Select(d => new
+            {
+                d.Id,
+                d.TipoDocumento,
+                d.NombreArchivo,
+                d.TextoExtraido,
+                d.Estado,
+                d.FechaSubida
+            })
+            .ToListAsync();
+
+        return Ok(documentos);
+    }
+
     // --- ENDPOINT DEFINITIVO Y A PRUEBA DE BALAS ---
     [HttpGet("descargar/{identificador}")]
     public async Task<IActionResult> DescargarPdf(string identificador)

@@ -6,11 +6,15 @@ namespace HomologaUTA.Homologacion.DTOs;
 public class SolicitudInfoDto
 {
     public int Id { get; set; }
+    public string NumeroProceso { get; set; } = string.Empty;
     public string Tipo { get; set; } = string.Empty;
+    public string Modulo { get; set; } = "INTERNO";
     public string EstudianteCorreo { get; set; } = string.Empty;
     public DateTime FechaRegistro { get; set; }
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
+    public string? UniversidadOrigen { get; set; }
+    public string? UniversidadDestino { get; set; }
     public string Estado { get; set; } = string.Empty;
 }
 
@@ -60,14 +64,34 @@ public class DetalleAsignaturaDto
     /// <summary>Id de la asignatura analizada; se usa al emitir el informe.</summary>
     public int Id { get; set; }
 
+    /// <summary>Id de la asignatura de destino en el catálogo.</summary>
+    public int? AsignaturaDestinoId { get; set; }
+
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string AsignaturaDestino { get; set; } = string.Empty;
+
+    /// <summary>true cuando la materia de destino se cubre con dos materias de origen (HU-22).</summary>
+    public bool Combinada { get; set; }
+
+    public List<MateriaOrigenDto> MateriasOrigen { get; set; } = new();
+
+    /// <summary>Regla que resolvió el resultado (por ejemplo, equivalencia).</summary>
+    public string? ReglaAplicada { get; set; }
 
     public PropuestaAgenteDto Propuesta { get; set; } = new();
 
     /// <summary>Decisión y observación del Coordinador; null mientras no emita el informe.</summary>
     public string? DecisionCoordinador { get; set; }
     public string? ObservacionCoordinador { get; set; }
+}
+
+public class MateriaOrigenDto
+{
+    public int? AsignaturaId { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public decimal? Nota { get; set; }
+    public string? EstadoSegunDocumento { get; set; }
+    public string? Periodo { get; set; }
 }
 
 /// <summary>Lo que propuso el agente para la asignatura.</summary>

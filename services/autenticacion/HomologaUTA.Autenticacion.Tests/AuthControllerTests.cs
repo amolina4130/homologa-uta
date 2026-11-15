@@ -69,6 +69,116 @@ namespace HomologaUTA.Autenticacion.Tests
         }
 
         // ==============================================================
+        // PRUEBAS DEL REGISTRO DE CUENTAS (HU-12)
+        // ==============================================================
+
+        [Fact]
+        public async Task Registro_DatosValidos_CreaCuentaEstudiante()
+        {
+            var context = GetInMemoryDbContext();
+            var hasher = new PasswordHasher<Usuario>();
+            var tokenService = GetTokenService();
+            context.Roles.Add(new Rol { Id = 1, Nombre = "ESTUDIANTE" });
+            await context.SaveChangesAsync();
+
+            var controller = new AuthController(context, hasher, tokenService);
+            var request = new RegistroRequest
+            {
+                Nombre = "Ana Estudiante",
+                Correo = "Ana.Estudiante@UTA.edu.ec",
+                Contrasena = "Demo123!"
+            };
+
+            var result = await controller.Registro(request);
+
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(201, objectResult.StatusCode);
+            var respuesta = Assert.IsType<RegistroResponse>(objectResult.Value);
+            Assert.Equal("Ana Estudiante", respuesta.Nombre);
+            Assert.Equal("ana.estudiante@uta.edu.ec", respuesta.Correo);
+            Assert.Equal("Estudiante", respuesta.Rol);
+
+            var guardado = await context.Usuarios.Include(u => u.Rol)
+                .SingleAsync(u => u.Correo == "ana.estudiante@uta.edu.ec");
+            Assert.Equal("ESTUDIANTE", guardado.Rol.Nombre);
+            Assert.Equal("Ana Estudiante", guardado.Nombre);
+            Assert.NotEqual("Demo123!", guardado.PasswordHash);
+            Assert.Equal(
+                PasswordVerificationResult.Success,
+                hasher.VerifyHashedPassword(guardado, guardado.PasswordHash, "Demo123!"));
+        }
+
+        [Fact]
+        public async Task Registro_CorreoDuplicado_DevuelveConflict()
+        {
+            var context = GetInMemoryDbContext();
+            var hasher = new PasswordHasher<Usuario>();
+            var tokenService = GetTokenService();
+            var rol = new Rol { Id = 1, Nombre = "ESTUDIANTE" };
+            context.Roles.Add(rol);
+            var existente = new Usuario { Correo = "duplicado@uta.edu.ec", RolId = 1 };
+            existente.PasswordHash = hasher.HashPassword(existente, "Demo123!");
+            context.Usuarios.Add(existente);
+            await context.SaveChangesAsync();
+
+            var controller = new AuthController(context, hasher, tokenService);
+            var request = new RegistroRequest
+            {
+                Nombre = "Otro Estudiante",
+                Correo = "duplicado@uta.edu.ec",
+                Contrasena = "Demo123!"
+            };
+
+            var result = await controller.Registro(request);
+
+            var conflict = Assert.IsType<ConflictObjectResult>(result);
+            Assert.Equal(409, conflict.StatusCode);
+            Assert.Equal(1, await context.Usuarios.CountAsync());
+        }
+
+        [Fact]
+        public async Task Registro_ContrasenaDebil_DevuelveBadRequest()
+        {
+            var context = GetInMemoryDbContext();
+            var hasher = new PasswordHasher<Usuario>();
+            var tokenService = GetTokenService();
+            context.Roles.Add(new Rol { Id = 1, Nombre = "ESTUDIANTE" });
+            await context.SaveChangesAsync();
+
+            var controller = new AuthController(context, hasher, tokenService);
+            var request = new RegistroRequest
+            {
+                Nombre = "Ana Estudiante",
+                Correo = "ana@uta.edu.ec",
+                Contrasena = "corta"
+            };
+
+            var result = await controller.Registro(request);
+
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal(0, await context.Usuarios.CountAsync());
+        }
+
+        [Fact]
+        public async Task Registro_SinNombre_DevuelveBadRequest()
+        {
+            var context = GetInMemoryDbContext();
+            var hasher = new PasswordHasher<Usuario>();
+            var tokenService = GetTokenService();
+            var controller = new AuthController(context, hasher, tokenService);
+            var request = new RegistroRequest
+            {
+                Nombre = "   ",
+                Correo = "ana@uta.edu.ec",
+                Contrasena = "Demo123!"
+            };
+
+            var result = await controller.Registro(request);
+
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
+
+        // ==============================================================
         // PRUEBA TEMPORAL PARA GENERAR EL HASH DE SQL SERVER
         // ==============================================================
         [Fact]

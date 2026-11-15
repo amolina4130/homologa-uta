@@ -45,9 +45,67 @@ public class AuthController : ControllerBase
         return Ok(new LoginResponse
         {
             Token = _tokens.GenerarToken(usuario),
-            Nombre = usuario.Correo.Split('@')[0],
+            Nombre = string.IsNullOrWhiteSpace(usuario.Nombre)
+                ? usuario.Correo.Split('@')[0]
+                : usuario.Nombre,
             Correo = usuario.Correo,
             Rol = usuario.Rol.Nombre
+        });
+    }
+
+    /// <summary>Registra una cuenta nueva con rol Estudiante</summary>
+    /// <remarks>
+    /// El rol no se elige desde el registro: siempre queda como Estudiante.
+    /// La contraseña se guarda con hash y debe tener al menos 8 caracteres,
+    /// una mayúscula, una minúscula y un número.
+    /// </remarks>
+    /// <response code="201">Cuenta creada</response>
+    /// <response code="400">Datos inválidos o contraseña que no cumple la política</response>
+    /// <response code="409">El correo ya está registrado</response>
+    [HttpPost("registro")]
+    [ProducesResponseType(typeof(RegistroResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Registro(RegistroRequest request)
+    {
+        var correo = (request.Correo ?? string.Empty).Trim().ToLowerInvariant();
+        var nombre = (request.Nombre ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(nombre))
+            return BadRequest(new { mensaje = "El nombre es obligatorio." });
+
+        if (string.IsNullOrWhiteSpace(correo) || !correo.Contains('@') || correo.StartsWith('@') || correo.EndsWith('@'))
+            return BadRequest(new { mensaje = "El correo no tiene un formato válido." });
+
+        var errorContrasena = ValidadorContrasena.Validar(request.Contrasena);
+        if (errorContrasena is not null)
+            return BadRequest(new { mensaje = errorContrasena });
+
+        if (await _db.Usuarios.AnyAsync(u => u.Correo == correo))
+            return Conflict(new { mensaje = "Ya existe una cuenta registrada con este correo." });
+
+        var rolEstudiante = await _db.Roles.FirstOrDefaultAsync(r => r.Nombre == "ESTUDIANTE");
+        if (rolEstudiante is null)
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { mensaje = "No se encontró el rol Estudiante configurado." });
+
+        var usuario = new Usuario
+        {
+            Nombre = nombre,
+            Correo = correo,
+            RolId = rolEstudiante.Id
+        };
+        usuario.PasswordHash = _hasher.HashPassword(usuario, request.Contrasena);
+
+        _db.Usuarios.Add(usuario);
+        await _db.SaveChangesAsync();
+
+        return StatusCode(StatusCodes.Status201Created, new RegistroResponse
+        {
+            Id = usuario.Id,
+            Nombre = usuario.Nombre,
+            Correo = usuario.Correo,
+            Rol = "Estudiante"
         });
     }
 }

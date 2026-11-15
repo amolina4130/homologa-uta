@@ -20,3 +20,30 @@ export async function login(correo, contrasena) {
 
   return await res.json(); 
 }
+
+export async function registro(nombre, correo, contrasena) {
+  const res = await fetch(`${GATEWAY_URL}/auth/registro`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre, correo, contrasena }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 409) {
+    const err = new Error(json.mensaje || "El correo ya está registrado.");
+    err.tipo = "duplicado";
+    throw err;
+  }
+  if (res.status === 400) {
+    const err = new Error(json.mensaje || "La contraseña no cumple los requisitos.");
+    err.tipo = "invalido";
+    throw err;
+  }
+  if (!res.ok) {
+    const err = new Error("Error del servidor");
+    err.tipo = "servidor";
+    throw err;
+  }
+
+  return json;
+}

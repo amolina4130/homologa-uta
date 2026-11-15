@@ -1,4 +1,5 @@
 using HomologaUTA.Solicitudes.Models;
+using HomologaUTA.Solicitudes.Models.Memoria;
 using Microsoft.EntityFrameworkCore;
 
 namespace HomologaUTA.Solicitudes.Data;
@@ -10,6 +11,14 @@ public class SolicitudesDbContext : DbContext
     // Tablas 1
     public DbSet<Carrera> Carreras => Set<Carrera>();
     public DbSet<Asignatura> Asignaturas => Set<Asignatura>();
+
+    // Catálogo ampliado (Sprint 3)
+    public DbSet<PlanAnalitico> PlanesAnaliticos => Set<PlanAnalitico>();
+    public DbSet<Equivalencia> Equivalencias => Set<Equivalencia>();
+
+    // Memoria del agente (HU-19)
+    public DbSet<MemoriaAsignatura> MemoriaAsignaturas => Set<MemoriaAsignatura>();
+    public DbSet<MemoriaEstado> MemoriaEstados => Set<MemoriaEstado>();
 
     // Tablas 2
     public DbSet<Solicitud> Solicitudes => Set<Solicitud>();
@@ -38,7 +47,12 @@ public class SolicitudesDbContext : DbContext
         // Configuración 2
         modelBuilder.Entity<Solicitud>(e =>
         {
+            e.Property(s => s.NumeroProceso).IsRequired().HasMaxLength(30);
+            e.HasIndex(s => s.NumeroProceso).IsUnique();
             e.Property(s => s.Tipo).IsRequired().HasMaxLength(50);
+            e.Property(s => s.Modulo).IsRequired().HasMaxLength(20).HasDefaultValue("INTERNO");
+            e.Property(s => s.UniversidadOrigen).HasMaxLength(200);
+            e.Property(s => s.UniversidadDestino).HasMaxLength(200);
             e.Property(s => s.EstudianteCorreo).IsRequired().HasMaxLength(150);
             e.Property(s => s.Estado).IsRequired().HasMaxLength(50);
             
@@ -76,6 +90,42 @@ public class SolicitudesDbContext : DbContext
              .HasForeignKey(h => h.SolicitudId)
              .OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(h => h.SolicitudId);
+        });
+
+        modelBuilder.Entity<PlanAnalitico>(e =>
+        {
+            e.Property(p => p.Contenido).IsRequired();
+            e.Property(p => p.ResultadosAprendizaje).HasMaxLength(4000);
+            e.HasOne(p => p.Asignatura)
+             .WithMany()
+             .HasForeignKey(p => p.AsignaturaId)
+             .OnDelete(DeleteBehavior.Cascade);
+            // Un solo plan vigente por asignatura
+            e.HasIndex(p => p.AsignaturaId).IsUnique();
+        });
+
+        modelBuilder.Entity<Equivalencia>(e =>
+        {
+            e.HasOne(x => x.CarreraOrigen).WithMany().HasForeignKey(x => x.CarreraOrigenId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.CarreraDestino).WithMany().HasForeignKey(x => x.CarreraDestinoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AsignaturaOrigen).WithMany().HasForeignKey(x => x.AsignaturaOrigenId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(x => x.AsignaturaDestino).WithMany().HasForeignKey(x => x.AsignaturaDestinoId).OnDelete(DeleteBehavior.Restrict);
+            // No se permite duplicar la equivalencia entre las mismas asignaturas
+            e.HasIndex(x => new { x.AsignaturaOrigenId, x.AsignaturaDestinoId }).IsUnique();
+        });
+
+        modelBuilder.Entity<MemoriaAsignatura>(e =>
+        {
+            e.Property(x => x.Nombre).IsRequired().HasMaxLength(200);
+            e.Property(x => x.Area).IsRequired().HasMaxLength(80);
+            e.Property(x => x.ContenidosMinimos).IsRequired();
+            e.HasIndex(x => new { x.CarreraId, x.AsignaturaId }).IsUnique();
+            e.HasIndex(x => x.Nivel);
+        });
+
+        modelBuilder.Entity<MemoriaEstado>(e =>
+        {
+            e.Property(x => x.Huella).IsRequired().HasMaxLength(100);
         });
 
     }

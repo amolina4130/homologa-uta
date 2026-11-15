@@ -93,6 +93,20 @@ namespace HomologaUTA.Solicitudes.Tests
         {
             // 1. Preparar
             using var context = GetInMemoryDbContext();
+            context.Carreras.AddRange(
+                new Carrera { Id = 1, Nombre = "Carrera Origen" },
+                new Carrera { Id = 2, Nombre = "Carrera Destino" });
+            context.Asignaturas.Add(new Asignatura
+            {
+                Id = 1,
+                Nombre = "Cálculo Diferencial",
+                Nivel = "Primero",
+                Creditos = 4,
+                Horas = 64,
+                CarreraId = 1
+            });
+            await context.SaveChangesAsync();
+
             var controller = GetControllerWithUser(context, "test@uta.edu.ec");
             
             var request = new SolicitudRequest

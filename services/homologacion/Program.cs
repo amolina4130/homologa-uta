@@ -4,7 +4,10 @@ using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
 using HomologaUTA.Homologacion.Validadores;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -55,11 +58,44 @@ builder.Services.AddScoped<AnalisisExternoService>();
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
 
+// 8. Catálogo (HU-13/HU-14/HU-19), Documentos (HU-20) y nuevo flujo con memoria (HU-21/HU-22)
+builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
+builder.Services.AddHttpClient<DocumentosClient>();
+builder.Services.AddScoped<PreseleccionService>();
+builder.Services.AddScoped<AgenteExtractorRecord>();
+builder.Services.AddScoped<ExtractorRecordService>();
+builder.Services.AddScoped<AnalisisMemoriaService>();
+builder.Services.AddScoped<ResolucionService>();
+builder.Services.AddScoped<IInformeService, InformeService>();
+
+// 9. JWT: el Gateway valida el token y lo reenvía; aquí se leen los claims "rol" y "email".
+var jwtKey = builder.Configuration["JWT_SECRET"]
+    ?? builder.Configuration["Jwt:Key"]
+    ?? "clave-de-desarrollo-homologauta-cambiar-en-produccion-2026";
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+            RoleClaimType = "rol"
+        };
+    });
 
 var app = builder.Build();
 
-// 8. Configuración de la app
+// 10. Configuración de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
 

@@ -53,9 +53,28 @@ public class AsignaturaAgenteExternoDto
     public string NombreOrigen { get; set; } = string.Empty;
     public string NombreDestino { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Materias de origen que cubren la materia de destino (HU-22). Una o dos; si no se envía,
+    /// se usa <see cref="NombreOrigen"/> como única materia de origen.
+    /// </summary>
+    public List<MateriaOrigenExternoDto> MateriasOrigen { get; set; } = new();
+
     /// <summary>La decisión la toma el agente. No se valida contra ninguna regla ni umbral.</summary>
     public string Decision { get; set; } = string.Empty;
 
     public string Justificacion { get; set; } = string.Empty;
+
+    /// <summary>Porcentaje general de similitud. Se usa como contenido si no se envía el detalle.</summary>
     public int PorcentajeSimilitud { get; set; }
+
+    public int? PorcentajeContenido { get; set; }
+    public int? PorcentajeProfundidad { get; set; }
+    public int? PorcentajeCargaHoraria { get; set; }
+}
+
+/// <summary>Materia de origen que el agente externo reporta para una asignatura de destino (HU-22).</summary>
+public class MateriaOrigenExternoDto
+{
+    public string Nombre { get; set; } = string.Empty;
+    public decimal? Nota { get; set; }
 }

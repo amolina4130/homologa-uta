@@ -14,15 +14,18 @@ export default function Menu() {
     "Carreras y mallas": "/carreras",
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
-    "Solicitudes pendientes": "/panel-coordinador" // <-- CORREGIDO AQUÍ
+    "Equivalencias": "/equivalencias",
+    "Memoria del agente": "/memoria",
+    "Resoluciones": "/resoluciones",
+    "Solicitudes pendientes": "/panel-coordinador"
   };
 
   const opciones = {
     ESTUDIANTE: ["Inicio", "Nueva solicitud", "Mis solicitudes", "Adjuntar documentos", "Carreras y mallas"],
     COORDINADOR: ["Inicio", "Solicitudes pendientes", "Carreras y mallas"],
-    SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
+    SECRETARIA: ["Inicio", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Carreras y mallas"],
+    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Equivalencias", "Memoria del agente", "Carreras y mallas"],
   };
 
   const misOpciones = opciones[rol] || [];

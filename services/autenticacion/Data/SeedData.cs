@@ -14,11 +14,11 @@ public static class SeedData
         // Arreglo con los 5 usuarios
         var usuariosSeed = new[]
         {
-            new { Correo = "estudiante@uta.edu.ec", RolId = 1, Pass = config["SEED_ESTUDIANTE_PASSWORD"] },
-            new { Correo = "coordinador@uta.edu.ec", RolId = 2, Pass = config["SEED_COORDINADOR_PASSWORD"] },
-            new { Correo = "secretaria@uta.edu.ec", RolId = 3, Pass = config["SEED_SECRETARIA_PASSWORD"] },
-            new { Correo = "consejo@uta.edu.ec", RolId = 4, Pass = config["SEED_CONSEJO_PASSWORD"] },
-            new { Correo = "admin@uta.edu.ec", RolId = 5, Pass = config["SEED_ADMIN_PASSWORD"] }
+            new { Nombre = "Estudiante Demo", Correo = "estudiante@uta.edu.ec", RolId = 1, Pass = config["SEED_ESTUDIANTE_PASSWORD"] },
+            new { Nombre = "Coordinador Demo", Correo = "coordinador@uta.edu.ec", RolId = 2, Pass = config["SEED_COORDINADOR_PASSWORD"] },
+            new { Nombre = "Secretaria Demo", Correo = "secretaria@uta.edu.ec", RolId = 3, Pass = config["SEED_SECRETARIA_PASSWORD"] },
+            new { Nombre = "Consejo Demo", Correo = "consejo@uta.edu.ec", RolId = 4, Pass = config["SEED_CONSEJO_PASSWORD"] },
+            new { Nombre = "Administrador Demo", Correo = "admin@uta.edu.ec", RolId = 5, Pass = config["SEED_ADMIN_PASSWORD"] }
         };
 
         foreach (var u in usuariosSeed)
@@ -27,6 +27,7 @@ public static class SeedData
             {
                 var nuevoUsuario = new Usuario
                 {
+                    Nombre = u.Nombre,
                     Correo = u.Correo,
                     RolId = u.RolId
                 };
