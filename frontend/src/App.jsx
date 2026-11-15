@@ -14,6 +14,8 @@ import AdjuntarDocumentos from "./pages/AdjuntarDocumentos";
 import PanelReglas from "./pages/PanelReglas"; 
 import PanelCoordinador from "./pages/PanelCoordinador"; 
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
+import Equivalencias from './pages/Equivalencias';
+
 
 export default function App() {
   return (
@@ -41,6 +43,7 @@ export default function App() {
 
           <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
+            <Route path="/equivalencias" element={<><Menu /><Equivalencias /></>} />
           </Route>
 
           {/* Ruta para adjuntar documentos */}
