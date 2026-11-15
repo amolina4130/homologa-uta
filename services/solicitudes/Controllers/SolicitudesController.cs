@@ -32,6 +32,20 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
+        var modulo = string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase)
+            ? "EXTERNO"
+            : "INTERNO";
+
+        if (modulo == "EXTERNO" &&
+            (string.IsNullOrWhiteSpace(request.UniversidadOrigen) ||
+             string.IsNullOrWhiteSpace(request.UniversidadDestino)))
+        {
+            return BadRequest(new
+            {
+                error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
+            });
+        }
+
         var correo = User.FindFirstValue(ClaimTypes.Email) 
                      ?? User.FindFirstValue("email")
                      ?? "estudiante@uta.edu.ec";
@@ -42,7 +56,13 @@ public class SolicitudesController : ControllerBase
             CarreraOrigenId = request.CarreraOrigenId,
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
-            Estado = EstadoSolicitud.PENDIENTE_REVISION // <-- CLAVE PARA EL COORDINADOR
+            Modulo = modulo,
+            UniversidadOrigen = request.UniversidadOrigen?.Trim(),
+            UniversidadDestino = request.UniversidadDestino?.Trim(),
+            // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
+            // cuando el agente termina el análisis (así el Coordinador nunca ve una
+            // solicitud sin propuesta).
+            Estado = EstadoSolicitud.REGISTRADA
         };
 
         foreach (var asigId in request.AsignaturasIds)
@@ -86,11 +106,46 @@ public class SolicitudesController : ControllerBase
                 Origen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 Destino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
                 FechaRegistro = s.FechaRegistro.ToString("yyyy-MM-dd"),
-                Estado = s.Estado
+                Estado = s.Estado,
+                Modulo = s.Modulo,
+                UniversidadOrigen = s.UniversidadOrigen,
+                UniversidadDestino = s.UniversidadDestino
             })
             .ToListAsync();
 
         return Ok(solicitudes);
+    }
+
+    /// <summary>Datos de una solicitud propia (incluye el módulo de análisis).</summary>
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> ObtenerSolicitud(int id)
+    {
+        var correo = User.FindFirstValue(ClaimTypes.Email)
+                     ?? User.FindFirstValue("email")
+                     ?? "estudiante@uta.edu.ec";
+
+        var solicitud = await _db.Solicitudes
+            .AsNoTracking()
+            .Include(s => s.CarreraOrigen)
+            .Include(s => s.CarreraDestino)
+            .FirstOrDefaultAsync(s => s.Id == id && s.EstudianteCorreo == correo);
+
+        if (solicitud is null)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        return Ok(new
+        {
+            Id = solicitud.Id,
+            Numero = "SOL-" + solicitud.Id.ToString("D4"),
+            Tipo = solicitud.Tipo,
+            Origen = solicitud.CarreraOrigen?.Nombre ?? "Origen",
+            Destino = solicitud.CarreraDestino?.Nombre ?? "Destino",
+            FechaRegistro = solicitud.FechaRegistro,
+            Estado = solicitud.Estado,
+            Modulo = solicitud.Modulo,
+            UniversidadOrigen = solicitud.UniversidadOrigen,
+            UniversidadDestino = solicitud.UniversidadDestino
+        });
     }
 
     [HttpGet("{id:int}/historial")]

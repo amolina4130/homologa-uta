@@ -37,7 +37,9 @@ builder.Services.AddSingleton<ServicioValidacionSolicitud>();
 builder.Services.AddSingleton<DecisionHomologacion>();
 
 // 4. Registrar el cliente de Ollama
-builder.Services.AddHttpClient<OllamaClient>();
+// El modelo real puede tardar decenas de segundos en responder cada asignatura;
+// el tiempo de espera por petición debe ser holgado para no cortar el análisis.
+builder.Services.AddHttpClient<OllamaClient>(c => c.Timeout = TimeSpan.FromMinutes(5));
 // 5. Registrar el Agente Interno
 builder.Services.AddScoped<AgenteInterno>();
 
@@ -48,6 +50,7 @@ builder.Services.AddScoped<AnalisisService>();
 
 // 7. Conector del agente externo y su servicio (TA-09.2)
 builder.Services.AddHttpClient<AgenteExternoConnector>();
+builder.Services.AddHttpClient<DocumentosClient>();
 builder.Services.AddScoped<AnalisisExternoService>();
 
 
@@ -65,7 +68,9 @@ app.UseSwaggerUI();
 
 app.MapControllers();
 
-app.Urls.Add("http://0.0.0.0:8080");
+// En Docker usa 8080; en local se puede cambiar con la variable PORT.
+var puerto = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://0.0.0.0:{puerto}");
 
 // 9. Aplicar migraciones al arrancar
 using (var scope = app.Services.CreateScope())

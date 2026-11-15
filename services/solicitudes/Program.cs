@@ -43,7 +43,9 @@ app.UseSwaggerUI();
 // --- 6. MAPEAR CONTROLADORES ---
 app.MapControllers();
 
-app.Urls.Add("http://0.0.0.0:8080");
+// En Docker usa 8080; en local se puede cambiar con la variable PORT.
+var puerto = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Urls.Add($"http://0.0.0.0:{puerto}");
 
 // --- 7. MIGRACIONES Y DATOS SEMILLA ---
 using (var scope = app.Services.CreateScope())

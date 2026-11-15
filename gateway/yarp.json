@@ -1,4 +1,4 @@
-{
+﻿{
   "ReverseProxy": {
     "Routes": {
       "auth-login": {
@@ -30,6 +30,12 @@
         "ClusterId": "reglas",
         "AuthorizationPolicy": "administrador",
         "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
+      },
+      "homologacion-estudiante": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "estudiante",
+        "Order": -1,
+        "Match": { "Path": "/homologacion/estudiante/{**catch-all}" }
       },
       "homologacion-coordinador": {
         "ClusterId": "homologacion",
@@ -71,6 +77,10 @@
         }
       },
       "homologacion": {
+        "HttpRequest": {
+          "RequestTimeout": "00:15:00",
+          "ActivityTimeout": "00:15:00"
+        },
         "Destinations": {
           "d1": { "Address": "http://homologacion-service:8080/" }
         }

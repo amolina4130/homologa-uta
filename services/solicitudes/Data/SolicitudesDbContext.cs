@@ -41,6 +41,9 @@ public class SolicitudesDbContext : DbContext
             e.Property(s => s.Tipo).IsRequired().HasMaxLength(50);
             e.Property(s => s.EstudianteCorreo).IsRequired().HasMaxLength(150);
             e.Property(s => s.Estado).IsRequired().HasMaxLength(50);
+            e.Property(s => s.Modulo).IsRequired().HasMaxLength(20).HasDefaultValue("INTERNO");
+            e.Property(s => s.UniversidadOrigen).HasMaxLength(150);
+            e.Property(s => s.UniversidadDestino).HasMaxLength(150);
             
             e.HasOne(s => s.CarreraOrigen)
              .WithMany()

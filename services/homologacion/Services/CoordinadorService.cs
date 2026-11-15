@@ -1,4 +1,5 @@
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Models;
@@ -22,104 +23,141 @@ public class CoordinadorService
 {
     private readonly HomologacionDbContext _db;
     private readonly SolicitudesClient _solicitudes;
+    private readonly AnalisisService _analisis;
+    private readonly AnalisisExternoService _analisisExterno;
     private readonly ILogger<CoordinadorService> _logger;
 
-    public CoordinadorService(HomologacionDbContext db, SolicitudesClient solicitudes, ILogger<CoordinadorService> logger)
+    public CoordinadorService(
+        HomologacionDbContext db,
+        SolicitudesClient solicitudes,
+        AnalisisService analisis,
+        AnalisisExternoService analisisExterno,
+        ILogger<CoordinadorService> logger)
     {
         _db = db;
         _solicitudes = solicitudes;
+        _analisis = analisis;
+        _analisisExterno = analisisExterno;
         _logger = logger;
     }
 
-    /// <summary>Solicitudes en PENDIENTE_REVISION, las más antiguas primero.</summary>
+    /// <summary>Solicitudes pendientes de revisión, las más antiguas primero.</summary>
     public async Task<List<PendienteDto>> ListarPendientesAsync(CancellationToken ct = default)
     {
-        try
-        {
-            // 1. Le pedimos la lista al microservicio de Solicitudes
-            var pendientes = await _solicitudes.ObtenerPendientesAsync(ct);
-
-            // 2. Mapeamos los datos a lo que espera el frontend
-            var lista = pendientes.Select(s => new PendienteDto
-            {
-                SolicitudId = s.Id,
-                Fecha = s.FechaRegistro,
-                Estudiante = s.EstudianteCorreo,
-                Tipo = s.Tipo,
-                CarreraOrigen = s.CarreraOrigen ?? "Origen",
-                CarreraDestino = s.CarreraDestino ?? "Destino",
-                FechaAnalisis = s.FechaRegistro,
-                TotalAsignaturas = 2 // Por ahora enviamos un valor por defecto
-            }).ToList();
-
-            return lista;
-        }
-        catch (SolicitudesNoDisponibleException)
-        {
-            // Si el microservicio falla, devolvemos lista vacía para no romper la app
-            return new List<PendienteDto>();
-        }
-    }
-
-    /// <summary>Detalle de una solicitud con la propuesta del agente por asignatura; null si no tiene análisis.</summary>
-    public async Task<DetalleSolicitudDto?> ObtenerDetalleAsync(int solicitudId, CancellationToken ct = default)
-    {
-        // 1. Buscamos si ya existe un análisis guardado
+        // Fuente 1: análisis que ya están esperando al Coordinador.
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
-            .Include(a => a.Asignaturas)
-            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
-
-        // 2. Buscamos la info de la solicitud en el microservicio
-        var info = (await _solicitudes.ObtenerPorIdsAsync(new[] { solicitudId }, ct)).FirstOrDefault();
-
-        // 3. SI NO HAY ANÁLISIS, creamos un detalle "virtual" para que el frontend no falle
-        if (analisis is null)
-        {
-            if (info is null) return null;
-
-            return new DetalleSolicitudDto
+            .Where(a => a.Estado == EstadoAnalisis.PENDIENTE_REVISION)
+            .Select(a => new
             {
-                SolicitudId = solicitudId,
-                Estado = EstadoAnalisis.PENDIENTE_REVISION,
+                a.SolicitudId,
+                a.FechaAnalisis,
+                TotalAsignaturas = a.Asignaturas.Count
+            })
+            .ToListAsync(ct);
+
+        // Fuente 2: solicitudes marcadas como pendientes. Así también aparecen las que
+        // quedaron sin análisis por un fallo previo (al abrirlas se genera).
+        var pendientes = await _solicitudes.ObtenerPendientesAsync(ct);
+
+        var ids = analisis.Select(a => a.SolicitudId)
+            .Union(pendientes.Select(p => p.Id))
+            .Distinct()
+            .ToList();
+
+        if (ids.Count == 0)
+            return new List<PendienteDto>();
+
+        var infos = await _solicitudes.ObtenerPorIdsAsync(ids, ct);
+        var infoPorId = infos.ToDictionary(i => i.Id);
+        var analisisPorId = analisis.ToDictionary(a => a.SolicitudId);
+
+        var lista = new List<PendienteDto>();
+        foreach (var id in ids)
+        {
+            if (!infoPorId.TryGetValue(id, out var info))
+            {
+                _logger.LogWarning("La solicitud {SolicitudId} está pendiente pero no existe en Solicitudes", id);
+                continue;
+            }
+
+            analisisPorId.TryGetValue(id, out var a);
+
+            lista.Add(new PendienteDto
+            {
+                SolicitudId = id,
                 Fecha = info.FechaRegistro,
                 Estudiante = info.EstudianteCorreo,
                 Tipo = info.Tipo,
                 CarreraOrigen = info.CarreraOrigen,
                 CarreraDestino = info.CarreraDestino,
-                FechaAnalisis = info.FechaRegistro,
-                // Creamos asignaturas de prueba para que el panel no esté vacío
-                Asignaturas = new List<DetalleAsignaturaDto>
-                {
-                    new DetalleAsignaturaDto {
-                        Id = 1,
-                        AsignaturaOrigen = "Asignatura Origen (Prueba)",
-                        AsignaturaDestino = "Asignatura Destino (Prueba)",
-                        Propuesta = new PropuestaAgenteDto { 
-                            Decision = "HOMOLOGABLE", 
-                            Justificacion = "Análisis pendiente de generación automática",
-                            PorcentajeContenido = 80,
-                            PorcentajeProfundidad = 80,
-                            PorcentajeHoras = 80
-                        }
-                    }
-                }
-            };
+                FechaAnalisis = a?.FechaAnalisis ?? info.FechaRegistro,
+                TotalAsignaturas = a?.TotalAsignaturas ?? info.TotalAsignaturas
+            });
         }
 
-        // 4. Si ya existe un análisis, devolvemos los datos reales
+        return lista.OrderBy(p => p.Fecha).ToList();
+    }
+
+    /// <summary>
+    /// Detalle de una solicitud con la propuesta real del agente por asignatura. Si la
+    /// solicitud existe pero aún no tiene análisis, se genera en ese momento con sus
+    /// asignaturas reales; nunca se devuelven datos inventados.
+    /// </summary>
+    public async Task<DetalleSolicitudDto?> ObtenerDetalleAsync(int solicitudId, CancellationToken ct = default)
+    {
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
         if (info is null)
-            _logger.LogWarning("La solicitud {SolicitudId} tiene análisis pero no existe en Solicitudes", solicitudId);
+            return null;
+
+        var analisis = await CargarAnalisisAsync(solicitudId, ct);
+
+        if (analisis is null)
+        {
+            // Una solicitud con informe emitido pero sin análisis es un dato inconsistente.
+            if (string.Equals(info.Estado, EstadoSolicitudHomologacion.INFORME_EMITIDO, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            try
+            {
+                if (string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase))
+                {
+                    await _analisisExterno.AnalizarSolicitudAsync(solicitudId, null, ct);
+                }
+                else
+                {
+                    await _analisis.AnalizarSolicitudAsync(
+                        solicitudId, AnalisisService.ConstruirAsignaturas(info), ct);
+                }
+            }
+            catch (Exception ex) when (ex is AnalisisSolicitudException
+                                       or AgenteExternoTimeoutException
+                                       or AgenteExternoException
+                                       or DocumentosNoDisponibleException
+                                       or SolicitudesNoDisponibleException)
+            {
+                _logger.LogWarning(ex, "No se pudo generar el análisis de la solicitud {SolicitudId}", solicitudId);
+                return null;
+            }
+
+            analisis = await CargarAnalisisAsync(solicitudId, ct);
+        }
+
+        if (analisis is null)
+            return null;
 
         return new DetalleSolicitudDto
         {
             SolicitudId = solicitudId,
             Estado = analisis.Estado,
-            Fecha = info?.FechaRegistro ?? analisis.FechaAnalisis,
-            Estudiante = info?.EstudianteCorreo ?? "estudiante@uta.edu.ec",
-            Tipo = info?.Tipo ?? "Homologación",
-            CarreraOrigen = info?.CarreraOrigen ?? "Origen",
-            CarreraDestino = info?.CarreraDestino ?? "Destino",
+            Fecha = info.FechaRegistro,
+            Estudiante = info.EstudianteCorreo,
+            Tipo = info.Tipo,
+            CarreraOrigen = info.CarreraOrigen,
+            CarreraDestino = info.CarreraDestino,
+            Modulo = info.Modulo,
+            UniversidadOrigen = info.UniversidadOrigen,
+            UniversidadDestino = info.UniversidadDestino,
             FechaAnalisis = analisis.FechaAnalisis,
             CoordinadorCorreo = analisis.CoordinadorCorreo,
             FechaInforme = analisis.FechaInforme,
@@ -146,54 +184,49 @@ public class CoordinadorService
         };
     }
 
-    /// <exception cref="InformeException">404 sin análisis, 409 si ya se emitió, 400 si el informe no es válido.</exception>
+    /// <exception cref="InformeException">404 sin análisis/solicitud, 409 si ya se emitió, 400 si el informe no es válido.</exception>
     public async Task<ResultadoInformeDto> EmitirInformeAsync(
         int solicitudId, EmitirInformeRequest request, string coordinadorCorreo, CancellationToken ct = default)
     {
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
+        if (info is null)
+            throw new InformeException(404, "Solicitud no encontrada.");
+
         var analisis = await _db.AnalisisSolicitudes
             .Include(a => a.Asignaturas)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
-        // SI NO HAY ANÁLISIS (porque el agente no lo creó), LO CREAMOS AL VUELO
         if (analisis is null)
-        {
-            analisis = new AnalisisSolicitud
-            {
-                SolicitudId = solicitudId,
-                Estado = EstadoAnalisis.INFORME_EMITIDO,
-                CoordinadorCorreo = coordinadorCorreo,
-                FechaAnalisis = DateTime.UtcNow,
-                FechaInforme = DateTime.UtcNow,
-                Asignaturas = request.Asignaturas.Select(a => new AnalisisAsignatura
-                {
-                    AsignaturaOrigen = "Asignatura Origen (S/D)",
-                    AsignaturaDestino = "Asignatura Destino (S/D)",
-                    DecisionCoordinador = a.Decision,
-                    ObservacionCoordinador = a.Observacion
-                }).ToList()
-            };
-            _db.AnalisisSolicitudes.Add(analisis);
-            await _db.SaveChangesAsync(ct);
-        }
-        else
-        {
-            // SI YA EXISTE, VALIDAMOS Y ACTUALIZAMOS
-            if (analisis.Estado != EstadoAnalisis.PENDIENTE_REVISION)
-                throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
+            throw new InformeException(404, "La solicitud no tiene un análisis para revisar.");
 
-            foreach (var item in request.Asignaturas)
-            {
-                var asignatura = analisis.Asignaturas.FirstOrDefault(a => a.Id == item.AsignaturaId);
-                if (asignatura != null)
-                {
-                    asignatura.DecisionCoordinador = item.Decision;
-                    asignatura.ObservacionCoordinador = item.Observacion;
-                }
-            }
-            analisis.Estado = EstadoAnalisis.INFORME_EMITIDO;
-            analisis.CoordinadorCorreo = coordinadorCorreo;
-            analisis.FechaInforme = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
+        if (analisis.Estado == EstadoAnalisis.INFORME_EMITIDO)
+            throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
+
+        ValidarInforme(analisis, request);
+
+        foreach (var item in request.Asignaturas)
+        {
+            var asignatura = analisis.Asignaturas.First(a => a.Id == item.AsignaturaId);
+            asignatura.DecisionCoordinador = NormalizarDecision(item.Decision);
+            asignatura.ObservacionCoordinador = item.Observacion.Trim();
+        }
+
+        analisis.Estado = EstadoAnalisis.INFORME_EMITIDO;
+        analisis.CoordinadorCorreo = coordinadorCorreo;
+        analisis.FechaInforme = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        // El informe ya quedó guardado. Si Solicitudes no responde, se registra el problema
+        // pero no se pierde el trabajo del Coordinador.
+        var estadoActualizado = false;
+        try
+        {
+            estadoActualizado = await _solicitudes.CambiarEstadoAsync(
+                solicitudId, EstadoSolicitudHomologacion.INFORME_EMITIDO, coordinadorCorreo, ct);
+        }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            _logger.LogError(ex, "El informe de {SolicitudId} se guardó, pero no se pudo actualizar Solicitudes", solicitudId);
         }
 
         return new ResultadoInformeDto
@@ -201,14 +234,58 @@ public class CoordinadorService
             SolicitudId = solicitudId,
             Estado = analisis.Estado,
             CoordinadorCorreo = coordinadorCorreo,
-            FechaInforme = analisis.FechaInforme ?? DateTime.UtcNow,
-            Asignaturas = analisis.Asignaturas.Select(a => new InformeAsignaturaResultadoDto
-            {
-                AsignaturaId = a.Id,
-                AsignaturaOrigen = a.AsignaturaOrigen,
-                Decision = a.DecisionCoordinador!,
-                Observacion = a.ObservacionCoordinador!
-            }).ToList()
+            FechaInforme = analisis.FechaInforme.Value,
+            EstadoSolicitudActualizado = estadoActualizado,
+            Asignaturas = analisis.Asignaturas
+                .OrderBy(a => a.Id)
+                .Select(a => new InformeAsignaturaResultadoDto
+                {
+                    AsignaturaId = a.Id,
+                    AsignaturaOrigen = a.AsignaturaOrigen,
+                    Decision = a.DecisionCoordinador!,
+                    Observacion = a.ObservacionCoordinador!
+                })
+                .ToList()
         };
     }
+
+    private async Task<AnalisisSolicitud?> CargarAnalisisAsync(int solicitudId, CancellationToken ct) =>
+        await _db.AnalisisSolicitudes
+            .Include(a => a.Asignaturas)
+            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
+
+    /// <summary>Valida que el informe traiga exactamente las asignaturas del análisis, sin repetidas ni ajenas.</summary>
+    private static void ValidarInforme(AnalisisSolicitud analisis, EmitirInformeRequest request)
+    {
+        if (request?.Asignaturas is null || request.Asignaturas.Count == 0)
+            throw new InformeException(400, "Debe enviar la decisión de al menos una asignatura.");
+
+        var idsAnalisis = analisis.Asignaturas.Select(a => a.Id).ToHashSet();
+        var vistos = new HashSet<int>();
+
+        foreach (var item in request.Asignaturas)
+        {
+            if (!idsAnalisis.Contains(item.AsignaturaId))
+                throw new InformeException(400, $"La asignatura {item.AsignaturaId} no pertenece a esta solicitud.");
+
+            if (!vistos.Add(item.AsignaturaId))
+                throw new InformeException(400, $"La asignatura {item.AsignaturaId} está repetida en el informe.");
+
+            var decision = NormalizarDecision(item.Decision);
+            if (decision != DecisionAnalisis.HOMOLOGABLE && decision != DecisionAnalisis.NO_HOMOLOGABLE)
+                throw new InformeException(400, $"Decisión inválida para la asignatura {item.AsignaturaId}. Use HOMOLOGABLE o NO_HOMOLOGABLE.");
+
+            if (string.IsNullOrWhiteSpace(item.Observacion))
+                throw new InformeException(400, $"La observación de la asignatura {item.AsignaturaId} es obligatoria.");
+
+            if (item.Observacion.Trim().Length > 1000)
+                throw new InformeException(400, $"La observación de la asignatura {item.AsignaturaId} supera los 1000 caracteres.");
+        }
+
+        if (vistos.Count != idsAnalisis.Count)
+            throw new InformeException(400, "Debe enviar la decisión de todas las asignaturas del análisis.");
+    }
+
+    private static string NormalizarDecision(string? decision) =>
+        (decision ?? string.Empty).Trim().ToUpperInvariant();
 }

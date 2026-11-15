@@ -21,7 +21,8 @@ public class OllamaClient
         {
             model = "llama3",
             prompt = prompt,
-            stream = false // Para que devuelva toda la respuesta junta
+            stream = false, // Para que devuelva toda la respuesta junta
+            format = "json" // Fuerza al modelo a responder con un JSON válido
         };
 
         var json = JsonSerializer.Serialize(requestBody);

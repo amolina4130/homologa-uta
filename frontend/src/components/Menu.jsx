@@ -15,6 +15,7 @@ export default function Menu() {
     "Reglas": "/reglas",
     "Panel Coordinador": "/panel-coordinador",
     "Equivalencias": "/equivalencias" 
+    "Solicitudes pendientes": "/panel-coordinador"
   };
 
   const opciones = {
@@ -22,7 +23,6 @@ export default function Menu() {
     COORDINADOR: ["Inicio", "Panel Coordinador", "Carreras y mallas"],
     SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    // AGREGAMOS "Equivalencias" A LA LISTA DEL ADMINISTRADOR
     ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Equivalencias", "Carreras y mallas"],
   };
 

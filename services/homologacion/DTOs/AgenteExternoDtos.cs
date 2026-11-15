@@ -2,22 +2,22 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HomologaUTA.Homologacion.DTOs;
 
-/// <summary>Lo que se envía al agente externo (contrato HU-09, sección 3).</summary>
+/// <summary>
+/// Lo que se envía al agente externo (contrato HU-09, sección 3).
+/// El cuerpo de la petición es opcional: si falta un dato, el servicio lo completa con la
+/// solicitud real y con el texto extraído de los documentos procesados.
+/// </summary>
 public class AgenteExternoRequest
 {
     /// <summary>Se toma del id de la ruta; lo que se envíe aquí se ignora.</summary>
     public int SolicitudId { get; set; }
 
-    [Required(ErrorMessage = "El correo del estudiante es obligatorio.")]
     public string Estudiante { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "La carrera de origen es obligatoria.")]
     public string CarreraOrigen { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "La carrera de destino es obligatoria.")]
     public string CarreraDestino { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Debe enviar los documentos.")]
     public DocumentosAgenteExternoDto Documentos { get; set; } = new();
 }
 
@@ -26,7 +26,6 @@ public class DocumentosAgenteExternoDto
     public string MallaOrigen { get; set; } = string.Empty;
     public string HistorialAcademico { get; set; } = string.Empty;
 
-    [MinLength(1, ErrorMessage = "Debe enviar al menos un sílabo.")]
     public List<SilaboAgenteExternoDto> Silabos { get; set; } = new();
 }
 
