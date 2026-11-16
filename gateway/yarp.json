@@ -6,6 +6,12 @@
         "AuthorizationPolicy": "Anonymous",
         "Match": { "Path": "/auth/login" }
       },
+      "auth-registro": {
+        "ClusterId": "auth",
+        "AuthorizationPolicy": "Anonymous",
+        "Match": { "Path": "/auth/registro", "Methods": [ "POST" ] }
+      },
+
       "auth": {
         "ClusterId": "auth",
         "AuthorizationPolicy": "autenticado",
