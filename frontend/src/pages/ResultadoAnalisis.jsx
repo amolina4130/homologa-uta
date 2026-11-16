@@ -4,6 +4,8 @@ import {
   obtenerResultadoAnalisis,
   analizarSolicitud,
   analizarSolicitudExterna,
+  obtenerResolucion,
+  descargarInforme,
 } from "../services/homologacionService";
 import { obtenerSolicitud } from "../services/solicitudesService";
 
@@ -20,12 +22,16 @@ const textoDecision = (decision) => {
   return decision || "Pendiente";
 };
 
+const formatoFecha = (valor) =>
+  valor ? new Date(valor).toLocaleString("es-EC") : "-";
+
 export default function ResultadoAnalisis() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [resultado, setResultado] = useState(null);
   const [solicitud, setSolicitud] = useState(null);
+  const [resolucion, setResolucion] = useState(null);
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -33,6 +39,9 @@ export default function ResultadoAnalisis() {
   const [generando, setGenerando] = useState(false);
   const [errorGenerando, setErrorGenerando] = useState("");
   const [reintentable, setReintentable] = useState(false);
+  const [descargando, setDescargando] = useState(false);
+  const [mensajeAccion, setMensajeAccion] = useState("");
+  const [errorAccion, setErrorAccion] = useState("");
 
   const esExterno =
     (resultado?.moduloSolicitud || solicitud?.modulo) === "EXTERNO";
@@ -40,6 +49,7 @@ export default function ResultadoAnalisis() {
   const cargarResultado = useCallback(async () => {
     setCargando(true);
     setError("");
+    setErrorAccion("");
     setSinAnalisis(false);
     setErrorGenerando("");
     setReintentable(false);
@@ -47,6 +57,17 @@ export default function ResultadoAnalisis() {
       const data = await obtenerResultadoAnalisis(id);
       setResultado(data);
       setAsignaturaSeleccionada(data.asignaturas?.[0] ?? null);
+
+      if (data.estado === "RESUELTA") {
+        try {
+          setResolucion(await obtenerResolucion(id));
+        } catch {
+          // El resultado sigue siendo válido aunque no se pueda leer la resolución.
+          setResolucion(null);
+        }
+      } else {
+        setResolucion(null);
+      }
     } catch (e) {
       if (e.status === 404) {
         // El resultado no existe todavía: se consulta la solicitud para saber
@@ -88,6 +109,20 @@ export default function ResultadoAnalisis() {
       setReintentable(Boolean(e.reintentable));
     } finally {
       setGenerando(false);
+    }
+  };
+
+  const descargar = async () => {
+    setDescargando(true);
+    setMensajeAccion("");
+    setErrorAccion("");
+    try {
+      await descargarInforme(id);
+      setMensajeAccion("Informe descargado correctamente.");
+    } catch (e) {
+      setErrorAccion(e.message || "No se pudo descargar el informe.");
+    } finally {
+      setDescargando(false);
     }
   };
 
@@ -191,7 +226,11 @@ export default function ResultadoAnalisis() {
     );
   }
 
-  const informeEmitido = resultado?.estado === "INFORME_EMITIDO";
+  const informeEmitido = ["INFORME_EMITIDO", "RESUELTA"].includes(resultado?.estado);
+  const resuelta = resultado?.estado === "RESUELTA";
+  const decisionFinalPorAsignatura = new Map(
+    (resolucion?.decisiones ?? []).map((d) => [d.asignaturaId, d.decisionFinal])
+  );
 
   return (
     <div className="container mt-4">
@@ -239,8 +278,17 @@ export default function ResultadoAnalisis() {
               <div className="col-md-10">
                 Emitido por {resultado?.coordinadorCorreo}
                 {resultado?.fechaInforme
-                  ? ` el ${new Date(resultado.fechaInforme).toLocaleString("es-EC")}`
+                  ? ` el ${formatoFecha(resultado.fechaInforme)}`
                   : ""}
+              </div>
+            </div>
+          )}
+          {resuelta && resolucion && (
+            <div className="row mb-0">
+              <div className="col-md-2 fw-bold">Resolución</div>
+              <div className="col-md-10">
+                {resolucion.numeroResolucion} · {formatoFecha(resolucion.fecha)}
+                {resolucion.observacion ? ` · ${resolucion.observacion}` : ""}
               </div>
             </div>
           )}
@@ -257,14 +305,33 @@ export default function ResultadoAnalisis() {
               <th>Profundidad</th>
               <th>Carga horaria</th>
               <th>Propuesta del agente</th>
-              {informeEmitido && <th>Decisión final</th>}
+              {informeEmitido && <th>Decisión del Coordinador</th>}
+              {resuelta && <th>Decisión final</th>}
               <th></th>
             </tr>
           </thead>
           <tbody>
             {resultado?.asignaturas?.map((asig) => (
               <tr key={asig.id}>
-                <td>{asig.asignaturaOrigen}</td>
+                <td>
+                  {asig.combinada && (asig.materiasOrigen?.length ?? 0) > 0 ? (
+                    <>
+                      <ul className="list-unstyled mb-0">
+                        {asig.materiasOrigen.map((m, indice) => (
+                          <li key={`${asig.id}-${indice}`}>
+                            {m.nombre}
+                            {m.nota !== null && m.nota !== undefined
+                              ? ` · Nota: ${m.nota}`
+                              : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      <span className="badge bg-info text-dark mt-1">Combinada</span>
+                    </>
+                  ) : (
+                    asig.asignaturaOrigen
+                  )}
+                </td>
                 <td>{asig.asignaturaDestino}</td>
                 <td>{asig.porcentajeContenido} %</td>
                 <td>{asig.porcentajeProfundidad} %</td>
@@ -282,6 +349,21 @@ export default function ResultadoAnalisis() {
                     {asig.decisionCoordinador ? (
                       <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
                         {textoDecision(asig.decisionCoordinador)}
+                      </span>
+                    ) : (
+                      <span className="text-muted">Sin decisión</span>
+                    )}
+                  </td>
+                )}
+                {resuelta && (
+                  <td>
+                    {decisionFinalPorAsignatura.get(asig.id) ? (
+                      <span
+                        className={`badge ${claseDecision(
+                          decisionFinalPorAsignatura.get(asig.id)
+                        )}`}
+                      >
+                        {textoDecision(decisionFinalPorAsignatura.get(asig.id))}
                       </span>
                     ) : (
                       <span className="text-muted">Sin decisión</span>
@@ -329,13 +411,25 @@ export default function ResultadoAnalisis() {
           : 'El sistema calcula la decisión con las reglas configuradas. El agente de IA entrega los porcentajes de similitud y su justificación. "Requiere revisión" indica que el agente no devolvió una respuesta válida y la decisión queda en manos del Coordinador.'}
       </p>
 
-      <div className="d-flex justify-content-between align-items-center mt-4">
+      {mensajeAccion && <div className="alert alert-success">{mensajeAccion}</div>}
+      {errorAccion && <div className="alert alert-danger">{errorAccion}</div>}
+
+      <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 gap-2">
         <button className="btn btn-outline-secondary" onClick={() => navigate("/mis-solicitudes")}>
           Volver a Mis solicitudes
         </button>
-        <button className="btn btn-outline-primary" onClick={cargarResultado}>
-          Actualizar
-        </button>
+        <div className="d-flex gap-2">
+          <button
+            className="btn btn-outline-success"
+            onClick={descargar}
+            disabled={descargando}
+          >
+            {descargando ? "Descargando..." : "Descargar informe"}
+          </button>
+          <button className="btn btn-outline-primary" onClick={cargarResultado}>
+            Actualizar
+          </button>
+        </div>
       </div>
     </div>
   );

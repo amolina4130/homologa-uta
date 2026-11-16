@@ -16,7 +16,9 @@ const lanzarError = async (res, mensajePorDefecto) => {
   let mensaje = mensajePorDefecto;
   try {
     const cuerpo = await res.json();
-    if (cuerpo && cuerpo.error) mensaje = cuerpo.error;
+    if (cuerpo && (cuerpo.mensaje || cuerpo.error)) {
+      mensaje = cuerpo.mensaje || cuerpo.error;
+    }
   } catch {
     // La respuesta no trae JSON; se conserva el mensaje por defecto.
   }
@@ -51,6 +53,18 @@ export async function emitirInforme(id, informeCompleto) {
     body: JSON.stringify(informeCompleto),
   });
   if (!res.ok) await lanzarError(res, "Error al emitir el informe");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// HU-17: registra la resolución del Consejo Directivo (solo con informe emitido).
+export async function registrarResolucion(id, resolucion) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${id}/resolucion`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(resolucion),
+  });
+  if (!res.ok) await lanzarError(res, "Error al registrar la resolución");
   const json = await res.json();
   return extraerDatos(json);
 }

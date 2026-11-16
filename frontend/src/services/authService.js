@@ -20,3 +20,28 @@ export async function login(correo, contrasena) {
 
   return await res.json(); 
 }
+
+// HU-12: crea una cuenta de estudiante. El rol lo asigna el backend.
+export async function registrar(nombre, correo, contrasena) {
+  const res = await fetch(`${GATEWAY_URL}/auth/registro`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre, correo, contrasena }),
+  });
+
+  let cuerpo = {};
+  try {
+    cuerpo = await res.json();
+  } catch {
+    // El backend no devolvió JSON; se usa el mensaje por defecto.
+  }
+
+  if (!res.ok) {
+    const err = new Error(cuerpo.mensaje || "No se pudo crear la cuenta.");
+    err.status = res.status;
+    err.tipo = res.status === 409 ? "duplicado" : "validacion";
+    throw err;
+  }
+
+  return cuerpo;
+}

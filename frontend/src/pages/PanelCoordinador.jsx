@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
-import { obtenerSolicitudesPendientes, obtenerDetalleSolicitud, emitirInforme } from "../services/coordinadorService";
+import {
+  obtenerSolicitudesPendientes,
+  obtenerDetalleSolicitud,
+  emitirInforme,
+  registrarResolucion,
+} from "../services/coordinadorService";
+import { descargarInforme } from "../services/homologacionService";
 import ListaSolicitudes from "../components/ListaSolicitudes";
 import DetalleSolicitud from "../components/DetalleSolicitud";
+import FormularioResolucion from "../components/FormularioResolucion";
 
 export default function PanelCoordinador() {
   const { rol } = useAuth();
   const [solicitudes, setSolicitudes] = useState([]);
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [descargando, setDescargando] = useState(false);
   const [error, setError] = useState("");
   const [exito, setExito] = useState("");
 
@@ -72,6 +80,54 @@ export default function PanelCoordinador() {
     }
   };
 
+  // HU-17: registra la resolución del Consejo Directivo.
+  const guardarResolucion = async (resolucion) => {
+    if (!solicitudSeleccionada) return;
+
+    const confirmar = window.confirm(
+      "¿Está seguro de registrar la resolución del Consejo Directivo? Esta acción no se puede repetir."
+    );
+    if (!confirmar) return;
+
+    setCargando(true);
+    setError("");
+    setExito("");
+
+    try {
+      const resultado = await registrarResolucion(
+        solicitudSeleccionada.solicitudId,
+        resolucion
+      );
+      setExito(
+        `Resolución ${resultado?.numeroResolucion || ""} registrada. La solicitud quedó en estado ${
+          resultado?.estadoSolicitud || "RESUELTA"
+        }.`
+      );
+      const detalle = await obtenerDetalleSolicitud(solicitudSeleccionada.solicitudId);
+      setSolicitudSeleccionada(detalle);
+      await cargarPendientes();
+    } catch (e) {
+      setError(e.message || "No se pudo registrar la resolución.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // HU-18: descarga el informe PDF con el token de la sesión.
+  const descargar = async (id) => {
+    setDescargando(true);
+    setError("");
+    setExito("");
+    try {
+      await descargarInforme(id);
+      setExito(`Informe de SOL-${String(id).padStart(4, "0")} descargado.`);
+    } catch (e) {
+      setError(e.message || "No se pudo descargar el informe.");
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   if (rol !== "COORDINADOR") {
     return (
       <div className="container mt-4">
@@ -99,16 +155,29 @@ export default function PanelCoordinador() {
           onAbrir={abrirDetalle}
         />
       ) : (
-        <DetalleSolicitud
-          key={solicitudSeleccionada.solicitudId}
-          solicitud={solicitudSeleccionada}
-          onVolver={() => {
-            setSolicitudSeleccionada(null);
-            setError("");
-          }}
-          onGuardar={guardarInforme}
-          cargando={cargando}
-        />
+        <>
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => {
+              setSolicitudSeleccionada(null);
+              setError("");
+            }}
+            onGuardar={guardarInforme}
+            onDescargarInforme={() => descargar(solicitudSeleccionada.solicitudId)}
+            descargando={descargando}
+            cargando={cargando}
+          />
+
+          {!solicitudSeleccionada.resolucion &&
+            solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
+              <FormularioResolucion
+                solicitud={solicitudSeleccionada}
+                onRegistrar={guardarResolucion}
+                cargando={cargando}
+              />
+            )}
+        </>
       )}
     </div>
   );

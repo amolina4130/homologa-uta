@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, rutaPorRol } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { iniciarSesion } = useAuth();
+  const mensajeExito = location.state?.mensajeExito || "";
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [errores, setErrores] = useState({});
@@ -54,6 +56,12 @@ export default function Login() {
         <form onSubmit={ingresar} noValidate>
           <h4 className="mb-4 text-center">Iniciar Sesión</h4>
 
+          {mensajeExito && (
+            <div className="alert alert-success py-2" role="alert">
+              {mensajeExito}
+            </div>
+          )}
+
           <div className="mb-3">
             <label htmlFor="correo" className="form-label fw-bold">Correo institucional</label>
             <input 
@@ -91,6 +99,13 @@ export default function Login() {
         </form>
 
         <p className="text-center text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+          ¿No tiene una cuenta?{" "}
+          <Link to="/registro" className="fw-bold">
+            Crear una cuenta
+          </Link>
+        </p>
+
+        <p className="text-center text-muted mt-2 mb-0" style={{ fontSize: "0.85rem" }}>
           Al ingresar, el sistema lo redirige a la pantalla según su rol.
         </p>
       </div>

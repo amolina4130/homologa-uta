@@ -6,6 +6,11 @@
         "AuthorizationPolicy": "Anonymous",
         "Match": { "Path": "/auth/login" }
       },
+      "auth-registro": {
+        "ClusterId": "auth",
+        "AuthorizationPolicy": "Anonymous",
+        "Match": { "Path": "/auth/registro" }
+      },
       "auth": {
         "ClusterId": "auth",
         "AuthorizationPolicy": "autenticado",
@@ -15,6 +20,36 @@
         "ClusterId": "solicitudes",
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/carreras/{**catch-all}" }
+      },
+      "asignaturas": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/asignaturas/{**catch-all}" }
+      },
+      "planes-analiticos": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/planes-analiticos/{**catch-all}" }
+      },
+      "equivalencias-consulta": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/equivalencias/{**catch-all}", "Methods": [ "GET" ] }
+      },
+      "equivalencias-modificar": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/equivalencias/{**catch-all}" }
+      },
+      "memoria-consulta": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/memoria/{**catch-all}", "Methods": [ "GET" ] }
+      },
+      "memoria-cargar": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/memoria/{**catch-all}" }
       },
       "solicitudes": {
         "ClusterId": "solicitudes",

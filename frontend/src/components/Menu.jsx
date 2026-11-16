@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 export default function Menu() {
   const { rol, cerrarSesion } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); 
+  const location = useLocation();
 
   const rutas = {
     "Inicio": "/inicio",
@@ -14,15 +14,24 @@ export default function Menu() {
     "Carreras y mallas": "/carreras",
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
-    "Solicitudes pendientes": "/panel-coordinador"
+    "Solicitudes pendientes": "/panel-coordinador",
+    "Equivalencias": "/equivalencias",
+    "Memoria del agente": "/memoria",
   };
 
   const opciones = {
     ESTUDIANTE: ["Inicio", "Nueva solicitud", "Mis solicitudes", "Adjuntar documentos", "Carreras y mallas"],
     COORDINADOR: ["Inicio", "Solicitudes pendientes", "Carreras y mallas"],
-    SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
-    CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Carreras y mallas"],
+    SECRETARIA: ["Inicio", "Carreras y mallas"],
+    CONSEJO: ["Inicio", "Carreras y mallas"],
+    ADMINISTRADOR: [
+      "Inicio",
+      "Estado del sistema",
+      "Reglas",
+      "Equivalencias",
+      "Memoria del agente",
+      "Carreras y mallas",
+    ],
   };
 
   const misOpciones = opciones[rol] || [];
@@ -30,22 +39,22 @@ export default function Menu() {
   const handleLogout = () => {
     cerrarSesion();
     navigate("/login");
-  };  
+  };
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow-sm mb-4">
       <div className="container-fluid">
         <span className="navbar-brand fw-bold text-white">HomologaUTA</span>
-        
+
         <div className="navbar-nav me-auto">
           {misOpciones.map((opcion) => {
             const ruta = rutas[opcion] || "/inicio";
             const isActive = location.pathname === ruta;
-            
+
             return (
-              <Link 
-                key={opcion} 
-                to={ruta} 
+              <Link
+                key={opcion}
+                to={ruta}
                 className={`nav-link ${isActive ? 'active fw-bold text-white border-bottom border-2 border-white' : 'text-white-50'}`}
               >
                 {opcion}

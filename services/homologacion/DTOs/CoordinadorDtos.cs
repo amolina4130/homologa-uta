@@ -61,6 +61,9 @@ public class PendienteDto
 {
     public int SolicitudId { get; set; }
 
+    /// <summary>Número de proceso visible, por ejemplo SOL-0004 (HU-16).</summary>
+    public string NumeroProceso { get; set; } = string.Empty;
+
     /// <summary>Fecha en que el estudiante registró la solicitud.</summary>
     public DateTime Fecha { get; set; }
 
@@ -82,6 +85,9 @@ public class PendienteDto
 public class DetalleSolicitudDto
 {
     public int SolicitudId { get; set; }
+
+    /// <summary>Número de proceso visible, por ejemplo SOL-0004 (HU-16).</summary>
+    public string NumeroProceso { get; set; } = string.Empty;
 
     /// <summary>PENDIENTE_REVISION o INFORME_EMITIDO.</summary>
     public string Estado { get; set; } = string.Empty;

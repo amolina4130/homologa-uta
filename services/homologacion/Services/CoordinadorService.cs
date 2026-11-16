@@ -89,6 +89,7 @@ public class CoordinadorService
             lista.Add(new PendienteDto
             {
                 SolicitudId = id,
+                NumeroProceso = info.NumeroProceso,
                 Fecha = info.FechaRegistro,
                 Estudiante = info.EstudianteCorreo,
                 Tipo = info.Tipo,
@@ -164,6 +165,7 @@ public class CoordinadorService
         return new DetalleSolicitudDto
         {
             SolicitudId = solicitudId,
+            NumeroProceso = info.NumeroProceso,
             Estado = analisis.Estado,
             Fecha = info.FechaRegistro,
             Estudiante = info.EstudianteCorreo,

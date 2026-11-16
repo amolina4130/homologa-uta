@@ -1,8 +1,19 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { obtenerMisSolicitudes, subirDocumento } from "../services/documentosService";
+import {
+  obtenerDocumentosSolicitud,
+  obtenerMisSolicitudes,
+  subirDocumento,
+} from "../services/documentosService";
+import {
+  actualizarMateriasAprobadas,
+  extraerRecord,
+  obtenerMateriasAprobadas,
+} from "../services/homologacionService";
+import { obtenerSolicitud } from "../services/solicitudesService";
 import ListaDocumentos from "../components/ListaDocumentos";
+import TablaMateriasAprobadas from "../components/TablaMateriasAprobadas";
 
 const MENSAJE_RECHAZO = "El archivo no es un PDF o excede el tamaño máximo permitido. No se guardó.";
 
@@ -18,24 +29,74 @@ export default function AdjuntarDocumentos() {
   const [searchParams] = useSearchParams();
   const solicitudIdParam = searchParams.get("solicitudId") || "";
   const volverResultado = searchParams.get("volver") === "resultado";
+
   const [solicitudes, setSolicitudes] = useState([]);
   const [solicitudId, setSolicitudId] = useState(solicitudIdParam);
   const [tipoCodigo, setTipoCodigo] = useState(TIPOS[0].codigo);
   const [archivo, setArchivo] = useState(null);
   const [claveInput, setClaveInput] = useState(0);
   const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [documentosPorSolicitud, setDocumentosPorSolicitud] = useState({});
+  const [documentos, setDocumentos] = useState([]);
+  const [estadoSolicitud, setEstadoSolicitud] = useState("");
+
+  const [materias, setMaterias] = useState([]);
+  const [requiereRevision, setRequiereRevision] = useState(false);
+  const [motivoRevision, setMotivoRevision] = useState("");
+  const [extrayendo, setExtrayendo] = useState(false);
+  const [guardandoMaterias, setGuardandoMaterias] = useState(false);
+  const [errorMaterias, setErrorMaterias] = useState("");
+  const [mensajeMaterias, setMensajeMaterias] = useState("");
 
   useEffect(() => {
     obtenerMisSolicitudes()
-      .then(setSolicitudes)
+      .then((data) => setSolicitudes(Array.isArray(data) ? data : []))
       .catch(() => setError("No se pudieron cargar sus solicitudes."));
   }, []);
+
+  const cargarSolicitud = useCallback(async (id) => {
+    setDocumentos([]);
+    setMaterias([]);
+    setRequiereRevision(false);
+    setMotivoRevision("");
+    setEstadoSolicitud("");
+    setErrorMaterias("");
+    setMensajeMaterias("");
+
+    if (!id) return;
+
+    try {
+      setDocumentos(await obtenerDocumentosSolicitud(id));
+    } catch (e) {
+      setError(e.message || "No se pudieron cargar los documentos de la solicitud.");
+    }
+
+    try {
+      const lista = await obtenerMateriasAprobadas(id);
+      setMaterias(Array.isArray(lista) ? lista : []);
+    } catch {
+      // Sin materias aprobadas todavía: la extracción las generará.
+      setMaterias([]);
+    }
+
+    try {
+      const detalle = await obtenerSolicitud(id);
+      setEstadoSolicitud(detalle?.estado || "");
+    } catch {
+      setEstadoSolicitud("");
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => cargarSolicitud(solicitudId), 0);
+    return () => clearTimeout(timer);
+  }, [solicitudId, cargarSolicitud]);
 
   function cambiarArchivo(e) {
     const file = e.target.files[0];
     setError("");
+    setMensaje("");
     setArchivo(null);
     if (!file) return;
 
@@ -56,22 +117,21 @@ export default function AdjuntarDocumentos() {
 
     setCargando(true);
     setError("");
+    setMensaje("");
     try {
       const respuesta = await subirDocumento(solicitudId, tipoCodigo, archivo);
       const etiqueta = TIPOS.find((t) => t.codigo === tipoCodigo)?.etiqueta ?? tipoCodigo;
       const nuevo = {
-        id: respuesta.nombreArchivo,
+        id: respuesta.documentoId,
         nombre: archivo.name,
-        tipo: etiqueta,
+        tipoDocumento: etiqueta,
         tamano: `${(archivo.size / (1024 * 1024)).toFixed(1)} MB`,
         estado: "PROCESADO",
       };
-      setDocumentosPorSolicitud((prev) => ({
-        ...prev,
-        [solicitudId]: [...(prev[solicitudId] ?? []), nuevo],
-      }));
+      setDocumentos((prev) => [...prev, nuevo]);
       setArchivo(null);
       setClaveInput((n) => n + 1);
+      setMensaje("Documento subido y procesado correctamente.");
     } catch (err) {
       setError(err.message || MENSAJE_RECHAZO);
     } finally {
@@ -79,12 +139,60 @@ export default function AdjuntarDocumentos() {
     }
   }
 
+  // HU-20: extrae las materias del récord ya procesado.
+  const extraer = async () => {
+    if (!solicitudId) return;
+    setExtrayendo(true);
+    setError("");
+    setMensaje("");
+    setErrorMaterias("");
+    setMensajeMaterias("");
+    setRequiereRevision(false);
+    setMotivoRevision("");
+    try {
+      const resultado = await extraerRecord(solicitudId);
+      setMaterias(resultado?.materias ?? []);
+      setRequiereRevision(Boolean(resultado?.requiereRevision));
+      setMotivoRevision(resultado?.motivo || "");
+      if (resultado?.requiereRevision) {
+        setErrorMaterias(
+          resultado?.motivo ||
+            "El récord no se pudo leer con claridad. Revise y corrija las materias manualmente."
+        );
+      } else {
+        setMensajeMaterias("Materias extraídas del récord. Revise y corrija antes de guardar.");
+      }
+    } catch (err) {
+      setErrorMaterias(err.message || "No se pudo leer el récord académico.");
+    } finally {
+      setExtrayendo(false);
+    }
+  };
+
+  const guardarMaterias = async (lista) => {
+    if (!solicitudId) return;
+    setGuardandoMaterias(true);
+    setErrorMaterias("");
+    setMensajeMaterias("");
+    try {
+      const guardadas = await actualizarMateriasAprobadas(solicitudId, lista);
+      setMaterias(Array.isArray(guardadas) ? guardadas : lista);
+      setMensajeMaterias("Materias aprobadas guardadas correctamente.");
+    } catch (err) {
+      setErrorMaterias(err.message || "No se pudieron guardar las materias aprobadas.");
+    } finally {
+      setGuardandoMaterias(false);
+    }
+  };
+
+  const soloLecturaMaterias = Boolean(estadoSolicitud) && estadoSolicitud !== "REGISTRADA";
+
   return (
     <div className="container mt-4">
       <div className="row justify-content-center">
-        <div className="col-md-10">
+        <div className="col-md-11">
           <div className="card shadow-sm border-0">
-            
+
             {/* ENCABEZADO */}
             <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
               <h5 className="mb-0 fw-bold">ADJUNTAR DOCUMENTOS</h5>
@@ -103,12 +211,13 @@ export default function AdjuntarDocumentos() {
                   id="solicitud"
                   className="form-select"
                   value={solicitudId}
-                  onChange={(e) => { setSolicitudId(e.target.value); setError(""); }}
+                  onChange={(e) => { setSolicitudId(e.target.value); setError(""); setMensaje(""); }}
                 >
                   <option value="">Seleccione una solicitud</option>
                   {solicitudes.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.numero} · {s.origen} → {s.destino}
+                      {(s.numeroProceso || s.numero || `SOL-${String(s.id).padStart(4, "0")}`)} ·{" "}
+                      {s.origen || s.carreraOrigen} → {s.destino || s.carreraDestino}
                     </option>
                   ))}
                 </select>
@@ -121,10 +230,10 @@ export default function AdjuntarDocumentos() {
                 <div className="row">
                   <div className="col-md-6 mb-3">
                     <label htmlFor="tipo" className="form-label fw-bold">Tipo de documento</label>
-                    <select 
-                      id="tipo" 
-                      className="form-select" 
-                      value={tipoCodigo} 
+                    <select
+                      id="tipo"
+                      className="form-select"
+                      value={tipoCodigo}
                       onChange={(e) => setTipoCodigo(e.target.value)}
                     >
                       {TIPOS.map((t) => (
@@ -135,16 +244,16 @@ export default function AdjuntarDocumentos() {
 
                   <div className="col-md-6 mb-3">
                     <label htmlFor="archivo" className="form-label fw-bold">Archivo PDF</label>
-                    <input 
-                      key={claveInput} 
-                      id="archivo" 
-                      type="file" 
-                      className="form-control" 
-                      accept=".pdf" 
-                      onChange={cambiarArchivo} 
+                    <input
+                      key={claveInput}
+                      id="archivo"
+                      type="file"
+                      className="form-control"
+                      accept=".pdf"
+                      onChange={cambiarArchivo}
                     />
                     <div className="form-text">
-                      Solo se aceptan archivos PDF. Tamaño máximo configurable (por ejemplo, 10 MB).
+                      Solo se aceptan archivos PDF. Tamaño máximo de 10 MB.
                     </div>
                   </div>
                 </div>
@@ -153,6 +262,9 @@ export default function AdjuntarDocumentos() {
                   <div className="alert alert-danger d-flex align-items-center mt-3 mb-0 py-2">
                     <span className="me-2">✖</span> {error}
                   </div>
+                )}
+                {mensaje && (
+                  <div className="alert alert-success mt-3 mb-0 py-2">{mensaje}</div>
                 )}
 
                 <div className="text-end mt-4">
@@ -165,8 +277,49 @@ export default function AdjuntarDocumentos() {
               {/* LISTA DE DOCUMENTOS */}
               <div className="mb-4">
                 <h5 className="fw-bold mb-3">Documentos de la solicitud</h5>
-                <ListaDocumentos documentos={documentosPorSolicitud[solicitudId] ?? []} />
+                <ListaDocumentos documentos={documentos} />
               </div>
+
+              {/* MATERIAS APROBADAS DEL RÉCORD (HU-20) */}
+              {solicitudId && (
+                <div className="mb-4">
+                  <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                    <h5 className="fw-bold mb-0">Materias aprobadas</h5>
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary"
+                      onClick={extraer}
+                      disabled={extrayendo || soloLecturaMaterias}
+                    >
+                      {extrayendo ? "Extrayendo..." : "Extraer materias del récord"}
+                    </button>
+                  </div>
+
+                  {requiereRevision && (
+                    <div className="alert alert-warning">
+                      <strong>Requiere revisión.</strong>{" "}
+                      {motivoRevision ||
+                        "El documento no se pudo leer con claridad. Revise las materias manualmente."}
+                    </div>
+                  )}
+
+                  {soloLecturaMaterias && (
+                    <div className="alert alert-info">
+                      La solicitud ya pasó a revisión: las materias aprobadas se muestran en
+                      modo lectura.
+                    </div>
+                  )}
+
+                  <TablaMateriasAprobadas
+                    materias={materias}
+                    onGuardar={guardarMaterias}
+                    guardando={guardandoMaterias}
+                    soloLectura={soloLecturaMaterias}
+                    mensaje={mensajeMaterias}
+                    error={errorMaterias}
+                  />
+                </div>
+              )}
 
               {volverResultado && solicitudId && (
                 <div className="alert alert-info d-flex justify-content-between align-items-center">
@@ -189,7 +342,7 @@ export default function AdjuntarDocumentos() {
                 Solo ves los documentos de tus propias solicitudes.
               </div>
             </div>
-            
+
           </div>
         </div>
       </div>

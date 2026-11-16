@@ -55,6 +55,7 @@ public class HomologacionDbContext : DbContext
         modelBuilder.Entity<MateriaOrigenResultado>(e =>
         {
             e.Property(m => m.Nombre).IsRequired().HasMaxLength(200);
+            e.Property(m => m.Nota).HasPrecision(5, 2);
 
             e.HasOne(m => m.AnalisisAsignatura)
              .WithMany(a => a.MateriasOrigen)
@@ -67,6 +68,7 @@ public class HomologacionDbContext : DbContext
             e.Property(m => m.Nombre).IsRequired().HasMaxLength(200);
             e.Property(m => m.EstadoSegunDocumento).IsRequired().HasMaxLength(50);
             e.Property(m => m.Periodo).HasMaxLength(50);
+            e.Property(m => m.Nota).HasPrecision(5, 2);
 
             // Un estudiante puede tener varias materias; se consultan por solicitud.
             e.HasIndex(m => m.SolicitudId);

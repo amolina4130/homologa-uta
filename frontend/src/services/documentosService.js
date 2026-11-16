@@ -13,6 +13,15 @@ export async function obtenerMisSolicitudes() {
   return await res.json();
 }
 
+// Documentos ya guardados para una solicitud del estudiante autenticado.
+export async function obtenerDocumentosSolicitud(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/documentos/solicitud/${solicitudId}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("No se pudieron cargar los documentos de la solicitud");
+  return await res.json();
+}
+
 export async function subirDocumento(solicitudId, tipoDocumento, archivo) {
   const formData = new FormData();
   formData.append("Archivo", archivo);

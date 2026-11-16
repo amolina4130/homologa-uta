@@ -6,6 +6,7 @@ using HomologaUTA.Autenticacion.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Moq;
 
 namespace HomologaUTA.Autenticacion.Tests;
