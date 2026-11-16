@@ -153,7 +153,24 @@ services:
     networks:
       - homologa_network
 
-  # 8. Gateway (YARP)
+  # 8. Servicio de Catálogo (NUEVO)
+  catalogo-service:
+    build:
+      context: ./services/catalogo
+      dockerfile: Dockerfile
+    container_name: homologa_catalogo
+    restart: always
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_CATALOGO:-HomologaUTA_Catalogo};User Id=sa;Password=${SQL_SA_PASSWORD:-HomologaUTA_2026!};TrustServerCertificate=True;
+    ports:
+      - "5006:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - homologa_network
+
+  # 9. Gateway (YARP)
   gateway:
     build:
       context: ./gateway
@@ -172,10 +189,11 @@ services:
       - documentos-service
       - reglas-service
       - homologacion-service
+      - catalogo-service
     networks:
       - homologa_network
 
-  # 9. Frontend (React + Vite + Nginx)
+  # 10. Frontend (React + Vite + Nginx)
   frontend:
     build:
       context: ./frontend
@@ -189,7 +207,7 @@ services:
     networks:
       - homologa_network
 
-  # 10. Ollama (Agente de IA)
+  # 11. Ollama (Agente de IA)
   ollama:
     image: ollama/ollama:latest
     container_name: homologa_ollama
