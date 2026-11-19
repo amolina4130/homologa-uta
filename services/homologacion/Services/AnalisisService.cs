@@ -258,6 +258,42 @@ public class AnalisisService
 
     private static string Recortar(string texto, int max) =>
         texto.Length <= max ? texto : texto[..max];
+
+    // --- NUEVO MÉTODO PARA LA RESOLUCIÓN DEL CONSEJO ---
+    /// <summary>
+    /// Marca el análisis como RESUELTA y guarda la decisión final del Coordinador 
+    /// para cada asignatura, basándose en la resolución del Consejo.
+    /// </summary>
+    public async Task RegistrarResolucionAsync(int solicitudId, List<DecisionResolucionDto> decisiones, CancellationToken ct = default)
+    {
+        var analisis = await _db.AnalisisSolicitudes
+            .Include(a => a.Asignaturas)
+            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
+
+        if (analisis is null)
+            throw new AnalisisSolicitudException(404, "La solicitud no tiene un análisis generado.");
+
+        // Actualizamos la decisión final de cada asignatura
+        foreach (var decision in decisiones)
+        {
+            var asignatura = analisis.Asignaturas.FirstOrDefault(a => a.Id == decision.AsignaturaId);
+            if (asignatura is not null)
+            {
+                asignatura.DecisionCoordinador = decision.DecisionFinal;
+            }
+        }
+
+        // El análisis pasa a RESUELTA
+        analisis.Estado = EstadoAnalisis.RESUELTA;
+        await _db.SaveChangesAsync(ct);
+    }
+}
+
+// --- CLASE DTO PARA LAS DECISIONES DEL CONSEJO ---
+public class DecisionResolucionDto
+{
+    public int AsignaturaId { get; set; }
+    public string DecisionFinal { get; set; } = string.Empty;
 }
 
 /// <summary>Estados del servicio de Solicitudes que usa Homologación.</summary>
