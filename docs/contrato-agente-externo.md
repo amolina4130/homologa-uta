@@ -18,6 +18,8 @@ El sistema (servicio de Homologación) enviará un JSON con la siguiente estruct
   "estudiante": "estudiante@uta.edu.ec",
   "carreraOrigen": "Ingeniería en Software (Universidad Externa)",
   "carreraDestino": "Ingeniería en Software (UTA)",
+  "universidadOrigen": "Universidad Nacional de Colombia",
+  "universidadDestino": "Universidad Técnica de Ambato",
   "documentos": {
     "mallaOrigen": "texto extraído de la malla...",
     "historialAcademico": "texto extraído del historial...",
