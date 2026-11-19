@@ -1,8 +1,9 @@
-﻿using HomologaUTA.Homologacion.Agents;
+using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
 using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
+using HomologaUTA.Homologacion.Reportes;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,6 +58,9 @@ builder.Services.AddScoped<AnalisisExternoService>();
 // Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
+
+// Informe PDF de homologación (TA-18.1)
+builder.Services.AddScoped<IInformeService, InformeHomologacion>();
 
 
 var app = builder.Build();
