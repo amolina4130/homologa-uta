@@ -5,9 +5,12 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
   const [carreras, setCarreras] = useState([]);
   const [asignaturas, setAsignaturas] = useState([]);
   const [formData, setFormData] = useState({
-    tipo: "Homologación", // Tipo fijo
+    tipo: "Homologación", 
+    modulo: "INTERNO", 
     carreraOrigenId: "",
     carreraDestinoId: "",
+    universidadOrigen: "", 
+    universidadDestino: "", 
     asignaturasIds: [],
   });
   const [errores, setErrores] = useState({});
@@ -52,6 +55,13 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
     if (!formData.carreraDestinoId) e.carreraDestinoId = "Seleccione la carrera de destino.";
     if (formData.carreraOrigenId === formData.carreraDestinoId) e.carreraDestinoId = "La carrera de destino no puede ser igual a la de origen.";
     if (formData.asignaturasIds.length === 0) e.asignaturas = "Seleccione al menos una asignatura.";
+
+    // Validación 400 para el módulo externo
+    if (formData.modulo === "EXTERNO") {
+      if (!formData.universidadOrigen.trim()) e.universidadOrigen = "Ingrese la universidad de origen.";
+      if (!formData.universidadDestino.trim()) e.universidadDestino = "Ingrese la universidad de destino.";
+    }
+
     return e;
   };
 
@@ -60,7 +70,13 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
     const eObj = validar();
     setErrores(eObj);
     if (Object.keys(eObj).length === 0) {
-      onSubmit(formData);
+      // Al enviar, si es interno, limpiamos las universidades para no enviar basura
+      const payload = { ...formData };
+      if (payload.modulo === "INTERNO") {
+        delete payload.universidadOrigen;
+        delete payload.universidadDestino;
+      }
+      onSubmit(payload);
     }
   };
 
@@ -69,12 +85,44 @@ export default function FormularioSolicitud({ onSubmit, cargando }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate style={{ display: "flex", gap: "30px", border: "2px solid #000", padding: "20px", marginTop: "20px" }}>
+      
       {/* Columna Izquierda */}
       <div style={{ flex: 1 }}>
         <h3>Nueva solicitud de homologación</h3>
         
-        {/* EL SELECTOR DE TIPO YA NO EXISTE (es fijo) */}
-        {/* EL SELECTOR DE MÓDULO YA NO EXISTE */}
+        {/* Selector de Módulo */}
+        <label>Módulo de análisis</label>
+        <select name="modulo" value={formData.modulo} onChange={handleChange} style={campo}>
+          <option value="INTERNO">Agente interno (Cambio de carrera UTA)</option>
+          <option value="EXTERNO">Agente externo (Universidad externa)</option>
+        </select>
+
+        {/* Campos condicionales para el módulo externo */}
+        {formData.modulo === "EXTERNO" && (
+          <div style={{ padding: "10px", backgroundColor: "#f0f0f0", marginBottom: "15px", border: "1px solid #ccc" }}>
+            <label>Universidad de Origen</label>
+            <input 
+              type="text" 
+              name="universidadOrigen" 
+              value={formData.universidadOrigen} 
+              onChange={handleChange} 
+              style={campo} 
+              placeholder="Ej. Universidad Central del Ecuador"
+            />
+            {errores.universidadOrigen && <p style={error}>{errores.universidadOrigen}</p>}
+
+            <label>Universidad de Destino</label>
+            <input 
+              type="text" 
+              name="universidadDestino" 
+              value={formData.universidadDestino} 
+              onChange={handleChange} 
+              style={campo} 
+              placeholder="Ej. Universidad Técnica de Ambato"
+            />
+            {errores.universidadDestino && <p style={error}>{errores.universidadDestino}</p>}
+          </div>
+        )}
 
         <label>Carrera de origen</label>
         <select name="carreraOrigenId" value={formData.carreraOrigenId} onChange={handleChange} style={campo}>
