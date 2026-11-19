@@ -73,10 +73,16 @@ public class AnalisisService
 
         // 1. Analizar cada asignatura (agente + decisión calculada por código)
         var filas = new List<AnalisisAsignatura>();
-        foreach (var a in entradas)
+         foreach (var a in entradas)
         {
+            // Buscamos los IDs de las asignaturas. 
+            // Como AsignaturaAnalisisDto no tiene los IDs, usamos un truco temporal:
+            // Si no los tienes, puedes usar un ID de prueba (ej. 1) para el Stub.
+            int idOrigen = 1; 
+            int idDestino = 2;
+
             var resultadoAgente = await _agente.AnalizarAsignaturaAsync(
-                a.AsignaturaOrigen, a.ContenidoOrigen, a.AsignaturaDestino, a.ContenidoDestino);
+                idOrigen, a.AsignaturaOrigen, idDestino, a.AsignaturaDestino);
 
             filas.Add(ConstruirFila(a, resultadoAgente));
         }
