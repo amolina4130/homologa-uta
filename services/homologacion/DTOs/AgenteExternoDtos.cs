@@ -18,6 +18,10 @@ public class AgenteExternoRequest
 
     public string CarreraDestino { get; set; } = string.Empty;
 
+    public string UniversidadOrigen { get; set; } = string.Empty;
+    public string UniversidadDestino { get; set; } = string.Empty;
+    // -------------------------------
+
     public DocumentosAgenteExternoDto Documentos { get; set; } = new();
 }
 
