@@ -49,6 +49,13 @@
         "Order": -1,
         "Match": { "Path": "/homologacion/coordinador/{**catch-all}" }
       },
+
+      "homologacion-informe": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/homologacion/{id}/informe", "Methods": [ "GET" ] }
+      },
+
       "homologacion": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",

@@ -11,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Controladores y Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<IInformeService, InformeServiceSimulado>();
 
 builder.Services.AddSwaggerGen(c =>
 {
