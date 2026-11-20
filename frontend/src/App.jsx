@@ -16,6 +16,7 @@ import PanelCoordinador from "./pages/PanelCoordinador";
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
 import Equivalencias from './pages/Equivalencias';
 import Registro from './pages/Registro'; 
+import EstadoMemoria from './pages/EstadoMemoria';
  
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
           <Route element={<RutaProtegida rolPermitido="ADMINISTRADOR" />}>
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
             <Route path="/equivalencias" element={<><Menu /><Equivalencias /></>} />
+            <Route path="/memoria" element={<><Menu /><EstadoMemoria /></>} />
           </Route>
 
           {/* Ruta para adjuntar documentos */}
