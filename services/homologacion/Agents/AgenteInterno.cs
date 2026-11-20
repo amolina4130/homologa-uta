@@ -25,6 +25,9 @@ public class ResultadoAgente
     
     public string Justificacion { get; set; } = string.Empty;
     public bool RequiereRevision { get; set; } = false;
+
+    [JsonPropertyName("materiasOrigen")]
+    public List<string> MateriasOrigen { get; set; } = new();
 }
 
 public class AgenteInterno
@@ -83,8 +86,12 @@ public class AgenteInterno
                            "Debes comparar asignaturas y devolver ÚNICAMENTE un JSON válido con la estructura especificada.";
                            
         var userPrompt = $@"
-        Compara la siguiente asignatura de origen con la de destino y devuelve un JSON con esta estructura exacta:
+        Compara la siguiente asignatura de origen con la de destino.
+        Si una sola materia de origen no cubre la de destino, pero la combinación de DOS materias sí, 
+        devuelve las dos materias en ""materiasOrigen"" y calcula los porcentajes sobre el conjunto.
+        Devuelve un JSON con esta estructura exacta:
         {{
+        ""materiasOrigen"": [""Nombre de materia 1"", ""Nombre de materia 2""],
         ""contenido"": (número del 0 al 100),
         ""profundidad"": (número del 0 al 100),
         ""horas"": (número del 0 al 100),
@@ -117,6 +124,9 @@ public class AgenteInterno
 
                 var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var resultado = JsonSerializer.Deserialize<ResultadoAgente>(jsonLimpio, opciones);
+
+                if (resultado.MateriasOrigen.Count > 2)
+                    throw new JsonException("El agente propuso más de dos materias de origen.");
 
                 if (resultado == null)
                     throw new JsonException("El JSON devuelto está vacío.");
