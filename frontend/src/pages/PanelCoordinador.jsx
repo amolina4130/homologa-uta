@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { obtenerSolicitudesPendientes, obtenerDetalleSolicitud, emitirInforme } from "../services/coordinadorService";
 import ListaSolicitudes from "../components/ListaSolicitudes";
 import DetalleSolicitud from "../components/DetalleSolicitud";
+import FormularioResolucion from "../components/FormularioResolucion";
 
 export default function PanelCoordinador() {
   const { rol } = useAuth();
@@ -45,30 +46,38 @@ export default function PanelCoordinador() {
     }
   };
 
-  // El componente hijo arma el informe con la decisión y la observación de cada asignatura.
   const guardarInforme = async (informeArmado) => {
     if (!solicitudSeleccionada) return;
-
     const confirmar = window.confirm("¿Está seguro de emitir el informe técnico?");
     if (!confirmar) return;
 
-    setCargando(true);
-    setError("");
-    setExito("");
-
+    setCargando(true); setError(""); setExito("");
     try {
       const resultado = await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
-      setExito(
-        resultado?.estadoSolicitudActualizado === false
-          ? "Informe técnico guardado. No se pudo actualizar el estado de la solicitud en el servicio de Solicitudes."
-          : "Informe técnico emitido correctamente."
-      );
+      setExito(resultado?.estadoSolicitudActualizado === false ? "Informe técnico guardado." : "Informe técnico emitido correctamente.");
       setSolicitudSeleccionada(null);
       await cargarPendientes();
     } catch (e) {
       setError(e.message || "Error al emitir el informe.");
     } finally {
       setCargando(false);
+    }
+  };
+
+  const registrarResolucion = async (datosResolucion) => {
+    try {
+      
+      console.log("Datos a enviar al backend:", datosResolucion);
+      
+      if (solicitudSeleccionada.estado !== "INFORME_EMITIDO") {
+        throw new Error("No se puede registrar la resolución: no existe informe técnico previo (Error 409).");
+      }
+
+      setExito("Resolución registrada exitosamente.");
+      setSolicitudSeleccionada(null); 
+      await cargarPendientes();
+    } catch (err) {
+      throw err; 
     }
   };
 
@@ -99,16 +108,27 @@ export default function PanelCoordinador() {
           onAbrir={abrirDetalle}
         />
       ) : (
-        <DetalleSolicitud
-          key={solicitudSeleccionada.solicitudId}
-          solicitud={solicitudSeleccionada}
-          onVolver={() => {
-            setSolicitudSeleccionada(null);
-            setError("");
-          }}
-          onGuardar={guardarInforme}
-          cargando={cargando}
-        />
+        
+        <>
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => {
+              setSolicitudSeleccionada(null);
+              setError("");
+            }}
+            onGuardar={guardarInforme}
+            cargando={cargando}
+          />
+
+          {solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
+            <FormularioResolucion
+              solicitud={solicitudSeleccionada}
+              onGuardar={registrarResolucion}
+              cargando={cargando}
+            />
+          )}
+        </>
       )}
     </div>
   );
