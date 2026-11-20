@@ -12,6 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<AgenteExtractorRecord>();
+builder.Services.AddScoped<ExtractorRecordService>();
 
 builder.Services.AddSwaggerGen(c =>
 {

@@ -46,4 +46,24 @@ public class HomologacionController : ControllerBase
 
         return Ok(_servicio.Validar(id, request));
     }
+        /// <summary>Extrae las materias aprobadas del récord académico</summary>
+    [HttpPost("{id:int}/record/extraer")]
+    public async Task<IActionResult> ExtraerRecord(int id, [FromServices] ExtractorRecordService extractor)
+    {
+        try
+        {
+            var (materias, requiereRevision, motivo) = await extractor.ExtraerAsync(id);
+            
+            return Ok(new 
+            { 
+                materias, 
+                requiereRevision, 
+                motivo 
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = $"Error interno: {ex.Message}" });
+        }
+    }
 }
