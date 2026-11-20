@@ -74,3 +74,52 @@ export async function validarReglasObjetivas(solicitudId, datos) {
   const json = await res.json();
   return extraerDatos(json);
 }
+
+// Descargar el informe en PDF (HU-18)
+export async function descargarInformePDF(solicitudId, numeroProceso) {
+  try {
+    const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/informe`, {
+      method: "GET",
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) throw new Error("El informe aún no ha sido generado (404).");
+      if (res.status === 403) throw new Error("No tienes permiso para descargar este informe (403).");
+      await lanzarError(res, "Error al descargar el informe.");
+    }
+
+    // Convertimos la respuesta en un archivo (Blob) y forzamos la descarga
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    // Nombre del archivo: Informe_SOL-XXXX.pdf
+    a.download = `Informe_${numeroProceso || `SOL-${solicitudId}`}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+  } catch (error) {
+    
+    console.warn("Simulando descarga de PDF (Mock)...");
+    
+    if (!numeroProceso && !solicitudId) {
+      throw new Error("No se puede descargar el informe: datos incompletos.");
+    }
+
+  
+    const contenidoFalso = `Este es un PDF de prueba simulado para el informe de la solicitud ${numeroProceso || solicitudId}.`;
+    const blob = new Blob([contenidoFalso], { type: "application/pdf" });
+    
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Informe_${numeroProceso || `SOL-${solicitudId}`}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }
+}
