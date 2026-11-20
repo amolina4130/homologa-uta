@@ -10,7 +10,9 @@ Proyecto de la Carrera de Software, FISEI, Universidad Técnica de Ambato (ciclo
 
 Docente: Ing. Hernan Naranjo, Mg
 
-## Sprint 1 (14 al 21 de octubre de 2026)
+## Sprints
+
+### Sprint 1 (14 al 21 de octubre de 2026)
 | Historia | Mockup |
 |---|---|
 | HU-01 Levantar el sistema con un solo comando | M-01 Estado del sistema |
@@ -20,14 +22,25 @@ Docente: Ing. Hernan Naranjo, Mg
 
 Los mockups están en [`docs/mockups`](docs/mockups).
 
+### Sprint 3
+| Historia | Descripción |
+|---|---|
+| HU-19 Memoria del agente | Carga, actualización y consulta de la memoria del agente en el servicio de Catálogo |
+| HU-23 Documentación | Actualización del README y creación del manual de despliegue |
+
+> **Nota:** Las capturas de pantalla (evidencias de ejecución) se integran en el **documento final del proyecto**, no en este repositorio.
+
 ## Estructura
-```
-gateway/                  API Gateway (YARP)
-services/autenticacion/   Servicio de Autenticación
-services/solicitudes/     Servicio de Solicitudes y catálogo
-services/documentos/      Servicio de Documentos
-frontend/                 React
-docs/                     Planificación y mockups
+```text
+gateway/                     API Gateway (YARP)
+services/autenticacion/      Servicio de Autenticación
+services/solicitudes/        Servicio de Solicitudes y catálogo
+services/catalogo/           Servicio de Catálogo y memoria del agente
+services/documentos/         Servicio de Documentos
+services/reglas/             Servicio de Reglas normativas
+services/homologacion/       Servicio de Homologación (agentes e informes)
+frontend/                    React
+docs/                        Planificación, mockups y manuales
 ```
 
 ## Cómo levantar el sistema
@@ -39,19 +52,19 @@ docs/                     Planificación y mockups
 
 ### Pasos
 1. Clonar el repositorio:
-```
+   ```bash
    git clone https://github.com/amolina4130/homologa-uta.git
    cd homologa-uta
    git checkout develop
-```
+   ```
 2. Crear el archivo de variables de entorno y cambiar los valores:
-```
+   ```bash
    cp .env.example .env
-```
+   ```
 3. Levantar todo con un solo comando:
-```
-   docker compose up --build
-```
+   ```bash
+   docker compose up -d --build
+   ```
 4. Abrir la pantalla Estado del sistema: http://localhost:3000/estado
 
 ### Puertos
@@ -62,6 +75,9 @@ docs/                     Planificación y mockups
 | Servicio de Autenticación | 5001 |
 | Servicio de Solicitudes | 5002 |
 | Servicio de Documentos | 5003 |
+| Servicio de Reglas | 5004 |
+| Servicio de Homologación | 5005 |
+| Servicio de Catálogo | 5006 |
 | SQL Server | 1433 |
 
 Cada servicio expone Swagger en `/swagger` y su estado en `/health`.
@@ -69,11 +85,18 @@ Cada servicio expone Swagger en `/swagger` y su estado en `/health`.
 ### Usuarios de prueba
 Se precargan con la HU-03: un usuario por rol (por ejemplo `estudiante@uta.edu.ec` y `coordinador@uta.edu.ec`). La contraseña de demostración la define el equipo en el archivo `.env`.
 
+## Memoria del agente (HU-19)
+La memoria del agente se guarda en el servicio de Catálogo.
+- **Carga inicial:** se hace con `POST /memoria/carga` (solo Administrador).
+- **Actualización:** se repite la llamada y el sistema detecta si hubo cambios mediante una huella (hash).
+- **Consulta:** el servicio de Homologación consulta la memoria mediante `GET /memoria/estado`.
+
 ## Flujo de ramas
 `main` (versiones estables) ← `develop` (integración) ← `feature/HU-xx-nombre` (una por tarea o historia).
 Ver [GUIA_GIT.md](GUIA_GIT.md).
 
 ## Documentos del equipo
 - [Convenciones de nombres](docs/CONVENCIONES.md)
-- [Contrato de API del Sprint 1](docs/API_CONTRATO.md)
+- [Contrato de API](docs/API_CONTRATO.md)
+- [Manual de despliegue](docs/manual-despliegue.md)
 - Variables de entorno: copiar `.env.example` a `.env`.
