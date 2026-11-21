@@ -1,7 +1,8 @@
 using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Services;
 using Microsoft.AspNetCore.Mvc;
-
+using HomologaUTA.Homologacion.Models;
+using Microsoft.EntityFrameworkCore;
 namespace HomologaUTA.Homologacion.Controllers;
 
 [ApiController]

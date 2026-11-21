@@ -26,11 +26,15 @@ export const TablaSolicitudes = ({ solicitudes }) => {
         <tbody>
           {solicitudes.map((sol) => (
             <tr key={sol.id}>
+feature/TA-16.2-filtros-y-editar
               
               {/* 1. Mostramos el numeroProceso. Si el backend no lo envía, lo simulamos con el ID */}
               <td className="text-center fw-bold text-primary">
                 {sol.numeroProceso || `SOL-${sol.id.toString().padStart(4, '0')}`}
               </td>
+              
+
+              <td className="text-center fw-bold">{sol.numero || sol.id}</td>
               
               <td>
                 {sol.fechaRegistro 
@@ -41,6 +45,15 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               </td>
               
               <td>{sol.tipo || 'Homologación'}</td>
+
+              <td>
+                {sol.tipo || '-'}
+                {/* NUEVO: Si la solicitud tiene materias combinadas, mostramos una etiqueta */}
+                {sol.tieneCombinadas && (
+                  <span className="badge bg-info text-dark ms-1">Combinada</span>
+                )}
+              </td>
+ 
               
               <td>{sol.origen || sol.carreraOrigen || '-'}</td>
               <td>{sol.destino || sol.carreraDestino || '-'}</td>
@@ -60,6 +73,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               </td>
 
               {/* 2. Columna de Acciones con Lógica Condicional */}
+
               <td className="text-center">
                 <div className="d-flex justify-content-center gap-2">
                   <Link 
