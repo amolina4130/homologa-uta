@@ -63,10 +63,6 @@ builder.Services.AddScoped<AnalisisExternoService>();
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
 
-// Informe PDF de homologación (TA-18.1)
-builder.Services.AddScoped<IInformeService, InformeHomologacion>();
-
-
 var app = builder.Build();
 
 // 8. Configuración de la app
