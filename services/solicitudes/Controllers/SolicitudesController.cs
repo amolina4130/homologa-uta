@@ -15,6 +15,12 @@ public class SolicitudesController : ControllerBase
 {
     private readonly SolicitudesDbContext _db;
 
+    private const int MaxUniversidad = 150;
+
+    // El contrato pide { mensaje }; se deja también "error" porque el frontend actual lo lee.
+    private BadRequestObjectResult ErrorUniversidad(string texto) =>
+        BadRequest(new { mensaje = texto, error = texto });
+
     public SolicitudesController(SolicitudesDbContext db)
     {
         _db = db;
@@ -36,14 +42,20 @@ public class SolicitudesController : ControllerBase
             ? "EXTERNO"
             : "INTERNO";
 
-        if (modulo == "EXTERNO" &&
-            (string.IsNullOrWhiteSpace(request.UniversidadOrigen) ||
-             string.IsNullOrWhiteSpace(request.UniversidadDestino)))
+        // Universidades: solo aplican al módulo externo; en el interno quedan vacías.
+        string? universidadOrigen = null;
+        string? universidadDestino = null;
+
+        if (modulo == "EXTERNO")
         {
-            return BadRequest(new
-            {
-                error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
-            });
+            universidadOrigen = request.UniversidadOrigen?.Trim();
+            universidadDestino = request.UniversidadDestino?.Trim();
+
+            if (string.IsNullOrEmpty(universidadOrigen) || string.IsNullOrEmpty(universidadDestino))
+                return ErrorUniversidad("Para el agente externo debe indicar la universidad de origen y la universidad de destino.");
+
+            if (universidadOrigen.Length > MaxUniversidad || universidadDestino.Length > MaxUniversidad)
+                return ErrorUniversidad($"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres.");
         }
 
         var correo = User.FindFirstValue(ClaimTypes.Email) 
@@ -57,8 +69,8 @@ public class SolicitudesController : ControllerBase
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
             Modulo = modulo,
-            UniversidadOrigen = request.UniversidadOrigen?.Trim(),
-            UniversidadDestino = request.UniversidadDestino?.Trim(),
+            UniversidadOrigen = universidadOrigen,
+            UniversidadDestino = universidadDestino,
             // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
             // cuando el agente termina el análisis (así el Coordinador nunca ve una
             // solicitud sin propuesta).
@@ -83,7 +95,7 @@ public class SolicitudesController : ControllerBase
 
         await _db.SaveChangesAsync();
         
-        return Created($"/solicitudes/{solicitud.Id}", new { id = solicitud.Id, mensaje = "Solicitud registrada exitosamente." });
+        return Created($"/solicitudes/{solicitud.Id}", new { id = solicitud.Id, mensaje = "Solicitud registrada exitosamente.", modulo = solicitud.Modulo, universidadOrigen = solicitud.UniversidadOrigen, universidadDestino = solicitud.UniversidadDestino });
     }
 
     [HttpGet("mias")]
