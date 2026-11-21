@@ -285,7 +285,7 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
 
-        if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
         {
             modulo = "EXTERNO";
 
@@ -295,6 +295,16 @@ public class SolicitudesController : ControllerBase
                 return BadRequest(new
                 {
                     error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
+                });
+            }
+
+            // --- NUEVA VALIDACIÓN DE LONGITUD (150 caracteres) ---
+            if (request.UniversidadOrigen.Trim().Length > MaxUniversidad || 
+                request.UniversidadDestino.Trim().Length > MaxUniversidad)
+            {
+                return BadRequest(new
+                {
+                    error = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres."
                 });
             }
         }
