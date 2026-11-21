@@ -167,67 +167,90 @@ export default function DetalleSolicitud({ solicitud, onVolver, onGuardar, carga
                 </tr>
               </thead>
               <tbody>
-                {asignaturas.map((asig) => (
-                  <tr key={asig.id}>
-                    <td>
-                      <div className="fw-bold">{asig.asignaturaOrigen}</div>
-                      <div className="text-muted small">→ {asig.asignaturaDestino}</div>
-                    </td>
-                    <td>
-                      <span className={`badge ${claseDecision(asig.propuesta?.decision)}`}>
-                        {textoDecision(asig.propuesta?.decision)}
-                      </span>
-                      <div className="small text-muted mt-1">
-                        Contenido {asig.propuesta?.porcentajeContenido ?? 0} % · Profundidad{" "}
-                        {asig.propuesta?.porcentajeProfundidad ?? 0} % · Horas{" "}
-                        {asig.propuesta?.porcentajeHoras ?? 0} %
-                      </div>
-                      {asig.propuesta?.justificacion && (
-                        <div className="small mt-1" title={asig.propuesta.justificacion}>
-                          {asig.propuesta.justificacion}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ minWidth: "170px" }}>
-                      {soloLectura ? (
-                        <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
-                          {textoDecision(asig.decisionCoordinador)}
+                {asignaturas.map((asig) => {
+                  
+                  const esCombinada = asig.combinada;
+                  const materiasOrigen = asig.materiasOrigen || [];
+
+                  return (
+                    <tr key={asig.id}>
+                      <td>
+                        {/* Si es combinada, mostramos la etiqueta y las dos materias de origen */}
+                        {esCombinada ? (
+                          <div>
+                            <span className="badge bg-info text-dark mb-1">Combinada</span>
+                            <ul className="mb-0 ps-3">
+                              {materiasOrigen.map((m, i) => (
+                                <li key={i}>
+                                  <small>{m.nombre} <span className="text-muted">(Nota: {m.nota})</span></small>
+                                </li>
+                              ))}
+                            </ul>
+                            <div className="text-muted small mt-1">→ {asig.asignaturaDestino}</div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="fw-bold">{asig.asignaturaOrigen}</div>
+                            <div className="text-muted small">→ {asig.asignaturaDestino}</div>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${claseDecision(asig.propuesta?.decision)}`}>
+                          {textoDecision(asig.propuesta?.decision)}
                         </span>
-                      ) : (
-                        <select
-                          className="form-select form-select-sm"
-                          value={decisiones[asig.id] || ""}
-                          onChange={(e) => handleDecisionChange(asig.id, e.target.value)}
-                          disabled={cargando}
-                        >
-                          <option value="">Seleccione...</option>
-                          <option value="HOMOLOGABLE">HOMOLOGABLE</option>
-                          <option value="NO_HOMOLOGABLE">NO HOMOLOGABLE</option>
-                        </select>
-                      )}
-                    </td>
-                    <td style={{ minWidth: "220px" }}>
-                      {soloLectura ? (
-                        <span>{asig.observacionCoordinador || "-"}</span>
-                      ) : (
-                        <input
-                          type="text"
-                          className="form-control form-control-sm"
-                          placeholder="Escriba la observación..."
-                          value={observaciones[asig.id] || ""}
-                          onChange={(e) => handleObservacionChange(asig.id, e.target.value)}
-                          disabled={cargando}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        <div className="small text-muted mt-1">
+                          Contenido {asig.propuesta?.porcentajeContenido ?? 0} % · Profundidad{" "}
+                          {asig.propuesta?.porcentajeProfundidad ?? 0} % · Horas{" "}
+                          {asig.propuesta?.porcentajeHoras ?? 0} %
+                        </div>
+                        {asig.propuesta?.justificacion && (
+                          <div className="small mt-1" title={asig.propuesta.justificacion}>
+                            {asig.propuesta.justificacion}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ minWidth: "170px" }}>
+                        {soloLectura ? (
+                          <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
+                            {textoDecision(asig.decisionCoordinador)}
+                          </span>
+                        ) : (
+                          <select
+                            className="form-select form-select-sm"
+                            value={decisiones[asig.id] || ""}
+                            onChange={(e) => handleDecisionChange(asig.id, e.target.value)}
+                            disabled={cargando}
+                          >
+                            <option value="">Seleccione...</option>
+                            <option value="HOMOLOGABLE">HOMOLOGABLE</option>
+                            <option value="NO_HOMOLOGABLE">NO HOMOLOGABLE</option>
+                          </select>
+                        )}
+                      </td>
+                      <td style={{ minWidth: "220px" }}>
+                        {soloLectura ? (
+                          <span>{asig.observacionCoordinador || "-"}</span>
+                        ) : (
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="Escriba la observación..."
+                            value={observaciones[asig.id] || ""}
+                            onChange={(e) => handleObservacionChange(asig.id, e.target.value)}
+                            disabled={cargando}
+                          />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        <p className="text-muted small mb-0">* Todos los campos son obligatorios para emitir el informe.</p>
+        <p className="text-muted small mb-0"></p>
 
         {!soloLectura && (
           <div className="text-end mt-3">

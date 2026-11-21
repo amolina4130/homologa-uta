@@ -1,8 +1,9 @@
-﻿using HomologaUTA.Homologacion.Agents;
+using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
 using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
+using HomologaUTA.Homologacion.Reportes;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +15,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddScoped<AgenteExtractorRecord>();
 builder.Services.AddScoped<ExtractorRecordService>();
+builder.Services.AddScoped<HomologaUTA.Homologacion.Services.IInformeService, HomologaUTA.Homologacion.Services.InformeServiceSimulado>();
+
+builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -60,7 +64,6 @@ builder.Services.AddScoped<AnalisisExternoService>();
 // Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
-
 
 var app = builder.Build();
 
