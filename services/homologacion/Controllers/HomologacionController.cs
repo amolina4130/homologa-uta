@@ -47,4 +47,36 @@ public class HomologacionController : ControllerBase
 
         return Ok(_servicio.Validar(id, request));
     }
+
+        /// <summary>Preselecciona las candidatas de la carrera destino por área y nivel</summary>
+    /// <response code="200">Pares materia origen → candidatas, y materias sin candidata</response>
+    /// <response code="409">Sin materias aprobadas o memoria no cargada</response>
+    [HttpPost("{solicitudId:int}/preseleccion")]
+    public async Task<IActionResult> Preseleccionar(
+        int solicitudId,
+        [FromServices] IPreseleccionService preseleccion,
+        CancellationToken ct)
+    {
+        var solicitud = await _db.Solicitudes.FindAsync(new object[] { solicitudId }, ct); // AJUSTAR DbSet
+        if (solicitud is null) return NotFound();
+
+        var materias = await _db.MateriasAprobadas
+            .Where(m => m.SolicitudId == solicitudId)
+            .Select(m => new MateriaAprobadaDto(m.Id, m.Nombre, m.Nota, m.EstadoSegunDocumento, m.Periodo))
+            .ToListAsync(ct);
+
+        try
+        {
+            var resultado = await preseleccion.PreseleccionarAsync(
+                materias,
+                solicitud.CarreraDestinoId,   // AJUSTAR: carrera destino de la solicitud
+                solicitud.NivelAprobado,      // AJUSTAR: nivel aprobado del estudiante
+                ct);
+            return Ok(resultado);
+        }
+        catch (PreseleccionException ex)
+        {
+            return Conflict(new { mensaje = ex.Message });
+        }
+    }
 }
