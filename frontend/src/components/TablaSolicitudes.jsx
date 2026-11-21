@@ -26,10 +26,8 @@ export const TablaSolicitudes = ({ solicitudes }) => {
         <tbody>
           {solicitudes.map((sol) => (
             <tr key={sol.id}>
-              {/* Mostramos el Numero (SOL-0001) o el ID */}
               <td className="text-center fw-bold">{sol.numero || sol.id}</td>
               
-              {/* Formateo de fecha seguro */}
               <td>
                 {sol.fechaRegistro 
                   ? new Date(sol.fechaRegistro).toLocaleDateString() 
@@ -38,9 +36,14 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                   : '-'}
               </td>
               
-              <td>{sol.tipo || '-'}</td>
+              <td>
+                {sol.tipo || '-'}
+                {/* NUEVO: Si la solicitud tiene materias combinadas, mostramos una etiqueta */}
+                {sol.tieneCombinadas && (
+                  <span className="badge bg-info text-dark ms-1">Combinada</span>
+                )}
+              </td>
               
-              {/* Buscamos sol.origen y sol.destino */}
               <td>{sol.origen || sol.carreraOrigen || '-'}</td>
               <td>{sol.destino || sol.carreraDestino || '-'}</td>
               
@@ -58,7 +61,6 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                 </span>
               </td>
 
-              {/* NUEVA COLUMNA DE ACCIONES */}
               <td className="text-center">
                 <Link 
                   to={`/resultado/${sol.id}`} 
