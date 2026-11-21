@@ -6,11 +6,14 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
   const [observacion, setObservacion] = useState("");
   
   // Inicializamos las decisiones con los datos de la solicitud
+
   const [decisiones, setDecisiones] = useState(
     solicitud.asignaturas?.map((a) => ({
       asignaturaId: a.asignaturaId,
       nombre: a.nombre,
+
       decisionFinal: a.decisionFinal || "HOMOLOGABLE",
+
     })) || []
   );
   const [error, setError] = useState("");
@@ -25,6 +28,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(""); setExito("");
+
 
     if (!numeroResolucion || !fecha) {
       setError("Debe ingresar el número de resolución y la fecha.");
@@ -42,6 +46,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
       await onGuardar(payload);
       setExito("Resolución registrada correctamente.");
     } catch (err) {
+
       setError(err.message || "Error al registrar la resolución.");
     }
   };
@@ -88,6 +93,23 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
                 </tr>
               </thead>
               <tbody>
+
+                {decisiones.map((d) => (
+                  <tr key={d.asignaturaId}>
+                    <td>{d.nombre}</td>
+                    <td>
+                      <select
+                        className="form-select form-select-sm"
+                        value={d.decisionFinal}
+                        onChange={(e) => handleDecisionChange(d.asignaturaId, e.target.value)}
+                      >
+                        <option value="HOMOLOGABLE">Homologable</option>
+                        <option value="NO_HOMOLOGABLE">No Homologable</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+
                 {decisiones.map((d) => {
                   // LÓGICA DE COMBINACIÓN
                   const infoAsignatura = solicitud.asignaturas?.find(a => a.asignaturaId === d.asignaturaId);
@@ -123,6 +145,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
                     </tr>
                   );
                 })}
+
               </tbody>
             </table>
           </div>
