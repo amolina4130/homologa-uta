@@ -17,7 +17,7 @@ namespace HomologaUTA.Solicitudes.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.33")
+                .HasAnnotation("ProductVersion", "8.0.34")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -85,6 +85,10 @@ namespace HomologaUTA.Solicitudes.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Detalle")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("EstadoAnterior")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -146,6 +150,11 @@ namespace HomologaUTA.Solicitudes.Migrations
                         .HasColumnType("nvarchar(20)")
                         .HasDefaultValue("INTERNO");
 
+                    b.Property<string>("NumeroProceso")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<string>("Tipo")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -164,6 +173,9 @@ namespace HomologaUTA.Solicitudes.Migrations
                     b.HasIndex("CarreraDestinoId");
 
                     b.HasIndex("CarreraOrigenId");
+
+                    b.HasIndex("NumeroProceso")
+                        .IsUnique();
 
                     b.ToTable("Solicitudes");
                 });
