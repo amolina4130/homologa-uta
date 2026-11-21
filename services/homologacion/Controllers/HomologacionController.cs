@@ -52,7 +52,26 @@ public class HomologacionController : ControllerBase
 
         return Ok(_servicio.Validar(id, request));
     }
-
+        /// <summary>Extrae las materias aprobadas del récord académico</summary>
+    [HttpPost("{id:int}/record/extraer")]
+    public async Task<IActionResult> ExtraerRecord(int id, [FromServices] ExtractorRecordService extractor)
+    {
+        try
+        {
+            var (materias, requiereRevision, motivo) = await extractor.ExtraerAsync(id);
+            
+            return Ok(new 
+            { 
+                materias, 
+                requiereRevision, 
+                motivo 
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = $"Error interno: {ex.Message}" });
+        }
+     }
     /// <summary>Descarga el informe en PDF de una solicitud</summary>
     /// <remarks>
     /// El estudiante solo puede descargar sus propias solicitudes. El Coordinador puede descargar cualquiera.
@@ -87,5 +106,6 @@ public class HomologacionController : ControllerBase
 
         // 4. Devolver el archivo
         return File(pdfBytes, "application/pdf", $"Informe_SOL-{id:D4}.pdf");
+
     }
 }
