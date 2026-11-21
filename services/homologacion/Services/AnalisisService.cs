@@ -84,10 +84,16 @@ public class AnalisisService
 
         // 1. Analizar cada asignatura (agente + decisión calculada por código)
         var filas = new List<AnalisisAsignatura>();
-        foreach (var a in entradas)
+         foreach (var a in entradas)
         {
+            // Buscamos los IDs de las asignaturas. 
+            // Como AsignaturaAnalisisDto no tiene los IDs, usamos un truco temporal:
+            // Si no los tienes, puedes usar un ID de prueba (ej. 1) para el Stub.
+            int idOrigen = 1; 
+            int idDestino = 2;
+
             var resultadoAgente = await _agente.AnalizarAsignaturaAsync(
-                a.AsignaturaOrigen, a.ContenidoOrigen, a.AsignaturaDestino, a.ContenidoDestino);
+                idOrigen, a.AsignaturaOrigen, idDestino, a.AsignaturaDestino);
 
             filas.Add(ConstruirFila(a, resultadoAgente));
         }
@@ -269,6 +275,42 @@ public class AnalisisService
 
     private static string Recortar(string texto, int max) =>
         texto.Length <= max ? texto : texto[..max];
+
+    // --- NUEVO MÉTODO PARA LA RESOLUCIÓN DEL CONSEJO ---
+    /// <summary>
+    /// Marca el análisis como RESUELTA y guarda la decisión final del Coordinador 
+    /// para cada asignatura, basándose en la resolución del Consejo.
+    /// </summary>
+    public async Task RegistrarResolucionAsync(int solicitudId, List<DecisionResolucionDto> decisiones, CancellationToken ct = default)
+    {
+        var analisis = await _db.AnalisisSolicitudes
+            .Include(a => a.Asignaturas)
+            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
+
+        if (analisis is null)
+            throw new AnalisisSolicitudException(404, "La solicitud no tiene un análisis generado.");
+
+        // Actualizamos la decisión final de cada asignatura
+        foreach (var decision in decisiones)
+        {
+            var asignatura = analisis.Asignaturas.FirstOrDefault(a => a.Id == decision.AsignaturaId);
+            if (asignatura is not null)
+            {
+                asignatura.DecisionCoordinador = decision.DecisionFinal;
+            }
+        }
+
+        // El análisis pasa a RESUELTA
+        analisis.Estado = EstadoAnalisis.RESUELTA;
+        await _db.SaveChangesAsync(ct);
+    }
+}
+
+// --- CLASE DTO PARA LAS DECISIONES DEL CONSEJO ---
+public class DecisionResolucionDto
+{
+    public int AsignaturaId { get; set; }
+    public string DecisionFinal { get; set; } = string.Empty;
 }
 
 /// <summary>Estados del servicio de Solicitudes que usa Homologación.</summary>

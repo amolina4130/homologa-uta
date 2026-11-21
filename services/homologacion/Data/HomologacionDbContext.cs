@@ -9,6 +9,8 @@ public class HomologacionDbContext : DbContext
 
     public DbSet<AnalisisSolicitud> AnalisisSolicitudes => Set<AnalisisSolicitud>();
     public DbSet<AnalisisAsignatura> AnalisisAsignaturas => Set<AnalisisAsignatura>();
+    public DbSet<ResolucionConsejo> ResolucionesConsejo { get; set; }
+    public DbSet<DecisionAsignaturaResolucion> DecisionesResolucion { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -37,6 +39,27 @@ public class HomologacionDbContext : DbContext
              .WithMany(s => s.Asignaturas)
              .HasForeignKey(a => a.AnalisisSolicitudId)
              .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // --- CONFIGURACIÓN NUEVA PARA LA RESOLUCIÓN ---
+        modelBuilder.Entity<ResolucionConsejo>(e =>
+        {
+            e.Property(r => r.NumeroResolucion).IsRequired().HasMaxLength(100);
+            e.Property(r => r.UsuarioRegistro).IsRequired().HasMaxLength(200);
+            
+            // Una resolución por solicitud
+            e.HasIndex(r => r.SolicitudId).IsUnique();
+
+            // Relación con las decisiones
+            e.HasMany(r => r.Decisiones)
+             .WithOne()
+             .HasForeignKey(d => d.ResolucionConsejoId)
+             .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DecisionAsignaturaResolucion>(e =>
+        {
+            e.Property(d => d.DecisionFinal).IsRequired().HasMaxLength(50);
         });
     }
 }

@@ -29,6 +29,12 @@ namespace HomologaUTA.Solicitudes.Data
 
                 if (carreras != null && carreras.Any())
                 {
+                    // Le decimos a SQL Server que genere los IDs automáticamente
+                    foreach (var carrera in carreras)
+                    {
+                        carrera.Id = 0; 
+                    }
+
                     await context.Carreras.AddRangeAsync(carreras);
                     await context.SaveChangesAsync(); // Guardamos primero para generar los IDs
                 }
@@ -40,15 +46,14 @@ namespace HomologaUTA.Solicitudes.Data
             {
                 var asignaturasJson = await File.ReadAllTextAsync(asignaturasPath);
                 
-                // Ignoramos la propiedad "Carrera" para que no intente crear una carrera nueva al insertar la asignatura
                 var asignaturas = JsonSerializer.Deserialize<List<Asignatura>>(asignaturasJson, jsonOptions);
 
                 if (asignaturas != null && asignaturas.Any())
                 {
-                    // Nos aseguramos de que la relación con Carrera sea nula para no causar conflictos
                     foreach (var asignatura in asignaturas)
                     {
                         asignatura.Carrera = null!; 
+                        asignatura.Id = 0; // <--- LÍNEA NUEVA PARA EVITAR EL ERROR DE IDENTITY
                     }
 
                     await context.Asignaturas.AddRangeAsync(asignaturas);
