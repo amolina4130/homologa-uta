@@ -48,8 +48,8 @@ public class SolicitudesController : ControllerBase
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
             Modulo = modulo,
-            UniversidadOrigen = universidadOrigen,
-            UniversidadDestino = universidadDestino,
+            UniversidadOrigen = request.UniversidadOrigen?.Trim(),
+            UniversidadDestino = request.UniversidadDestino?.Trim(),
             // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
             // cuando el agente termina el análisis (así el Coordinador nunca ve una
             // solicitud sin propuesta).
@@ -82,7 +82,10 @@ public class SolicitudesController : ControllerBase
         {
             id = solicitud.Id,
             numeroProceso = solicitud.NumeroProceso,
-            mensaje = "Solicitud registrada exitosamente."
+            mensaje = "Solicitud registrada exitosamente.",
+            modulo = solicitud.Modulo,
+            universidadOrigen = solicitud.UniversidadOrigen,
+            universidadDestino = solicitud.UniversidadDestino
         });
     }
 
