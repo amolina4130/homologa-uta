@@ -48,8 +48,8 @@ public class SolicitudesController : ControllerBase
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
             Modulo = modulo,
-            UniversidadOrigen = universidadOrigen,
-            UniversidadDestino = universidadDestino,
+            UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null,
+            UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null,
             // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
             // cuando el agente termina el análisis (así el Coordinador nunca ve una
             // solicitud sin propuesta).
@@ -82,7 +82,10 @@ public class SolicitudesController : ControllerBase
         {
             id = solicitud.Id,
             numeroProceso = solicitud.NumeroProceso,
-            mensaje = "Solicitud registrada exitosamente."
+            mensaje = "Solicitud registrada exitosamente.",
+            modulo = solicitud.Modulo,
+            universidadOrigen = solicitud.UniversidadOrigen,
+            universidadDestino = solicitud.UniversidadDestino
         });
     }
 
@@ -274,13 +277,13 @@ public class SolicitudesController : ControllerBase
         modulo = "INTERNO";
 
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
-            return BadRequest(new { error = "Faltan campos obligatorios." });
+            return BadRequest(new { mensaje = "Faltan campos obligatorios.", error = "Faltan campos obligatorios." });
 
         if (request.CarreraOrigenId == request.CarreraDestinoId)
-            return BadRequest(new { error = "La carrera de origen y destino no pueden ser iguales." });
+            return BadRequest(new { mensaje = "La carrera de origen y destino no pueden ser iguales.", error = "La carrera de origen y destino no pueden ser iguales." });
 
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
-            return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
+            return BadRequest(new { mensaje = "Debe seleccionar al menos una asignatura.", error = "Debe seleccionar al menos una asignatura." });
 
         if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
         {
@@ -291,14 +294,25 @@ public class SolicitudesController : ControllerBase
             {
                 return BadRequest(new
                 {
+                    mensaje = "Para el agente externo debe indicar la universidad de origen y la universidad de destino.",
                     error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
+                });
+            }
+
+            // Validación de longitud
+            if (request.UniversidadOrigen.Trim().Length > MaxUniversidad || 
+                request.UniversidadDestino.Trim().Length > MaxUniversidad)
+            {
+                return BadRequest(new
+                {
+                    mensaje = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres.",
+                    error = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres."
                 });
             }
         }
 
         return null;
     }
-
     private async Task<object> ArmarDetalleAsync(Solicitud s)
     {
         var nombres = await _db.Carreras

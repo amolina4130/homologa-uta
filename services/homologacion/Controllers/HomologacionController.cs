@@ -1,6 +1,9 @@
 using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+
+
 using HomologaUTA.Homologacion.Models;
 using Microsoft.EntityFrameworkCore;
 namespace HomologaUTA.Homologacion.Controllers;
@@ -11,10 +14,12 @@ namespace HomologaUTA.Homologacion.Controllers;
 public class HomologacionController : ControllerBase
 {
     private readonly ServicioValidacionSolicitud _servicio;
+    private readonly IInformeService _informeService; // <-- NUEVO SERVICIO
 
-    public HomologacionController(ServicioValidacionSolicitud servicio)
+    public HomologacionController(ServicioValidacionSolicitud servicio, IInformeService informeService)
     {
         _servicio = servicio;
+        _informeService = informeService;
     }
 
     /// <summary>Ejecuta las reglas objetivas sobre la solicitud y devuelve el resultado por asignatura</summary>

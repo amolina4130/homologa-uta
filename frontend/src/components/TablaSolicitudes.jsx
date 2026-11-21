@@ -14,7 +14,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
       <table className="table table-hover table-bordered shadow-sm align-middle">
         <thead className="table-primary">
           <tr>
-            <th className="text-center">N°</th>
+            <th className="text-center">N° Proceso</th>
             <th>Fecha</th>
             <th>Tipo</th>
             <th>Carrera Origen</th>
@@ -26,6 +26,14 @@ export const TablaSolicitudes = ({ solicitudes }) => {
         <tbody>
           {solicitudes.map((sol) => (
             <tr key={sol.id}>
+feature/TA-16.2-filtros-y-editar
+              
+              {/* 1. Mostramos el numeroProceso. Si el backend no lo envía, lo simulamos con el ID */}
+              <td className="text-center fw-bold text-primary">
+                {sol.numeroProceso || `SOL-${sol.id.toString().padStart(4, '0')}`}
+              </td>
+              
+
               <td className="text-center fw-bold">{sol.numero || sol.id}</td>
               
               <td>
@@ -36,6 +44,8 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                   : '-'}
               </td>
               
+              <td>{sol.tipo || 'Homologación'}</td>
+
               <td>
                 {sol.tipo || '-'}
                 {/* NUEVO: Si la solicitud tiene materias combinadas, mostramos una etiqueta */}
@@ -43,6 +53,7 @@ export const TablaSolicitudes = ({ solicitudes }) => {
                   <span className="badge bg-info text-dark ms-1">Combinada</span>
                 )}
               </td>
+ 
               
               <td>{sol.origen || sol.carreraOrigen || '-'}</td>
               <td>{sol.destino || sol.carreraDestino || '-'}</td>
@@ -50,24 +61,38 @@ export const TablaSolicitudes = ({ solicitudes }) => {
               <td className="text-center">
                 <span
                   className={`badge p-2 ${
-                    sol.estado === "INFORME_EMITIDO"
+                    sol.estado === "INFORME_EMITIDO" || sol.estado === "RESUELTA"
                       ? "bg-success"
                       : sol.estado === "PENDIENTE_REVISION"
                       ? "bg-warning text-dark"
-                      : "bg-secondary"
+                      : "bg-primary" // REGISTRADA en azul
                   }`}
                 >
                   {sol.estado || 'REGISTRADA'}
                 </span>
               </td>
 
+              {/* 2. Columna de Acciones con Lógica Condicional */}
+
               <td className="text-center">
-                <Link 
-                  to={`/resultado/${sol.id}`} 
-                  className="btn btn-sm btn-outline-primary fw-bold"
-                >
-                  Ver detalle
-                </Link>
+                <div className="d-flex justify-content-center gap-2">
+                  <Link 
+                    to={`/resultado/${sol.id}`} 
+                    className="btn btn-sm btn-outline-secondary fw-bold"
+                  >
+                    Ver detalle
+                  </Link>
+
+                  {/* El botón Editar solo aparece si el estado es REGISTRADA */}
+                  {(sol.estado === "REGISTRADA" || !sol.estado) && (
+                    <Link 
+                      to={`/editar-solicitud/${sol.id}`} 
+                      className="btn btn-sm btn-outline-primary fw-bold"
+                    >
+                      Editar
+                    </Link>
+                  )}
+                </div>
               </td>
             </tr>
           ))}

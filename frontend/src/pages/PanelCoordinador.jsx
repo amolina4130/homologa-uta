@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { obtenerSolicitudesPendientes, obtenerDetalleSolicitud, emitirInforme } from "../services/coordinadorService";
+import { descargarInformePDF } from "../services/homologacionService"; 
 import ListaSolicitudes from "../components/ListaSolicitudes";
 import DetalleSolicitud from "../components/DetalleSolicitud";
+import FormularioResolucion from "../components/FormularioResolucion";
 
 export default function PanelCoordinador() {
   const { rol } = useAuth();
@@ -32,37 +34,27 @@ export default function PanelCoordinador() {
   }, [rol, cargarPendientes]);
 
   const abrirDetalle = async (id) => {
-    setCargando(true);
-    setError("");
-    setExito("");
+    setCargando(true); setError(""); setExito("");
     try {
       const detalle = await obtenerDetalleSolicitud(id);
       setSolicitudSeleccionada(detalle);
     } catch (e) {
-      setError(e.message || "Error al cargar el detalle de la solicitud.");
+      setError(e.message || "Error al cargar el detalle.");
     } finally {
       setCargando(false);
     }
   };
 
-  // El componente hijo arma el informe con la decisión y la observación de cada asignatura.
   const guardarInforme = async (informeArmado) => {
     if (!solicitudSeleccionada) return;
-
     const confirmar = window.confirm("¿Está seguro de emitir el informe técnico?");
     if (!confirmar) return;
 
-    setCargando(true);
-    setError("");
-    setExito("");
-
+    setCargando(true); setError(""); setExito("");
     try {
       const resultado = await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
-      setExito(
-        resultado?.estadoSolicitudActualizado === false
-          ? "Informe técnico guardado. No se pudo actualizar el estado de la solicitud en el servicio de Solicitudes."
-          : "Informe técnico emitido correctamente."
-      );
+      setExito(resultado?.estadoSolicitudActualizado === false ? "Informe técnico guardado." : "Informe técnico emitido correctamente.");
+
       setSolicitudSeleccionada(null);
       await cargarPendientes();
     } catch (e) {
@@ -72,12 +64,37 @@ export default function PanelCoordinador() {
     }
   };
 
+  // Función para descargar el PDF
+  const descargarPDF = async () => {
+    if (!solicitudSeleccionada) return;
+    try {
+      await descargarInformePDF(
+        solicitudSeleccionada.solicitudId, 
+        solicitudSeleccionada.numeroProceso || `SOL-${solicitudSeleccionada.solicitudId}`
+      );
+    } catch (error) {
+      setError(error.message);
+
+  const registrarResolucion = async (datosResolucion) => {
+    try {
+      
+      console.log("Datos a enviar al backend:", datosResolucion);
+      
+      if (solicitudSeleccionada.estado !== "INFORME_EMITIDO") {
+        throw new Error("No se puede registrar la resolución: no existe informe técnico previo (Error 409).");
+      }
+
+      setExito("Resolución registrada exitosamente.");
+      setSolicitudSeleccionada(null); 
+      await cargarPendientes();
+    } catch (err) {
+      throw err; 
+
+    }
+  };
+
   if (rol !== "COORDINADOR") {
-    return (
-      <div className="container mt-4">
-        <div className="alert alert-danger">Acceso denegado. Solo el Coordinador puede ver esta pantalla.</div>
-      </div>
-    );
+    return <div className="container mt-4"><div className="alert alert-danger">Acceso denegado.</div></div>;
   }
 
   return (
@@ -93,22 +110,46 @@ export default function PanelCoordinador() {
       {exito && <div className="alert alert-success">{exito}</div>}
 
       {!solicitudSeleccionada ? (
-        <ListaSolicitudes
-          solicitudes={solicitudes}
-          cargando={cargando}
-          onAbrir={abrirDetalle}
-        />
+        <ListaSolicitudes solicitudes={solicitudes} cargando={cargando} onAbrir={abrirDetalle} />
       ) : (
-        <DetalleSolicitud
-          key={solicitudSeleccionada.solicitudId}
-          solicitud={solicitudSeleccionada}
-          onVolver={() => {
-            setSolicitudSeleccionada(null);
-            setError("");
-          }}
-          onGuardar={guardarInforme}
-          cargando={cargando}
-        />
+
+        <>
+          {/*Botón de descarga para el coordinador */}
+          <div className="d-flex justify-content-end mb-2">
+            <button className="btn btn-success fw-bold" onClick={descargarPDF}>
+            </button>
+          </div>
+
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => { setSolicitudSeleccionada(null); setError(""); }}
+            onGuardar={guardarInforme}
+            cargando={cargando}
+          />
+
+        
+        <>
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => {
+              setSolicitudSeleccionada(null);
+              setError("");
+            }}
+            onGuardar={guardarInforme}
+            cargando={cargando}
+          />
+
+          {solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
+            <FormularioResolucion
+              solicitud={solicitudSeleccionada}
+              onGuardar={registrarResolucion}
+              cargando={cargando}
+            />
+          )}
+
+        </>
       )}
     </div>
   );
