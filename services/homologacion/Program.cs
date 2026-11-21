@@ -65,6 +65,11 @@ builder.Services.AddScoped<AnalisisExternoService>();
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
 
+builder.Services.Configure<PreseleccionOptions>(
+    builder.Configuration.GetSection(PreseleccionOptions.Seccion));
+builder.Services.AddSingleton<IMemoriaCatalogo, MemoriaCatalogoStub>();
+builder.Services.AddScoped<IPreseleccionService, PreseleccionService>();
+
 var app = builder.Build();
 
 // 8. Configuración de la app

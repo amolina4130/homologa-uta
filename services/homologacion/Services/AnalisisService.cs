@@ -19,6 +19,17 @@ public class AnalisisSolicitudException : Exception
     }
 }
 
+// Dentro del método de análisis, antes de llamar al agente:
+var preseleccion = await _preseleccion.PreseleccionarAsync(materias, carreraDestinoId, nivelAprobado, ct);
+
+foreach (var par in preseleccion.Pares)
+{
+    // Solo las candidatas van al agente
+    await EnviarAlAgenteAsync(par.MateriaOrigen, par.CandidatasDestino, ct);   // AJUSTAR: su llamada actual al agente
+}
+
+// preseleccion.SinCandidata NO se envía: queda como "sin equivalente probable" con su motivo.
+
 /// <summary>
 /// Analiza las asignaturas de una solicitud con el agente interno, guarda la decisión, los porcentajes
 /// y la justificación por asignatura, deja la solicitud en PENDIENTE_REVISION y publica AnalisisCompletado.
