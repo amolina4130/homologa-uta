@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { obtenerSolicitudesPendientes, obtenerDetalleSolicitud, emitirInforme } from "../services/coordinadorService";
+import { descargarInformePDF } from "../services/homologacionService"; 
 import ListaSolicitudes from "../components/ListaSolicitudes";
 import DetalleSolicitud from "../components/DetalleSolicitud";
 import FormularioResolucion from "../components/FormularioResolucion";
@@ -33,14 +34,12 @@ export default function PanelCoordinador() {
   }, [rol, cargarPendientes]);
 
   const abrirDetalle = async (id) => {
-    setCargando(true);
-    setError("");
-    setExito("");
+    setCargando(true); setError(""); setExito("");
     try {
       const detalle = await obtenerDetalleSolicitud(id);
       setSolicitudSeleccionada(detalle);
     } catch (e) {
-      setError(e.message || "Error al cargar el detalle de la solicitud.");
+      setError(e.message || "Error al cargar el detalle.");
     } finally {
       setCargando(false);
     }
@@ -55,6 +54,7 @@ export default function PanelCoordinador() {
     try {
       const resultado = await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
       setExito(resultado?.estadoSolicitudActualizado === false ? "Informe técnico guardado." : "Informe técnico emitido correctamente.");
+
       setSolicitudSeleccionada(null);
       await cargarPendientes();
     } catch (e) {
@@ -63,6 +63,17 @@ export default function PanelCoordinador() {
       setCargando(false);
     }
   };
+
+  // Función para descargar el PDF
+  const descargarPDF = async () => {
+    if (!solicitudSeleccionada) return;
+    try {
+      await descargarInformePDF(
+        solicitudSeleccionada.solicitudId, 
+        solicitudSeleccionada.numeroProceso || `SOL-${solicitudSeleccionada.solicitudId}`
+      );
+    } catch (error) {
+      setError(error.message);
 
   const registrarResolucion = async (datosResolucion) => {
     try {
@@ -78,15 +89,12 @@ export default function PanelCoordinador() {
       await cargarPendientes();
     } catch (err) {
       throw err; 
+
     }
   };
 
   if (rol !== "COORDINADOR") {
-    return (
-      <div className="container mt-4">
-        <div className="alert alert-danger">Acceso denegado. Solo el Coordinador puede ver esta pantalla.</div>
-      </div>
-    );
+    return <div className="container mt-4"><div className="alert alert-danger">Acceso denegado.</div></div>;
   }
 
   return (
@@ -102,12 +110,24 @@ export default function PanelCoordinador() {
       {exito && <div className="alert alert-success">{exito}</div>}
 
       {!solicitudSeleccionada ? (
-        <ListaSolicitudes
-          solicitudes={solicitudes}
-          cargando={cargando}
-          onAbrir={abrirDetalle}
-        />
+        <ListaSolicitudes solicitudes={solicitudes} cargando={cargando} onAbrir={abrirDetalle} />
       ) : (
+
+        <>
+          {/*Botón de descarga para el coordinador */}
+          <div className="d-flex justify-content-end mb-2">
+            <button className="btn btn-success fw-bold" onClick={descargarPDF}>
+            </button>
+          </div>
+
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => { setSolicitudSeleccionada(null); setError(""); }}
+            onGuardar={guardarInforme}
+            cargando={cargando}
+          />
+
         
         <>
           <DetalleSolicitud
@@ -128,6 +148,7 @@ export default function PanelCoordinador() {
               cargando={cargando}
             />
           )}
+
         </>
       )}
     </div>
