@@ -3,6 +3,9 @@ using HomologaUTA.Homologacion.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
+
+using HomologaUTA.Homologacion.Models;
+using Microsoft.EntityFrameworkCore;
 namespace HomologaUTA.Homologacion.Controllers;
 
 [ApiController]

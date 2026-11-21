@@ -4,12 +4,13 @@ using Polly;
 using Polly.Retry;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
+using HomologaUTA.Homologacion.Clients;
+using System.Threading.Tasks;
 
 namespace HomologaUTA.Homologacion.Agents;
 
 public class ResultadoAgente
 {
-    // 2. Marcar como requeridos y validar rangos (Criterio 2)
     [JsonRequired]
     [Range(0, 100)]
     public int Contenido { get; set; }
@@ -24,20 +25,25 @@ public class ResultadoAgente
     
     public string Justificacion { get; set; } = string.Empty;
     public bool RequiereRevision { get; set; } = false;
+
+    [JsonPropertyName("materiasOrigen")]
+    public List<string> MateriasOrigen { get; set; } = new();
 }
 
 public class AgenteInterno
 {
     private readonly Clients.OllamaClient _ollamaClient;
+    private readonly ICatalogoClient _catalogoClient; // <-- NUEVO CLIENTE
     private readonly ResiliencePipeline _retryPipeline;
     private readonly ILogger<AgenteInterno> _logger;
 
-    public AgenteInterno(Clients.OllamaClient ollamaClient, ILogger<AgenteInterno> logger)
+    // Inyectamos el ICatalogoClient en el constructor
+    public AgenteInterno(Clients.OllamaClient ollamaClient, ICatalogoClient catalogoClient, ILogger<AgenteInterno> logger)
     {
         _ollamaClient = ollamaClient;
+        _catalogoClient = catalogoClient;
         _logger = logger;
         
-        // 1. Polly corregido: maneja TaskCanceledException (Timeout) y HttpRequestException (Caída)
         _retryPipeline = new ResiliencePipelineBuilder()
             .AddRetry(new RetryStrategyOptions
             {
@@ -45,11 +51,10 @@ public class AgenteInterno
                 Delay = TimeSpan.FromSeconds(2),
                 ShouldHandle = new PredicateBuilder()
                     .Handle<JsonException>()
-                    .Handle<TaskCanceledException>() // Timeout de HttpClient
-                    .Handle<HttpRequestException>(), // Ollama caído
+                    .Handle<TaskCanceledException>()
+                    .Handle<HttpRequestException>(),
                 OnRetry = args =>
                 {
-                    // 3. Loggear reintentos
                     _logger.LogWarning("Reintento {Attempt} por error: {Exception}", args.AttemptNumber, args.Outcome.Exception?.Message);
                     return default;
                 }
@@ -57,15 +62,36 @@ public class AgenteInterno
             .Build();
     }
 
-    public async Task<ResultadoAgente> AnalizarAsignaturaAsync(string asignaturaOrigen, string contenidoOrigen, string asignaturaDestino, string contenidoDestino)
+    // Ahora recibe los IDs en lugar del texto
+    public async Task<ResultadoAgente> AnalizarAsignaturaAsync(int idOrigen, string nombreOrigen, int idDestino, string nombreDestino)
     {
-        // 4. Usar el campo "system" y "format" de Ollama
+        // 1. Consultar los planes analíticos usando el Cliente (Stub o real)
+        var planOrigen = await _catalogoClient.ObtenerPlanAnaliticoAsync(idOrigen);
+        var planDestino = await _catalogoClient.ObtenerPlanAnaliticoAsync(idDestino);
+
+        // 2. Si falta alguno, requiere revisión (Criterio de aceptación)
+        if (planOrigen == null || planDestino == null)
+        {
+            _logger.LogWarning("Falta plan analítico para {Origen} o {Destino}", nombreOrigen, nombreDestino);
+            return new ResultadoAgente
+            {
+                Contenido = 0, Profundidad = 0, Horas = 0,
+                Justificacion = "Falta el plan analítico de una o ambas asignaturas en el Catálogo. Requiere revisión.",
+                RequiereRevision = true
+            };
+        }
+
+        // 3. Armar los prompts con el contenido REAL
         var systemPrompt = "Eres un experto en homologación académica de la Universidad Técnica de Ambato. " +
                            "Debes comparar asignaturas y devolver ÚNICAMENTE un JSON válido con la estructura especificada.";
                            
         var userPrompt = $@"
-        Compara la siguiente asignatura de origen con la de destino y devuelve un JSON con esta estructura exacta:
+        Compara la siguiente asignatura de origen con la de destino.
+        Si una sola materia de origen no cubre la de destino, pero la combinación de DOS materias sí, 
+        devuelve las dos materias en ""materiasOrigen"" y calcula los porcentajes sobre el conjunto.
+        Devuelve un JSON con esta estructura exacta:
         {{
+        ""materiasOrigen"": [""Nombre de materia 1"", ""Nombre de materia 2""],
         ""contenido"": (número del 0 al 100),
         ""profundidad"": (número del 0 al 100),
         ""horas"": (número del 0 al 100),
@@ -74,11 +100,13 @@ public class AgenteInterno
 
         No agregues texto fuera del JSON.
 
-        Asignatura Origen: {asignaturaOrigen}
-        Contenido: {contenidoOrigen}
+        Asignatura Origen: {nombreOrigen}
+        Contenido: {planOrigen.Contenido}
+        Resultados: {planOrigen.ResultadosAprendizaje}
 
-        Asignatura Destino: {asignaturaDestino}
-        Contenido: {contenidoDestino}
+        Asignatura Destino: {nombreDestino}
+        Contenido: {planDestino.Contenido}
+        Resultados: {planDestino.ResultadosAprendizaje}
         ";
 
         try
@@ -89,7 +117,6 @@ public class AgenteInterno
                 var respuestaRaw = await _ollamaClient.GenerarRespuestaAsync(promptCompleto);
                 var jsonLimpio = respuestaRaw.Replace("```json", "").Replace("```", "").Trim();
 
-                // Algunos modelos agregan texto antes o después del JSON: se recorta el objeto.
                 var inicio = jsonLimpio.IndexOf('{');
                 var fin = jsonLimpio.LastIndexOf('}');
                 if (inicio >= 0 && fin > inicio)
@@ -98,10 +125,12 @@ public class AgenteInterno
                 var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                 var resultado = JsonSerializer.Deserialize<ResultadoAgente>(jsonLimpio, opciones);
 
+                if (resultado.MateriasOrigen.Count > 2)
+                    throw new JsonException("El agente propuso más de dos materias de origen.");
+
                 if (resultado == null)
                     throw new JsonException("El JSON devuelto está vacío.");
 
-                // Validar rangos manualmente para lanzar excepción y que Polly reintente
                 if (resultado.Contenido < 0 || resultado.Contenido > 100 ||
                     resultado.Profundidad < 0 || resultado.Profundidad > 100 ||
                     resultado.Horas < 0 || resultado.Horas > 100)
@@ -114,14 +143,11 @@ public class AgenteInterno
         }
         catch (Exception ex)
         {
-            // 3. Loguear el error real antes de devolver el fallback
-            _logger.LogError(ex, "El agente falló tras los reintentos para la asignatura {Asignatura}", asignaturaOrigen);
+            _logger.LogError(ex, "El agente falló tras los reintentos para la asignatura {Asignatura}", nombreOrigen);
             
             return new ResultadoAgente
             {
-                Contenido = 0,
-                Profundidad = 0,
-                Horas = 0,
+                Contenido = 0, Profundidad = 0, Horas = 0,
                 Justificacion = "El agente no pudo generar una respuesta válida tras varios intentos. Requiere revisión manual.",
                 RequiereRevision = true
             };
