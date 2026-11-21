@@ -48,11 +48,19 @@
         "Order": -1,
         "Match": { "Path": "/homologacion/coordinador/{**catch-all}" }
       },
+feature/TA-18.2-endpoint-informe
+
+
+develop
       "homologacion-informe": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{id}/informe", "Methods": [ "GET" ] }
       },
+feature/TA-18.2-endpoint-informe
+
+
+develop
       "homologacion": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",

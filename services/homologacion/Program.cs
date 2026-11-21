@@ -13,6 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<HomologaUTA.Homologacion.Services.IInformeService, HomologaUTA.Homologacion.Services.InformeServiceSimulado>();
+
 builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
@@ -60,10 +62,6 @@ builder.Services.AddScoped<AnalisisExternoService>();
 // Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
-
-// Informe PDF de homologación (TA-18.1)
-builder.Services.AddScoped<IInformeService, InformeHomologacion>();
-
 
 var app = builder.Build();
 
