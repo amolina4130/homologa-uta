@@ -277,15 +277,15 @@ public class SolicitudesController : ControllerBase
         modulo = "INTERNO";
 
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
-            return BadRequest(new { error = "Faltan campos obligatorios." });
+            return BadRequest(new { mensaje = "Faltan campos obligatorios.", error = "Faltan campos obligatorios." });
 
         if (request.CarreraOrigenId == request.CarreraDestinoId)
-            return BadRequest(new { error = "La carrera de origen y destino no pueden ser iguales." });
+            return BadRequest(new { mensaje = "La carrera de origen y destino no pueden ser iguales.", error = "La carrera de origen y destino no pueden ser iguales." });
 
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
-            return BadRequest(new { error = "Debe seleccionar al menos una asignatura." });
+            return BadRequest(new { mensaje = "Debe seleccionar al menos una asignatura.", error = "Debe seleccionar al menos una asignatura." });
 
-                if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
         {
             modulo = "EXTERNO";
 
@@ -294,11 +294,12 @@ public class SolicitudesController : ControllerBase
             {
                 return BadRequest(new
                 {
+                    mensaje = "Para el agente externo debe indicar la universidad de origen y la universidad de destino.",
                     error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
                 });
             }
 
-            // --- VALIDACIÓN DE LONGITUD (150 caracteres) ---
+            // Validación de longitud
             if (request.UniversidadOrigen.Trim().Length > MaxUniversidad || 
                 request.UniversidadDestino.Trim().Length > MaxUniversidad)
             {
@@ -312,7 +313,6 @@ public class SolicitudesController : ControllerBase
 
         return null;
     }
-
     private async Task<object> ArmarDetalleAsync(Solicitud s)
     {
         var nombres = await _db.Carreras
