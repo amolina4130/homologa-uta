@@ -14,7 +14,7 @@ export default function Menu() {
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
     "Panel Coordinador": "/panel-coordinador",
-    "Equivalencias": "/equivalencias" 
+    "Equivalencias": "/equivalencias", 
     "Solicitudes pendientes": "/panel-coordinador"
   };
 

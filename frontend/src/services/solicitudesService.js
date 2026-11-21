@@ -76,3 +76,23 @@ export async function obtenerSolicitud(id) {
   return await res.json();
 }
 
+export async function actualizarSolicitud(id, solicitudData) {
+  const res = await fetch(`${GATEWAY_URL}/solicitudes/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(solicitudData),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(errorData.error || "Error al actualizar la solicitud");
+    err.status = res.status;
+    
+    // Simulamos los errores del contrato si el backend no responde bien
+    if (res.status === 409) err.message = "La solicitud ya está en revisión y no se puede modificar.";
+    if (res.status === 403) err.message = "No tienes permiso para modificar esta solicitud.";
+    
+    throw err;
+  }
+  return await res.json();
+}

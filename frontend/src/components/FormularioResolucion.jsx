@@ -4,12 +4,16 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
   const [numeroResolucion, setNumeroResolucion] = useState("");
   const [fecha, setFecha] = useState("");
   const [observacion, setObservacion] = useState("");
-  // Inicializamos las decisiones con la propuesta del agente o una por defecto
+  
+  // Inicializamos las decisiones con los datos de la solicitud
+
   const [decisiones, setDecisiones] = useState(
     solicitud.asignaturas?.map((a) => ({
       asignaturaId: a.asignaturaId,
       nombre: a.nombre,
-      decisionFinal: a.decisionFinal || "HOMOLOGABLE", // Valor por defecto
+
+      decisionFinal: a.decisionFinal || "HOMOLOGABLE",
+
     })) || []
   );
   const [error, setError] = useState("");
@@ -25,7 +29,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
     e.preventDefault();
     setError(""); setExito("");
 
-    // Validaciones básicas (Criterio: campos de número y fecha)
+
     if (!numeroResolucion || !fecha) {
       setError("Debe ingresar el número de resolución y la fecha.");
       return;
@@ -42,7 +46,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
       await onGuardar(payload);
       setExito("Resolución registrada correctamente.");
     } catch (err) {
-      // Aquí caerán los errores del contrato (409, 403)
+
       setError(err.message || "Error al registrar la resolución.");
     }
   };
@@ -89,6 +93,7 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
                 </tr>
               </thead>
               <tbody>
+
                 {decisiones.map((d) => (
                   <tr key={d.asignaturaId}>
                     <td>{d.nombre}</td>
@@ -104,6 +109,43 @@ export default function FormularioResolucion({ solicitud, onGuardar, cargando })
                     </td>
                   </tr>
                 ))}
+
+                {decisiones.map((d) => {
+                  // LÓGICA DE COMBINACIÓN
+                  const infoAsignatura = solicitud.asignaturas?.find(a => a.asignaturaId === d.asignaturaId);
+                  const esCombinada = infoAsignatura?.combinada;
+                  const materiasOrigen = infoAsignatura?.materiasOrigen || [];
+
+                  return (
+                    <tr key={d.asignaturaId}>
+                      <td>
+                        {esCombinada ? (
+                          <div>
+                            <span className="badge bg-info text-dark mb-1">Combinada</span>
+                            <ul className="mb-0 ps-3">
+                              {materiasOrigen.map((m, i) => (
+                                <li key={i}><small>{m.nombre} (Nota: {m.nota})</small></li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          d.nombre
+                        )}
+                      </td>
+                      <td>
+                        <select
+                          className="form-select form-select-sm"
+                          value={d.decisionFinal}
+                          onChange={(e) => handleDecisionChange(d.asignaturaId, e.target.value)}
+                        >
+                          <option value="HOMOLOGABLE">Homologable</option>
+                          <option value="NO_HOMOLOGABLE">No Homologable</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+
               </tbody>
             </table>
           </div>

@@ -26,6 +26,7 @@ public class AuthDbContext : DbContext
 
         modelBuilder.Entity<Usuario>(e =>
         {
+            e.Property(u => u.Nombre).IsRequired().HasMaxLength(150).HasDefaultValue(string.Empty);
             e.Property(u => u.Correo).IsRequired().HasMaxLength(150);
             e.HasIndex(u => u.Correo).IsUnique();
             e.Property(u => u.PasswordHash).IsRequired();
