@@ -19,6 +19,12 @@ public class SolicitudesController : ControllerBase
 
     private readonly SolicitudesDbContext _db;
 
+    private const int MaxUniversidad = 150;
+
+    // El contrato pide { mensaje }; se deja también "error" porque el frontend actual lo lee.
+    private BadRequestObjectResult ErrorUniversidad(string texto) =>
+        BadRequest(new { mensaje = texto, error = texto });
+
     public SolicitudesController(SolicitudesDbContext db)
     {
         _db = db;
@@ -42,8 +48,8 @@ public class SolicitudesController : ControllerBase
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
             Modulo = modulo,
-            UniversidadOrigen = request.UniversidadOrigen?.Trim(),
-            UniversidadDestino = request.UniversidadDestino?.Trim(),
+            UniversidadOrigen = universidadOrigen,
+            UniversidadDestino = universidadDestino,
             // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
             // cuando el agente termina el análisis (así el Coordinador nunca ve una
             // solicitud sin propuesta).
