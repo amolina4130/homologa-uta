@@ -13,6 +13,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddScoped<AgenteExtractorRecord>();
+builder.Services.AddScoped<ExtractorRecordService>();
+builder.Services.AddScoped<HomologaUTA.Homologacion.Services.IInformeService, HomologaUTA.Homologacion.Services.InformeServiceSimulado>();
+
 builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
