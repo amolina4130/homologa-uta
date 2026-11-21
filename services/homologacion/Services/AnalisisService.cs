@@ -44,6 +44,7 @@ public class AnalisisService
     private readonly DecisionHomologacion _decision;
     private readonly IAnalisisEventPublisher _publisher;
     private readonly SolicitudesClient _solicitudes;
+     private readonly IMemoriaClient _memoriaClient;
     private readonly ILogger<AnalisisService> _logger;
 
     public AnalisisService(
@@ -52,6 +53,7 @@ public class AnalisisService
         DecisionHomologacion decision,
         IAnalisisEventPublisher publisher,
         SolicitudesClient solicitudes,
+        IMemoriaClient memoriaClient,
         ILogger<AnalisisService> logger)
     {
         _db = db;
@@ -59,6 +61,7 @@ public class AnalisisService
         _decision = decision;
         _publisher = publisher;
         _solicitudes = solicitudes;
+        _memoriaClient = memoriaClient;
         _logger = logger;
     }
 
@@ -71,6 +74,11 @@ public class AnalisisService
         IReadOnlyList<AsignaturaAnalisisDto>? asignaturas = null,
         CancellationToken ct = default)
     {
+        var estadoMemoria = await _memoriaClient.ObtenerEstadoMemoriaAsync(ct);
+        if (estadoMemoria is null)
+        {
+            throw new AnalisisSolicitudException(409, "Memoria del agente sin cargar. El Administrador debe actualizarla.");
+        }
         var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
         if (info is null)
             throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");

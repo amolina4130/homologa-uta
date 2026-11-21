@@ -11,7 +11,6 @@
         "AuthorizationPolicy": "Anonymous",
         "Match": { "Path": "/auth/registro", "Methods": [ "POST" ] }
       },
-
       "auth": {
         "ClusterId": "auth",
         "AuthorizationPolicy": "autenticado",
@@ -49,10 +48,25 @@
         "Order": -1,
         "Match": { "Path": "/homologacion/coordinador/{**catch-all}" }
       },
+      "homologacion-informe": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/homologacion/{id}/informe", "Methods": [ "GET" ] }
+      },
       "homologacion": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{**catch-all}" }
+      },
+      "memoria-carga": {
+        "ClusterId": "catalogo",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/memoria/carga", "Methods": [ "POST" ] }
+      },
+      "memoria-consulta": {
+        "ClusterId": "catalogo",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/memoria/{**catch-all}", "Methods": [ "GET" ] }
       },
       "documentos-descarga": {
         "ClusterId": "documentos",
@@ -64,9 +78,19 @@
         "ClusterId": "documentos",
         "AuthorizationPolicy": "estudiante",
         "Match": { "Path": "/documentos/{**catch-all}" }
+      },
+      "memoria-estado": {
+        "ClusterId": "catalogo",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/memoria/estado", "Methods": [ "GET" ] }
       }
     },
     "Clusters": {
+      "catalogo": {
+        "Destinations": {
+          "d1": { "Address": "http://catalogo-service:8080/" }
+        }
+      },
       "auth": {
         "Destinations": {
           "d1": { "Address": "http://auth-service:8080/" }
@@ -94,6 +118,11 @@
       "documentos": {
         "Destinations": {
           "d1": { "Address": "http://documentos-service:8080/" }
+        }
+      },
+      "catalogo": {
+        "Destinations": {
+          "d1": { "Address": "http://catalogo-service:8080/" }
         }
       }
     }

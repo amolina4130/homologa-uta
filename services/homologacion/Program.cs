@@ -12,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
 {
