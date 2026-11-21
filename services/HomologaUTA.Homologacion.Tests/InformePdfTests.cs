@@ -1,60 +1,223 @@
-using Xunit;
+using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Data;
+using HomologaUTA.Homologacion.DTOs;
+using HomologaUTA.Homologacion.Models;
+using HomologaUTA.Homologacion.Reportes;
+using HomologaUTA.Homologacion.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
 
-namespace HomologaUTA.Homologacion.Tests
+namespace HomologaUTA.Homologacion.Tests;
+
+public class InformePdfTests
 {
-    public class InformePdfTests
+    // ---------- Plantilla (solo dibuja) ----------
+
+    private static InformeDatos DatosBase(int asignaturas = 2) => new()
     {
-        // 1. Descarga correcta por el estudiante dueño
-        [Fact]
-        public void Descarga_Por_Estudiante_Duenio_DebeSerExitosa()
+        SolicitudId = 7,
+        NumeroProceso = "SOL-0007",
+        EstudianteCorreo = "estudiante@uta.edu.ec",
+        FechaRegistro = new DateTime(2026, 11, 2),
+        CarreraOrigen = "Software",
+        CarreraDestino = "Tecnologías de la Información",
+        Modulo = "INTERNO",
+        FechaAnalisis = new DateTime(2026, 11, 3),
+        Asignaturas = Enumerable.Range(1, asignaturas).Select(i => new InformeAsignatura
         {
-            /* 
-             * LÓGICA FUTURA (cuando el InformesController esté integrado):
-             * var context = GetInMemoryDbContext();
-             * var controller = new InformesController(context);
-             * controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Email, "duenio@uta.edu.ec") })) } };
-             * var result = await controller.DescargarPdf(1);
-             * var fileResult = Assert.IsType<FileContentResult>(result);
-             * Assert.Equal("application/pdf", fileResult.ContentType);
-             */
-            Assert.True(true);
-        }
+            AsignaturaOrigen = $"Asignatura origen {i}",
+            AsignaturaDestino = $"Asignatura destino {i}",
+            PorcentajeContenido = 80,
+            PorcentajeProfundidad = 70,
+            PorcentajeHoras = 100,
+            Decision = i % 3 == 0 ? "NO_HOMOLOGABLE" : i % 2 == 0 ? "REQUIERE_REVISION" : "HOMOLOGABLE",
+            Justificacion = "Los contenidos coinciden en su mayoría; se cubren los temas principales de la asignatura."
+        }).ToList()
+    };
 
-        // 2. Rechazo (403) a otro estudiante
-        [Fact]
-        public void Descarga_Por_Otro_Estudiante_DebeDevolverForbidden()
-        {
-            /* 
-             * LÓGICA FUTURA:
-             * var result = await controller.DescargarPdf(1); // Simulando token de otro@uta.edu.ec
-             * Assert.IsType<ForbidResult>(result);
-             */
-            Assert.True(true);
-        }
+    private static void AssertEsPdf(byte[] bytes)
+    {
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
+    }
 
-        // 3. Descarga correcta por el Coordinador
-        [Fact]
-        public void Descarga_Por_Coordinador_DebeSerExitosa()
-        {
-            /* 
-             * LÓGICA FUTURA:
-             * controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "COORDINADOR") })) } };
-             * var result = await controller.DescargarPdf(1);
-             * Assert.IsType<FileContentResult>(result);
-             */
-            Assert.True(true);
-        }
+    [Fact]
+    public void Plantilla_SinInformeNiResolucion_GeneraPdf()
+    {
+        AssertEsPdf(PlantillaInforme.Generar(DatosBase()));
+    }
 
-        // 4. Solicitud sin análisis
-        [Fact]
-        public void Descarga_Solicitud_Sin_Analisis_DebeDevolverBadRequest()
+    [Fact]
+    public void Plantilla_ConInformeDelCoordinador_GeneraPdf()
+    {
+        var d = DatosBase();
+        d.CoordinadorCorreo = "coordinador@uta.edu.ec";
+        d.FechaInforme = new DateTime(2026, 11, 5);
+        d.Asignaturas[0].DecisionCoordinador = "HOMOLOGABLE";
+        d.Asignaturas[0].ObservacionCoordinador = "Coincide el sílabo.";
+        d.Asignaturas[1].DecisionCoordinador = "NO_HOMOLOGABLE";
+
+        AssertEsPdf(PlantillaInforme.Generar(d));
+    }
+
+    [Fact]
+    public void Plantilla_ConResolucionYModuloExterno_GeneraPdf()
+    {
+        var d = DatosBase();
+        d.Modulo = "EXTERNO";
+        d.UniversidadOrigen = "Universidad Central del Ecuador";
+        d.UniversidadDestino = "Universidad Técnica de Ambato";
+        d.FechaInforme = new DateTime(2026, 11, 5);
+        d.Resolucion = new InformeResolucion
         {
-            /* 
-             * LÓGICA FUTURA:
-             * var result = await controller.DescargarPdf(99); // ID sin análisis
-             * Assert.IsType<BadRequestObjectResult>(result);
-             */
-            Assert.True(true);
+            NumeroResolucion = "RES-2026-045",
+            Fecha = new DateTime(2026, 11, 10),
+            Observacion = "Aprobada en sesión ordinaria.",
+            Decisiones = new() { new InformeDecisionFinal { Asignatura = "Asignatura origen 1", DecisionFinal = "HOMOLOGABLE" } }
+        };
+
+        AssertEsPdf(PlantillaInforme.Generar(d));
+    }
+
+    [Fact]
+    public void Plantilla_ConMuchasAsignaturas_PaginaSinFallar()
+    {
+        var corto = PlantillaInforme.Generar(DatosBase(2));
+        var largo = PlantillaInforme.Generar(DatosBase(80));
+
+        AssertEsPdf(largo);
+        Assert.True(largo.Length > corto.Length);
+    }
+
+    [Fact]
+    public void Plantilla_SinAsignaturas_GeneraPdf()
+    {
+        AssertEsPdf(PlantillaInforme.Generar(DatosBase(0)));
+    }
+
+    // ---------- Servicio (reúne datos y genera) ----------
+
+    private class HandlerFalso : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+        public HandlerFalso(Func<HttpRequestMessage, HttpResponseMessage> responder) => _responder = responder;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(_responder(request));
+    }
+
+    private static SolicitudesClient ClienteSolicitudes(params int[] idsExistentes)
+    {
+        var handler = new HandlerFalso(req =>
+        {
+            var id = int.Parse(req.RequestUri!.Segments[^2].TrimEnd('/'));
+            if (!idsExistentes.Contains(id))
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+
+            var dto = new SolicitudCompletaDto
+            {
+                Id = id,
+                EstudianteCorreo = "estudiante@uta.edu.ec",
+                FechaRegistro = new DateTime(2026, 11, 2),
+                CarreraOrigen = "Software",
+                CarreraDestino = "TI",
+                Modulo = "INTERNO"
+            };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(dto) };
+        });
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Solicitudes:Url"] = "http://solicitudes.test" })
+            .Build();
+
+        return new SolicitudesClient(new HttpClient(handler), config, NullLogger<SolicitudesClient>.Instance);
+    }
+
+    private static HomologacionDbContext BdConAnalisis(int solicitudId, bool conAnalisis = true)
+    {
+        var opciones = new DbContextOptionsBuilder<HomologacionDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        var db = new HomologacionDbContext(opciones);
+
+        if (conAnalisis)
+        {
+            var analisis = new AnalisisSolicitud
+            {
+                SolicitudId = solicitudId,
+                FechaAnalisis = new DateTime(2026, 11, 3)
+            };
+            analisis.Asignaturas.Add(new AnalisisAsignatura
+            {
+                AsignaturaOrigen = "Programación I",
+                AsignaturaDestino = "Fundamentos de Programación",
+                PorcentajeContenido = 90,
+                PorcentajeProfundidad = 85,
+                PorcentajeHoras = 100,
+                Decision = "HOMOLOGABLE",
+                Justificacion = "Contenidos equivalentes."
+            });
+            analisis.Asignaturas.Add(new AnalisisAsignatura
+            {
+                AsignaturaOrigen = "Cálculo",
+                AsignaturaDestino = "Matemática I",
+                PorcentajeContenido = 40,
+                PorcentajeProfundidad = 50,
+                PorcentajeHoras = 60,
+                Decision = "NO_HOMOLOGABLE",
+                Justificacion = "Cobertura insuficiente."
+            });
+
+            db.AnalisisSolicitudes.Add(analisis);
+            db.SaveChanges();
         }
+        return db;
+    }
+
+    [Fact]
+    public async Task GenerarPdf_ConSolicitudYAnalisis_DevuelvePdf()
+    {
+        using var db = BdConAnalisis(5);
+        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+
+        AssertEsPdf(await servicio.GenerarPdf(5));
+    }
+
+    [Fact]
+    public async Task ReunirDatos_ArmaNumeroDeProcesoYAsignaturas()
+    {
+        using var db = BdConAnalisis(5);
+        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+
+        var datos = await servicio.ReunirDatosAsync(5);
+
+        Assert.Equal("SOL-0005", datos.NumeroProceso);
+        Assert.Equal("estudiante@uta.edu.ec", datos.EstudianteCorreo);
+        Assert.Equal(2, datos.Asignaturas.Count);
+        Assert.Null(datos.Resolucion);   // sin resolución del Consejo: la sección se omite
+    }
+
+    [Fact]
+    public async Task GenerarPdf_SolicitudInexistente_Lanza404()
+    {
+        using var db = BdConAnalisis(5);
+        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+
+        var ex = await Assert.ThrowsAsync<AnalisisSolicitudException>(() => servicio.GenerarPdf(99));
+        Assert.Equal(404, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task GenerarPdf_SolicitudSinAnalisis_Lanza404()
+    {
+        using var db = BdConAnalisis(5, conAnalisis: false);
+        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+
+        var ex = await Assert.ThrowsAsync<AnalisisSolicitudException>(() => servicio.GenerarPdf(5));
+        Assert.Equal(404, ex.StatusCode);
     }
 }
