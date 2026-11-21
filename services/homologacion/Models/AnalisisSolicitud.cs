@@ -7,6 +7,9 @@ public static class EstadoAnalisis
 
     /// <summary>El Coordinador ya emitió su informe técnico.</summary>
     public const string INFORME_EMITIDO = "INFORME_EMITIDO";
+
+    /// <summary>El Consejo Directivo ya registró su resolución final.</summary>
+    public const string RESUELTA = "RESUELTA"; 
 }
 
 /// <summary>Decisiones posibles para una asignatura.</summary>

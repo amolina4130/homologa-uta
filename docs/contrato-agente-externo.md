@@ -18,6 +18,8 @@ El sistema (servicio de Homologación) enviará un JSON con la siguiente estruct
   "estudiante": "estudiante@uta.edu.ec",
   "carreraOrigen": "Ingeniería en Software (Universidad Externa)",
   "carreraDestino": "Ingeniería en Software (UTA)",
+  "universidadOrigen": "Universidad Nacional de Colombia",
+  "universidadDestino": "Universidad Técnica de Ambato",
   "documentos": {
     "mallaOrigen": "texto extraído de la malla...",
     "historialAcademico": "texto extraído del historial...",
@@ -30,6 +32,10 @@ El sistema (servicio de Homologación) enviará un JSON con la siguiente estruct
   }
 }
 ```
+### 3.1. Combinación de materias de origen
+El sistema puede enviar hasta DOS materias de origen en el campo `silabos` (como un array de objetos). 
+El agente externo debe evaluar si la combinación de ambas cubre los contenidos de la materia de destino y devolver los porcentajes calculados sobre el conjunto.
+
 ## 4. Respuesta Esperada (Response)
 El agente externo debe devolver un JSON con la decisión por asignatura y su justificación verificable:
 

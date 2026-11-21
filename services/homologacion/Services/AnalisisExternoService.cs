@@ -154,6 +154,12 @@ public class AnalisisExternoService
             entrada.CarreraOrigen = info.CarreraOrigen;
         if (string.IsNullOrWhiteSpace(entrada.CarreraDestino))
             entrada.CarreraDestino = info.CarreraDestino;
+                // --- NUEVO: Enviar las universidades al agente externo ---
+        if (string.IsNullOrWhiteSpace(entrada.UniversidadOrigen))
+            entrada.UniversidadOrigen = info.UniversidadOrigen ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(entrada.UniversidadDestino))
+            entrada.UniversidadDestino = info.UniversidadDestino ?? string.Empty;
+        // ---------------------------------------------------------
 
         // El cuerpo ya trae la documentación: se respeta lo que envió el estudiante.
         if (entrada.Documentos.Silabos.Count > 0)

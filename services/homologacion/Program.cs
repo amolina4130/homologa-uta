@@ -1,16 +1,19 @@
-﻿using HomologaUTA.Homologacion.Agents;
+using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
 using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
+using HomologaUTA.Homologacion.Reportes;
 using HomologaUTA.Homologacion.Validadores;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Controladores y Swagger
+builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
 {
