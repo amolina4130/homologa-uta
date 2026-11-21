@@ -58,6 +58,16 @@
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{**catch-all}" }
       },
+      "memoria-carga": {
+        "ClusterId": "catalogo",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/memoria/carga", "Methods": [ "POST" ] }
+      },
+      "memoria-consulta": {
+        "ClusterId": "catalogo",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/memoria/{**catch-all}", "Methods": [ "GET" ] }
+      },
       "documentos-descarga": {
         "ClusterId": "documentos",
         "AuthorizationPolicy": "Anonymous",
@@ -76,6 +86,11 @@
       }
     },
     "Clusters": {
+      "catalogo": {
+        "Destinations": {
+          "d1": { "Address": "http://catalogo-service:8080/" }
+        }
+      },
       "auth": {
         "Destinations": {
           "d1": { "Address": "http://auth-service:8080/" }
