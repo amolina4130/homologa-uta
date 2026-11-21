@@ -1,0 +1,9 @@
+namespace HomologaUTA.Homologacion.Models;
+
+public class MateriaOrigenResultado
+{
+    public int Id { get; set; }
+    public int ResultadoAsignaturaId { get; set; }   // AJUSTAR: mismo tipo que el Id de ResultadoAsignatura
+    public string Nombre { get; set; } = string.Empty;
+    public decimal? Nota { get; set; }
+}

@@ -47,4 +47,47 @@ public class HomologacionController : ControllerBase
 
         return Ok(_servicio.Validar(id, request));
     }
+    using HomologaUTA.Homologacion.Models;
+using Microsoft.EntityFrameworkCore;
+    /// <summary>Resultados por asignatura de destino, con sus materias de origen (informe técnico y detalle)</summary>
+    /// <response code="200">Lista de resultados</response>
+    [HttpGet("{solicitudId:int}/resultados")]
+    public async Task<IActionResult> ObtenerResultados(int solicitudId, CancellationToken ct)
+    {
+        var resultados = await _db.ResultadosAsignatura                   // AJUSTAR DbSet
+            .Include(r => r.MateriasOrigen)
+            .Where(r => r.SolicitudId == solicitudId)                     // AJUSTAR propiedad
+            .ToListAsync(ct);
+
+        return Ok(resultados.Select(ResultadoAsignaturaMapper.ADto));
+    }
+
+    /// <summary>Define las materias de origen de un resultado (una o dos)</summary>
+    /// <response code="200">Resultado actualizado</response>
+    /// <response code="400">Más de dos materias de origen o ninguna</response>
+    /// <response code="404">Resultado no encontrado</response>
+    [HttpPut("{solicitudId:int}/resultados/{resultadoId:int}/materias-origen")]
+    public async Task<IActionResult> AsignarMateriasOrigen(
+        int solicitudId, int resultadoId,
+        [FromBody] List<MateriaOrigenDto> materias, CancellationToken ct)
+    {
+        var resultado = await _db.ResultadosAsignatura
+            .Include(r => r.MateriasOrigen)
+            .FirstOrDefaultAsync(r => r.Id == resultadoId && r.SolicitudId == solicitudId, ct); // AJUSTAR
+
+        if (resultado is null) return NotFound();
+
+        try
+        {
+            resultado.AsignarMateriasOrigen(
+                materias.Select(m => new MateriaOrigenResultado { Nombre = m.Nombre, Nota = m.Nota }));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { mensaje = ex.Message });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(ResultadoAsignaturaMapper.ADto(resultado));
+    }
 }
