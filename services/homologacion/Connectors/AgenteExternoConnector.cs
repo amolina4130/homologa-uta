@@ -46,6 +46,18 @@ public class AgenteExternoConnector
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(_timeoutSegundos));
 
+        if (request.Documentos?.Silabos != null)
+        {
+            foreach (var silabo in request.Documentos.Silabos)
+            {
+                if (silabo.Asignatura.Split(',').Length > 2) // Asumiendo que el agente envía "Física 1, Física 2"
+                {
+                    _logger.LogWarning("El silabo {Asignatura} excede el máximo de 2 materias.", silabo.Asignatura);
+                    throw new AgenteExternoException("El agente externo no puede combinar más de dos materias.");
+                }
+            }
+        }
+
         try
         {
             using var respuesta = await _http.PostAsJsonAsync(_url, request, cts.Token);
