@@ -4,6 +4,7 @@ import { obtenerSolicitudesPendientes, obtenerDetalleSolicitud, emitirInforme } 
 import { descargarInformePDF } from "../services/homologacionService"; 
 import ListaSolicitudes from "../components/ListaSolicitudes";
 import DetalleSolicitud from "../components/DetalleSolicitud";
+import FormularioResolucion from "../components/FormularioResolucion";
 
 export default function PanelCoordinador() {
   const { rol } = useAuth();
@@ -52,7 +53,8 @@ export default function PanelCoordinador() {
     setCargando(true); setError(""); setExito("");
     try {
       const resultado = await emitirInforme(solicitudSeleccionada.solicitudId, informeArmado);
-      setExito(resultado?.estadoSolicitudActualizado === false ? "Informe guardado." : "Informe emitido correctamente.");
+      setExito(resultado?.estadoSolicitudActualizado === false ? "Informe técnico guardado." : "Informe técnico emitido correctamente.");
+
       setSolicitudSeleccionada(null);
       await cargarPendientes();
     } catch (e) {
@@ -72,6 +74,22 @@ export default function PanelCoordinador() {
       );
     } catch (error) {
       setError(error.message);
+
+  const registrarResolucion = async (datosResolucion) => {
+    try {
+      
+      console.log("Datos a enviar al backend:", datosResolucion);
+      
+      if (solicitudSeleccionada.estado !== "INFORME_EMITIDO") {
+        throw new Error("No se puede registrar la resolución: no existe informe técnico previo (Error 409).");
+      }
+
+      setExito("Resolución registrada exitosamente.");
+      setSolicitudSeleccionada(null); 
+      await cargarPendientes();
+    } catch (err) {
+      throw err; 
+
     }
   };
 
@@ -94,6 +112,7 @@ export default function PanelCoordinador() {
       {!solicitudSeleccionada ? (
         <ListaSolicitudes solicitudes={solicitudes} cargando={cargando} onAbrir={abrirDetalle} />
       ) : (
+
         <>
           {/*Botón de descarga para el coordinador */}
           <div className="d-flex justify-content-end mb-2">
@@ -108,6 +127,28 @@ export default function PanelCoordinador() {
             onGuardar={guardarInforme}
             cargando={cargando}
           />
+
+        
+        <>
+          <DetalleSolicitud
+            key={solicitudSeleccionada.solicitudId}
+            solicitud={solicitudSeleccionada}
+            onVolver={() => {
+              setSolicitudSeleccionada(null);
+              setError("");
+            }}
+            onGuardar={guardarInforme}
+            cargando={cargando}
+          />
+
+          {solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
+            <FormularioResolucion
+              solicitud={solicitudSeleccionada}
+              onGuardar={registrarResolucion}
+              cargando={cargando}
+            />
+          )}
+
         </>
       )}
     </div>

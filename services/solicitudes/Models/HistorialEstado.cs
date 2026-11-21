@@ -12,4 +12,7 @@ public class HistorialEstado
 
     public string UsuarioCorreo { get; set; } = string.Empty;
     public DateTime FechaCambio { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Nota opcional del movimiento; por ejemplo, que el estudiante editó la solicitud.</summary>
+    public string? Detalle { get; set; }
 }
