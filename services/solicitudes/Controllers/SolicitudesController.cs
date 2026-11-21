@@ -298,12 +298,13 @@ public class SolicitudesController : ControllerBase
                 });
             }
 
-            // --- NUEVA VALIDACIÓN DE LONGITUD (150 caracteres) ---
+            // --- VALIDACIÓN DE LONGITUD (150 caracteres) ---
             if (request.UniversidadOrigen.Trim().Length > MaxUniversidad || 
                 request.UniversidadDestino.Trim().Length > MaxUniversidad)
             {
                 return BadRequest(new
                 {
+                    mensaje = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres.",
                     error = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres."
                 });
             }
