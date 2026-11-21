@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerMisSolicitudes, subirDocumento } from "../services/documentosService";
+import { extraerMateriasRecord, guardarMateriasAprobadas } from "../services/homologacionService";
 import ListaDocumentos from "../components/ListaDocumentos";
+import TablaMateriasAprobadas from "../components/TablaMateriasAprobadas";
 
 const MENSAJE_RECHAZO = "El archivo no es un PDF o excede el tamaño máximo permitido. No se guardó.";
 
@@ -26,6 +28,10 @@ export default function AdjuntarDocumentos() {
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const [documentosPorSolicitud, setDocumentosPorSolicitud] = useState({});
+
+  const [materiasExtraidas, setMateriasExtraidas] = useState(null);
+  const [requiereRevision, setRequiereRevision] = useState(false);
+  const [motivoRevision, setMotivoRevision] = useState("");
 
   useEffect(() => {
     obtenerMisSolicitudes()
@@ -72,12 +78,30 @@ export default function AdjuntarDocumentos() {
       }));
       setArchivo(null);
       setClaveInput((n) => n + 1);
+
+      // NUEVO: Si el tipo es HISTORIAL, disparamos la extracción
+      if (tipoCodigo === "HISTORIAL") {
+        const extraccion = await extraerMateriasRecord(solicitudId);
+        setMateriasExtraidas(extraccion.materias || []);
+        setRequiereRevision(extraccion.requiereRevision || false);
+        setMotivoRevision(extraccion.motivo || "");
+      }
+
     } catch (err) {
       setError(err.message || MENSAJE_RECHAZO);
     } finally {
       setCargando(false);
     }
   }
+
+  // NUEVA FUNCIÓN: Guardar las materias editadas
+  const handleGuardarMaterias = async (materiasFinales) => {
+    try {
+      await guardarMateriasAprobadas(solicitudId, materiasFinales);
+    } catch (err) {
+      throw err; // Lo atrapa la TablaMateriasAprobadas para mostrar el error
+    }
+  };
 
   return (
     <div className="container mt-4">
@@ -168,10 +192,20 @@ export default function AdjuntarDocumentos() {
                 <ListaDocumentos documentos={documentosPorSolicitud[solicitudId] ?? []} />
               </div>
 
+              {/* Tabla condicional de materias extraídas */}
+              {materiasExtraidas && (
+                <TablaMateriasAprobadas 
+                  materiasIniciales={materiasExtraidas}
+                  onGuardar={handleGuardarMaterias}
+                  requiereRevision={requiereRevision}
+                  motivo={motivoRevision}
+                />
+              )}
+
               {volverResultado && solicitudId && (
                 <div className="alert alert-info d-flex justify-content-between align-items-center">
                   <span>
-                    Suba al menos un documento procesado. Después continúe para generar el análisis externo.
+                    
                   </span>
                   <button
                     type="button"
@@ -184,9 +218,9 @@ export default function AdjuntarDocumentos() {
               )}
 
               <div className="alert alert-secondary small mb-0">
-                El texto de cada PDF se extrae con PdfPig y el documento pasa a PROCESADO.
+                
                 <br />
-                Solo ves los documentos de tus propias solicitudes.
+                
               </div>
             </div>
             

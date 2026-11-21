@@ -17,6 +17,7 @@ export default function Menu() {
     "Equivalencias": "/equivalencias",
     "Solicitudes pendientes": "/panel-coordinador", 
     "Estado Memoria": "/memoria"
+
   };
 
   const opciones = {

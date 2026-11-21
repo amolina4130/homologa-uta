@@ -16,7 +16,11 @@ import PanelCoordinador from "./pages/PanelCoordinador";
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
 import Equivalencias from './pages/Equivalencias';
 import Registro from './pages/Registro'; 
+
 import EstadoMemoria from './pages/EstadoMemoria';
+
+import EditarSolicitud from './pages/EditarSolicitud';
+
  
 
 export default function App() {
@@ -38,6 +42,7 @@ export default function App() {
             <Route path="/nueva-solicitud" element={<><Menu /><NuevaSolicitud /></>} />
             <Route path="/carreras" element={<><Menu /><Carreras /></>} />
             <Route path="/resultado/:id" element={<><Menu /><ResultadoAnalisis /></>} />
+            <Route path="/editar-solicitud/:id" element={<><Menu /><EditarSolicitud /></>} />
           </Route>
 
           {/* Rutas restringidas por rol */}
