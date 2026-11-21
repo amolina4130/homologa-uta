@@ -14,8 +14,10 @@ export default function Menu() {
     "Estado del sistema": "/estado",
     "Reglas": "/reglas",
     "Panel Coordinador": "/panel-coordinador",
-    "Equivalencias": "/equivalencias", 
-    "Solicitudes pendientes": "/panel-coordinador"
+    "Equivalencias": "/equivalencias",
+    "Solicitudes pendientes": "/panel-coordinador", 
+    "Estado Memoria": "/memoria"
+
   };
 
   const opciones = {
@@ -23,7 +25,7 @@ export default function Menu() {
     COORDINADOR: ["Inicio", "Panel Coordinador", "Carreras y mallas"],
     SECRETARIA: ["Inicio", "Solicitudes", "Carreras y mallas"],
     CONSEJO: ["Inicio", "Resoluciones", "Carreras y mallas"],
-    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Equivalencias", "Carreras y mallas"],
+    ADMINISTRADOR: ["Inicio", "Estado del sistema", "Reglas", "Equivalencias", "Estado Memoria", "Carreras y mallas"],
   };
 
   const misOpciones = opciones[rol] || [];
