@@ -19,20 +19,11 @@ public class AnalisisSolicitudException : Exception
     }
 }
 
-// Dentro del método de análisis, antes de llamar al agente:
-var preseleccion = await _preseleccion.PreseleccionarAsync(materias, carreraDestinoId, nivelAprobado, ct);
-
-foreach (var par in preseleccion.Pares)
-{
-    // Solo las candidatas van al agente
-    await EnviarAlAgenteAsync(par.MateriaOrigen, par.CandidatasDestino, ct);   // AJUSTAR: su llamada actual al agente
-}
-
-// preseleccion.SinCandidata NO se envía: queda como "sin equivalente probable" con su motivo.
-
 /// <summary>
 /// Analiza las asignaturas de una solicitud con el agente interno, guarda la decisión, los porcentajes
 /// y la justificación por asignatura, deja la solicitud en PENDIENTE_REVISION y publica AnalisisCompletado.
+/// Cuando el estudiante tiene materias aprobadas extraídas del récord, antes de llamar al agente se
+/// hace la preselección por área y nivel (HU-21) y se permite la combinación de dos materias (HU-22).
 /// </summary>
 public class AnalisisService
 {
@@ -42,74 +33,113 @@ public class AnalisisService
     private readonly HomologacionDbContext _db;
     private readonly AgenteInterno _agente;
     private readonly DecisionHomologacion _decision;
+    private readonly PreseleccionService _preseleccion;
     private readonly IAnalisisEventPublisher _publisher;
     private readonly SolicitudesClient _solicitudes;
-     private readonly IMemoriaClient _memoriaClient;
     private readonly ILogger<AnalisisService> _logger;
 
     public AnalisisService(
         HomologacionDbContext db,
         AgenteInterno agente,
         DecisionHomologacion decision,
+        PreseleccionService preseleccion,
         IAnalisisEventPublisher publisher,
         SolicitudesClient solicitudes,
-        IMemoriaClient memoriaClient,
         ILogger<AnalisisService> logger)
     {
         _db = db;
         _agente = agente;
         _decision = decision;
+        _preseleccion = preseleccion;
         _publisher = publisher;
         _solicitudes = solicitudes;
-        _memoriaClient = memoriaClient;
         _logger = logger;
     }
 
     /// <summary>
     /// Analiza la solicitud. Si no se envían asignaturas, las toma del servicio de Solicitudes
-    /// (asignaturas reales seleccionadas por el estudiante).
+    /// (asignaturas reales seleccionadas por el estudiante) o de la preselección si ya existen
+    /// materias aprobadas del récord.
     /// </summary>
     public async Task<ResultadoAnalisisDto> AnalizarSolicitudAsync(
         int solicitudId,
         IReadOnlyList<AsignaturaAnalisisDto>? asignaturas = null,
         CancellationToken ct = default)
     {
-        var estadoMemoria = await _memoriaClient.ObtenerEstadoMemoriaAsync(ct);
-        if (estadoMemoria is null)
-        {
-            throw new AnalisisSolicitudException(409, "Memoria del agente sin cargar. El Administrador debe actualizarla.");
-        }
         var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
         if (info is null)
             throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");
 
-        var entradas = asignaturas is { Count: > 0 }
-            ? asignaturas
-            : ConstruirAsignaturas(info);
+        EntradasPreseleccion? preseleccion = null;
+        List<AsignaturaAnalisisDto> entradas;
 
-        if (entradas.Count == 0)
+        if (asignaturas is { Count: > 0 })
+        {
+            entradas = asignaturas.ToList();
+        }
+        else
+        {
+            try
+            {
+                preseleccion = await _preseleccion.ConstruirEntradasAsync(solicitudId, ct);
+            }
+            catch (MemoriaNoDisponibleException ex)
+            {
+                throw new AnalisisSolicitudException(502, ex.Message);
+            }
+
+            entradas = preseleccion.UsaMateriasAprobadas
+                ? preseleccion.Entradas.ToList()
+                : ConstruirAsignaturas(info);
+        }
+
+        var sinCandidata = preseleccion?.SinCandidata?.ToList() ?? new List<MateriaSinCandidataDto>();
+
+        // Solicitudes marca las asignaturas sin equivalencia en su catálogo con un centinela.
+        // Antes de llamar al agente se intenta una candidata real en la memoria destino; las que
+        // no la tengan quedan en revisión como "Sin equivalente probable".
+        foreach (var pendiente in await _preseleccion.ResolverSinEquivalenteAsync(info, entradas, ct))
+        {
+            if (!sinCandidata.Any(s => string.Equals(
+                    s.MateriaOrigen, pendiente.MateriaOrigen, StringComparison.OrdinalIgnoreCase)))
+            {
+                sinCandidata.Add(pendiente);
+            }
+        }
+
+        if (entradas.Count == 0 && sinCandidata.Count == 0)
             throw new AnalisisSolicitudException(400, "La solicitud no tiene asignaturas para analizar.");
 
-        // 1. Analizar cada asignatura (agente + decisión calculada por código)
+        // 1. Analizar cada asignatura candidata (agente + decisión calculada por código).
+        // Las que no tienen candidata no se envían al agente: quedan en revisión con el motivo.
         var filas = new List<AnalisisAsignatura>();
-         foreach (var a in entradas)
+        foreach (var a in entradas)
         {
-            // Buscamos los IDs de las asignaturas. 
-            // Como AsignaturaAnalisisDto no tiene los IDs, usamos un truco temporal:
-            // Si no los tienes, puedes usar un ID de prueba (ej. 1) para el Stub.
-            int idOrigen = 1; 
-            int idDestino = 2;
-
-            var resultadoAgente = await _agente.AnalizarAsignaturaAsync(
-                idOrigen, a.AsignaturaOrigen, idDestino, a.AsignaturaDestino);
-
+            var resultadoAgente = await AnalizarConAgenteAsync(a);
             filas.Add(ConstruirFila(a, resultadoAgente));
+        }
+
+        foreach (var materia in sinCandidata)
+        {
+            filas.Add(new AnalisisAsignatura
+            {
+                AsignaturaOrigen = Recortar(materia.MateriaOrigen, MaxNombre),
+                AsignaturaDestino = "Sin equivalente probable",
+                Decision = DecisionAnalisis.REQUIERE_REVISION,
+                Justificacion = Recortar(
+                    string.IsNullOrWhiteSpace(materia.Motivo)
+                        ? "No hay una asignatura de destino candidata para esta materia."
+                        : materia.Motivo,
+                    MaxJustificacion),
+                RequiereRevision = true
+            });
         }
 
         // 2. Guardar: si la solicitud ya se había analizado, se reemplaza su resultado
         var fecha = DateTime.UtcNow;
         var analisis = await _db.AnalisisSolicitudes
             .Include(x => x.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
             .FirstOrDefaultAsync(x => x.SolicitudId == solicitudId, ct);
 
         if (analisis is null)
@@ -172,6 +202,11 @@ public class AnalisisService
             {
                 AsignaturaOrigen = f.AsignaturaOrigen,
                 AsignaturaDestino = f.AsignaturaDestino,
+                AsignaturaDestinoId = f.AsignaturaDestinoId,
+                Combinada = f.Combinada,
+                MateriasOrigen = f.MateriasOrigen
+                    .Select(m => new MateriaOrigenDto { Nombre = m.Nombre, Nota = m.Nota })
+                    .ToList(),
                 PorcentajeContenido = f.PorcentajeContenido,
                 PorcentajeProfundidad = f.PorcentajeProfundidad,
                 PorcentajeHoras = f.PorcentajeHoras,
@@ -193,6 +228,7 @@ public class AnalisisService
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
             .Include(a => a.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
         if (analisis is null)
@@ -201,13 +237,17 @@ public class AnalisisService
         return new ResultadoSolicitudDto
         {
             SolicitudId = solicitudId,
-            Numero = $"SOL-{solicitudId:D4}",
+            Numero = string.IsNullOrWhiteSpace(info.NumeroProceso)
+                ? $"SOL-{solicitudId:D4}"
+                : info.NumeroProceso,
             Tipo = info.Tipo,
             Modulo = string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase)
                 ? "Agente externo"
                 : "Agente interno",
             Estado = analisis.Estado,
-            Estudiante = info.EstudianteCorreo,
+            Estudiante = CoordinadorService.NombreEstudiante(info),
+            EstudianteCedula = CoordinadorService.CedulaEstudiante(info),
+            ComiteCorreo = info.EstudianteCorreo,
             FechaRegistro = info.FechaRegistro,
             CarreraOrigen = info.CarreraOrigen,
             CarreraDestino = info.CarreraDestino,
@@ -224,6 +264,13 @@ public class AnalisisService
                     Id = a.Id,
                     AsignaturaOrigen = a.AsignaturaOrigen,
                     AsignaturaDestino = a.AsignaturaDestino,
+                    AsignaturaDestinoId = a.AsignaturaDestinoId,
+                    Combinada = a.Combinada,
+                    MateriasOrigen = a.MateriasOrigen
+                        .Select(m => new MateriaOrigenDto { Nombre = m.Nombre, Nota = m.Nota })
+                        .ToList(),
+                    AreaOrigen = a.AreaOrigen,
+                    AreaDestino = a.AreaDestino,
                     PorcentajeContenido = a.PorcentajeContenido,
                     PorcentajeProfundidad = a.PorcentajeProfundidad,
                     PorcentajeHoras = a.PorcentajeHoras,
@@ -244,8 +291,64 @@ public class AnalisisService
             AsignaturaOrigen = a.AsignaturaOrigen,
             ContenidoOrigen = a.ContenidoOrigen,
             AsignaturaDestino = a.AsignaturaDestino,
-            ContenidoDestino = a.ContenidoDestino
+            ContenidoDestino = a.ContenidoDestino,
+            AsignaturaDestinoId = a.AsignaturaDestinoId,
+            AreaOrigen = a.AreaOrigen,
+            AreaDestino = a.AreaDestino,
+            NivelOrigen = a.NivelOrigen,
+            NivelDestino = a.NivelDestino,
+            EquivalenciaAplicada = a.EquivalenciaAplicada,
+            MateriasOrigenPermitidas = new List<string> { a.AsignaturaOrigen }
         }).ToList();
+
+    /// <summary>
+    /// Aplica una equivalencia registrada antes de llamar al agente: si la regla existe, la
+    /// asignatura queda homologable y se cita la regla. En otro caso, el agente compara contenidos.
+    /// </summary>
+    private async Task<ResultadoAgente> AnalizarConAgenteAsync(AsignaturaAnalisisDto entrada)
+    {
+        // Regla institucional de materias no homologables: estas materias no se homologan aunque exista una
+        // equivalencia registrada o el contenido parezca idéntico. Se evalúan primero para
+        // que ninguna otra regla pueda marcarlas como homologables.
+        var motivoExclusion = ReglasHomologacion.MotivoSiNoHomologable(
+            entrada.AsignaturaOrigen, entrada.AsignaturaDestino);
+        if (motivoExclusion is not null)
+        {
+            return new ResultadoAgente
+            {
+                Contenido = 0,
+                Profundidad = 0,
+                Horas = 0,
+                Justificacion = motivoExclusion,
+                RequiereRevision = false,
+                MateriasOrigen = new List<string> { entrada.AsignaturaOrigen }
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(entrada.EquivalenciaAplicada))
+        {
+            return new ResultadoAgente
+            {
+                Contenido = 100,
+                Profundidad = 100,
+                Horas = 100,
+                Justificacion = entrada.EquivalenciaAplicada.Trim(),
+                RequiereRevision = false,
+                MateriasOrigen = new List<string> { entrada.AsignaturaOrigen }
+            };
+        }
+
+        // El análisis del registro usa la memoria del agente (mallas, planes analíticos y
+        // equivalencias). Así termina en milisegundos y no depende de la disponibilidad de
+        // Ollama. La IA se solicita después, cuando el Docente genera su sugerencia.
+        return await _agente.AnalizarAsignaturaAsync(
+            entrada.AsignaturaOrigen,
+            entrada.ContenidoOrigen,
+            entrada.AsignaturaDestino,
+            entrada.ContenidoDestino,
+            entrada.MateriasOrigenPermitidas.Count > 0 ? entrada.MateriasOrigenPermitidas : null,
+            usarOllama: false);
+    }
 
     private AnalisisAsignatura ConstruirFila(AsignaturaAnalisisDto entrada, ResultadoAgente agente)
     {
@@ -268,10 +371,55 @@ public class AnalisisService
                 : $"{d.Justificacion} Análisis del agente: {agente.Justificacion.Trim()}";
         }
 
+        if (!ReglasHomologacion.EsMateriaNoHomologable(
+                entrada.AsignaturaOrigen, entrada.AsignaturaDestino) &&
+            !string.IsNullOrWhiteSpace(entrada.EquivalenciaAplicada) &&
+            !justificacion.Contains(entrada.EquivalenciaAplicada, StringComparison.OrdinalIgnoreCase))
+        {
+            justificacion = $"{entrada.EquivalenciaAplicada.Trim()} {justificacion}";
+        }
+
+        var nombres = (agente.MateriasOrigen ?? new List<string>())
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Select(m => m.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (nombres.Count == 0)
+            nombres.Add(entrada.AsignaturaOrigen.Trim());
+
+        if (nombres.Count > 2)
+            throw new AnalisisSolicitudException(400,
+                "Una asignatura de destino no puede cubrirse con más de dos materias de origen.");
+
+        if (entrada.MateriasOrigenPermitidas.Count > 0)
+        {
+            var ajenas = nombres
+                .Where(n => !entrada.MateriasOrigenPermitidas.Contains(n, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            if (ajenas.Count > 0)
+                throw new AnalisisSolicitudException(400,
+                    $"El agente propuso materias que no pertenecen al estudiante: {string.Join(", ", ajenas)}.");
+        }
+
+        var materias = nombres.Select((nombre, indice) => new MateriaOrigenResultado
+        {
+            Nombre = Recortar(nombre, MaxNombre),
+            Nota = entrada.NotasMateriasOrigen.TryGetValue(nombre, out var nota)
+                ? nota
+                : indice == 0 ? entrada.NotaOrigen : null
+        }).ToList();
+
         return new AnalisisAsignatura
         {
-            AsignaturaOrigen = Recortar(entrada.AsignaturaOrigen, MaxNombre),
+            AsignaturaOrigen = Recortar(string.Join(" + ", nombres), MaxNombre),
             AsignaturaDestino = Recortar(entrada.AsignaturaDestino, MaxNombre),
+            AsignaturaDestinoId = entrada.AsignaturaDestinoId,
+            AreaOrigen = RecortarOpcional(entrada.AreaOrigen, 80),
+            AreaDestino = RecortarOpcional(entrada.AreaDestino, 80),
+            Combinada = nombres.Count == 2,
+            MateriasOrigen = materias,
             PorcentajeContenido = agente.Contenido,
             PorcentajeProfundidad = agente.Profundidad,
             PorcentajeHoras = agente.Horas,
@@ -284,41 +432,10 @@ public class AnalisisService
     private static string Recortar(string texto, int max) =>
         texto.Length <= max ? texto : texto[..max];
 
-    // --- NUEVO MÉTODO PARA LA RESOLUCIÓN DEL CONSEJO ---
-    /// <summary>
-    /// Marca el análisis como RESUELTA y guarda la decisión final del Coordinador 
-    /// para cada asignatura, basándose en la resolución del Consejo.
-    /// </summary>
-    public async Task RegistrarResolucionAsync(int solicitudId, List<DecisionResolucionDto> decisiones, CancellationToken ct = default)
-    {
-        var analisis = await _db.AnalisisSolicitudes
-            .Include(a => a.Asignaturas)
-            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
-
-        if (analisis is null)
-            throw new AnalisisSolicitudException(404, "La solicitud no tiene un análisis generado.");
-
-        // Actualizamos la decisión final de cada asignatura
-        foreach (var decision in decisiones)
-        {
-            var asignatura = analisis.Asignaturas.FirstOrDefault(a => a.Id == decision.AsignaturaId);
-            if (asignatura is not null)
-            {
-                asignatura.DecisionCoordinador = decision.DecisionFinal;
-            }
-        }
-
-        // El análisis pasa a RESUELTA
-        analisis.Estado = EstadoAnalisis.RESUELTA;
-        await _db.SaveChangesAsync(ct);
-    }
-}
-
-// --- CLASE DTO PARA LAS DECISIONES DEL CONSEJO ---
-public class DecisionResolucionDto
-{
-    public int AsignaturaId { get; set; }
-    public string DecisionFinal { get; set; } = string.Empty;
+    private static string? RecortarOpcional(string? texto, int max) =>
+        string.IsNullOrWhiteSpace(texto)
+            ? null
+            : texto.Trim().Length <= max ? texto.Trim() : texto.Trim()[..max];
 }
 
 /// <summary>Estados del servicio de Solicitudes que usa Homologación.</summary>

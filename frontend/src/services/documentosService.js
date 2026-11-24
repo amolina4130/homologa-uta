@@ -1,7 +1,7 @@
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 function getAuthHeaders() {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   return { Authorization: `Bearer ${token}` };
 }
 
@@ -10,6 +10,15 @@ export async function obtenerMisSolicitudes() {
     headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error("Error al cargar solicitudes");
+  return await res.json();
+}
+
+// Documentos ya guardados para una solicitud del estudiante autenticado.
+export async function obtenerDocumentosSolicitud(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/documentos/solicitud/${solicitudId}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error("No se pudieron cargar los documentos de la solicitud");
   return await res.json();
 }
 

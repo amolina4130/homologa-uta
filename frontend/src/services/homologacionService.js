@@ -1,7 +1,7 @@
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   return {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${token}`
@@ -17,7 +17,9 @@ const lanzarError = async (res, mensajePorDefecto) => {
   let reintentable = false;
   try {
     const cuerpo = await res.json();
-    if (cuerpo && cuerpo.error) mensaje = cuerpo.error;
+    if (cuerpo && (cuerpo.error || cuerpo.mensaje)) {
+      mensaje = cuerpo.error || cuerpo.mensaje;
+    }
     if (cuerpo && cuerpo.reintentable) reintentable = true;
   } catch {
     // La respuesta no trae JSON; se conserva el mensaje por defecto.
@@ -75,92 +77,63 @@ export async function validarReglasObjetivas(solicitudId, datos) {
   return extraerDatos(json);
 }
 
-// Descargar el informe en PDF (HU-18)
-export async function descargarInformePDF(solicitudId, numeroProceso) {
-  try {
-    const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/informe`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-
-    if (!res.ok) {
-      if (res.status === 404) throw new Error("El informe aún no ha sido generado (404).");
-      if (res.status === 403) throw new Error("No tienes permiso para descargar este informe (403).");
-      await lanzarError(res, "Error al descargar el informe.");
-    }
-
-    // Convertimos la respuesta en un archivo (Blob) y forzamos la descarga
-    const blob = await res.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    // Nombre del archivo: Informe_SOL-XXXX.pdf
-    a.download = `Informe_${numeroProceso || `SOL-${solicitudId}`}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-
-  } catch (error) {
-    
-    console.warn("Simulando descarga de PDF (Mock)...");
-    
-    if (!numeroProceso && !solicitudId) {
-      throw new Error("No se puede descargar el informe: datos incompletos.");
-    }
-
-  
-    const contenidoFalso = `Este es un PDF de prueba simulado para el informe de la solicitud ${numeroProceso || solicitudId}.`;
-    const blob = new Blob([contenidoFalso], { type: "application/pdf" });
-    
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Informe_${numeroProceso || `SOL-${solicitudId}`}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  }
+// HU-20: reutiliza el récord ya subido y extrae sus materias y notas.
+export async function extraerRecord(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/record/extraer`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo extraer el récord académico");
+  return await res.json();
 }
 
-// Extraer materias del récord 
-export async function extraerMateriasRecord(solicitudId) {
-  try {
-    const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/record/extraer`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({}),
-    });
-    if (!res.ok) await lanzarError(res, "No se pudo extraer el récord.");
-    return await res.json();
-  } catch (error) {
-    // Simulamos la extracción de datos
-    console.warn("Simulando extracción de materias (Mock).");
-    return {
-      materias: [
-        { nombre: "Programación I", nota: 9.5 },
-        { nombre: "Cálculo Diferencial", nota: 8.0 },
-      ],
-      requiereRevision: true, 
-      motivo: "El PDF tenía baja resolución en algunas notas.",
-    };
-  }
+// HU-20: materias aprobadas guardadas para la solicitud.
+export async function obtenerMateriasAprobadas(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/materias-aprobadas`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudieron cargar las materias aprobadas");
+  return await res.json();
 }
 
-// Guardar materias aprobadas 
-export async function guardarMateriasAprobadas(solicitudId, materias) {
-  try {
-    const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/materias-aprobadas`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ materias }),
-    });
-    if (!res.ok) await lanzarError(res, "Error al guardar las materias.");
-    return await res.json();
-  } catch (error) {
-    // Simulamos guardado exitoso
-    return { success: true, mensaje: "Materias guardadas correctamente." };
-  }
+// HU-20: guarda la lista corregida por el estudiante.
+export async function actualizarMateriasAprobadas(solicitudId, materias) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/materias-aprobadas`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ materias }),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudieron guardar las materias aprobadas");
+  return await res.json();
 }
 
+// HU-17: resolución del Consejo Directivo (null si todavía no existe).
+export async function obtenerResolucion(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/resolucion`, {
+    headers: getAuthHeaders(),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) await lanzarError(res, "No se pudo cargar la resolución del Consejo");
+  return await res.json();
+}
+
+// HU-18: descarga el informe PDF y lo entrega al navegador.
+export async function descargarInforme(solicitudId) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/informe`, {
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    await lanzarError(res, "No se pudo descargar el informe");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Informe_SOL-${String(solicitudId).padStart(4, "0")}.pdf`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}

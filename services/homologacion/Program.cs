@@ -1,23 +1,20 @@
+﻿using System.Text;
 using HomologaUTA.Homologacion.Agents;
 using HomologaUTA.Homologacion.Clients;
 using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Services;
-using HomologaUTA.Homologacion.Reportes;
 using HomologaUTA.Homologacion.Validadores;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Controladores y Swagger
-builder.Services.AddHttpClient<ICatalogoClient, CatalogoClient>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddScoped<AgenteExtractorRecord>();
-builder.Services.AddScoped<ExtractorRecordService>();
-builder.Services.AddScoped<HomologaUTA.Homologacion.Services.IInformeService, HomologaUTA.Homologacion.Services.InformeServiceSimulado>();
-
-builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -36,6 +33,40 @@ builder.Services.AddSwaggerGen(c =>
 // 2. Base de datos del servicio (resultados del análisis)
 builder.Services.AddDbContext<HomologacionDbContext>(o =>
     o.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// 2.1 JWT: el Gateway valida el token; aquí se leen los claims (correo y rol) para las
+// reglas de propiedad y rol de los endpoints de HU-17, HU-18 y HU-20.
+var jwtKey = builder.Configuration["JWT_SECRET"] ?? builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["JWT_ISSUER"] ?? builder.Configuration["Jwt:Issuer"] ?? "HomologaUTA";
+var jwtAudience = builder.Configuration["JWT_AUDIENCE"] ?? builder.Configuration["Jwt:Audience"] ?? "HomologaUTA";
+
+if (!string.IsNullOrWhiteSpace(jwtKey))
+{
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.MapInboundClaims = false;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = jwtIssuer,
+                ValidateAudience = true,
+                ValidAudience = jwtAudience,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromSeconds(30),
+                RoleClaimType = "rol",
+                NameClaimType = "sub"
+            };
+        });
+}
+else
+{
+    // Sin JWT configurado (pruebas locales) no se exige token; los controladores usan el correo demo.
+    builder.Services.AddAuthentication();
+}
 
 // 3. Validadores de reglas objetivas (TA-07.1 y TA-07.2) y el servicio que los ejecuta (TA-07.4)
 builder.Services.AddSingleton<ValidadorReglas>();
@@ -64,18 +95,34 @@ builder.Services.AddScoped<AnalisisExternoService>();
 // Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
+builder.Services.AddScoped<DocenteService>();
 
-builder.Services.Configure<PreseleccionOptions>(
-    builder.Configuration.GetSection(PreseleccionOptions.Seccion));
-builder.Services.AddSingleton<IMemoriaCatalogo, MemoriaCatalogoStub>();
-builder.Services.AddScoped<IPreseleccionService, PreseleccionService>();
+// 8. Sprint 3: memoria del agente, preselección, récord, materias aprobadas,
+// resolución del Consejo e informe PDF (HU-17 a HU-22).
+var preseleccion = builder.Configuration.GetSection("Preseleccion").Get<PreseleccionConfig>()
+                   ?? new PreseleccionConfig();
+builder.Services.AddSingleton(preseleccion);
+
+builder.Services.AddHttpClient<IMemoriaClient, MemoriaClient>();
+builder.Services.AddScoped<PreseleccionService>();
+builder.Services.AddScoped<AgenteExtractorRecord>();
+builder.Services.AddScoped<ExtractorRecordService>();
+builder.Services.AddScoped<MateriasAprobadasService>();
+builder.Services.AddScoped<ResolucionService>();
+builder.Services.AddScoped<IInformeService, InformeService>();
+
+// QuestPDF: licencia Community para el informe técnico (HU-18)
+QuestPDF.Settings.License = LicenseType.Community;
+
 
 var app = builder.Build();
 
-// 8. Configuración de la app
+// 9. Configuración de la app
 // SerializeAsV2: el visor de Swashbuckle 6.6.2 no reconoce "openapi 3.0.4"
 app.UseSwagger(c => c.SerializeAsV2 = true);
 app.UseSwaggerUI();
+
+app.UseAuthentication();
 
 app.MapControllers();
 
@@ -83,7 +130,7 @@ app.MapControllers();
 var puerto = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 app.Urls.Add($"http://0.0.0.0:{puerto}");
 
-// 9. Aplicar migraciones al arrancar
+// 10. Aplicar migraciones al arrancar
 using (var scope = app.Services.CreateScope())
 {
     try

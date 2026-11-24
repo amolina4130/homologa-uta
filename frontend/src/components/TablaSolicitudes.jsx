@@ -1,10 +1,28 @@
 import { Link } from "react-router-dom";
 
-export const TablaSolicitudes = ({ solicitudes }) => {
+const ESTADOS_CON_INFORME = ["INFORME_EMITIDO", "RESUELTA"];
+
+const claseEstado = (estado) => {
+  switch (estado) {
+    case "RESUELTA":
+      return "bg-success";
+    case "INFORME_EMITIDO":
+      return "bg-info text-dark";
+    case "PENDIENTE_REVISION":
+      return "bg-warning text-dark";
+    default:
+      return "bg-secondary";
+  }
+};
+
+const formatoFecha = (valor) =>
+  valor ? new Date(valor).toLocaleDateString("es-EC") : "-";
+
+export const TablaSolicitudes = ({ solicitudes, onDescargarInforme }) => {
   if (!solicitudes || solicitudes.length === 0) {
     return (
       <div className="alert alert-info text-center shadow-sm mt-3" role="alert">
-        No tienes solicitudes registradas por el momento.
+        No tienes solicitudes registradas con esos criterios.
       </div>
     );
   }
@@ -14,88 +32,75 @@ export const TablaSolicitudes = ({ solicitudes }) => {
       <table className="table table-hover table-bordered shadow-sm align-middle">
         <thead className="table-primary">
           <tr>
-            <th className="text-center">N° Proceso</th>
+            <th className="text-center">N° de proceso</th>
             <th>Fecha</th>
             <th>Tipo</th>
-            <th>Carrera Origen</th>
-            <th>Carrera Destino</th>
+            <th>Carrera origen</th>
+            <th>Carrera destino</th>
+            <th className="text-center">Módulo</th>
             <th className="text-center">Estado</th>
             <th className="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          {solicitudes.map((sol) => (
-            <tr key={sol.id}>
-feature/TA-16.2-filtros-y-editar
-              
-              {/* 1. Mostramos el numeroProceso. Si el backend no lo envía, lo simulamos con el ID */}
-              <td className="text-center fw-bold text-primary">
-                {sol.numeroProceso || `SOL-${sol.id.toString().padStart(4, '0')}`}
-              </td>
-              
+          {solicitudes.map((sol) => {
+            const numero = sol.numeroProceso || sol.numero || `SOL-${String(sol.id).padStart(4, "0")}`;
+            const puedeEditar = sol.puedeEditar ?? sol.estado === "REGISTRADA";
+            const tieneInforme = ESTADOS_CON_INFORME.includes(sol.estado);
 
-              <td className="text-center fw-bold">{sol.numero || sol.id}</td>
-              
-              <td>
-                {sol.fechaRegistro 
-                  ? new Date(sol.fechaRegistro).toLocaleDateString() 
-                  : sol.fecha 
-                  ? new Date(sol.fecha).toLocaleDateString() 
-                  : '-'}
-              </td>
-              
-              <td>{sol.tipo || 'Homologación'}</td>
-
-              <td>
-                {sol.tipo || '-'}
-                {/* NUEVO: Si la solicitud tiene materias combinadas, mostramos una etiqueta */}
-                {sol.tieneCombinadas && (
-                  <span className="badge bg-info text-dark ms-1">Combinada</span>
-                )}
-              </td>
- 
-              
-              <td>{sol.origen || sol.carreraOrigen || '-'}</td>
-              <td>{sol.destino || sol.carreraDestino || '-'}</td>
-              
-              <td className="text-center">
-                <span
-                  className={`badge p-2 ${
-                    sol.estado === "INFORME_EMITIDO" || sol.estado === "RESUELTA"
-                      ? "bg-success"
-                      : sol.estado === "PENDIENTE_REVISION"
-                      ? "bg-warning text-dark"
-                      : "bg-primary" // REGISTRADA en azul
-                  }`}
-                >
-                  {sol.estado || 'REGISTRADA'}
-                </span>
-              </td>
-
-              {/* 2. Columna de Acciones con Lógica Condicional */}
-
-              <td className="text-center">
-                <div className="d-flex justify-content-center gap-2">
-                  <Link 
-                    to={`/resultado/${sol.id}`} 
-                    className="btn btn-sm btn-outline-secondary fw-bold"
+            return (
+              <tr key={sol.id}>
+                <td className="text-center fw-bold">{numero}</td>
+                <td>{formatoFecha(sol.fechaRegistro || sol.fecha)}</td>
+                <td>{sol.tipo || "-"}</td>
+                <td>{sol.origen || sol.carreraOrigen || "-"}</td>
+                <td>{sol.destino || sol.carreraDestino || "-"}</td>
+                <td className="text-center">
+                  <span
+                    className={`badge ${
+                      sol.modulo === "EXTERNO" ? "bg-info text-dark" : "bg-light text-dark border"
+                    }`}
                   >
-                    Ver detalle
-                  </Link>
-
-                  {/* El botón Editar solo aparece si el estado es REGISTRADA */}
-                  {(sol.estado === "REGISTRADA" || !sol.estado) && (
-                    <Link 
-                      to={`/editar-solicitud/${sol.id}`} 
+                    {sol.modulo === "EXTERNO" ? "Externo" : "Interno"}
+                  </span>
+                </td>
+                <td className="text-center">
+                  <span className={`badge p-2 ${claseEstado(sol.estado)}`}>
+                    {sol.estado || "REGISTRADA"}
+                  </span>
+                </td>
+                <td className="text-center">
+                  <div className="d-flex flex-wrap gap-1 justify-content-center">
+                    <Link
+                      to={`/resultado/${sol.id}`}
                       className="btn btn-sm btn-outline-primary fw-bold"
                     >
-                      Editar
+                      Ver detalle
                     </Link>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
+
+                    {puedeEditar && (
+                      <Link
+                        to={`/editar-solicitud/${sol.id}`}
+                        className="btn btn-sm btn-outline-secondary fw-bold"
+                      >
+                        Editar
+                      </Link>
+                    )}
+
+                    {tieneInforme && onDescargarInforme && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-success fw-bold"
+                        onClick={() => onDescargarInforme(sol.id)}
+                      >
+                        Descargar informe
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -53,6 +53,7 @@ if (!string.IsNullOrWhiteSpace(jwtKey))
 // --- Registrar servicios ---
 builder.Services.AddScoped<ExtractorPdfService>();
 builder.Services.AddScoped<EventPublisherService>(); // <--- NUEVO: Publicador de RabbitMQ
+builder.Services.AddScoped<CarpetaService>(); // Procesamiento de carpetas de documentos
 
 var app = builder.Build();
 

@@ -1,16 +1,12 @@
 import { useState } from "react";
-// 1. Importamos useLocation para recibir el mensaje del Registro, y Link para la navegación
-import { useNavigate, useLocation, Link } from "react-router-dom"; 
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth, rutaPorRol } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation(); // 2. Hook para leer el estado de la ruta
+  const location = useLocation();
   const { iniciarSesion } = useAuth();
-  
-  // 3. Extraemos el mensaje de éxito (si viene desde el Registro)
-  const mensajeExito = location.state?.mensajeExito;
-
+  const mensajeExito = location.state?.mensajeExito || "";
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [errores, setErrores] = useState({});
@@ -34,6 +30,7 @@ export default function Login() {
 
     setCargando(true);
     try {
+      // El AuthContext ya se encarga de guardar el usuario en el sessionStorage
       const rol = await iniciarSesion(correo, contrasena);
       navigate(rutaPorRol(rol));
     } catch (err) {
@@ -59,9 +56,8 @@ export default function Login() {
         <form onSubmit={ingresar} noValidate>
           <h4 className="mb-4 text-center">Iniciar Sesión</h4>
 
-          {/* 4. AQUÍ MOSTRAMOS EL MENSAJE DE ÉXITO DEL REGISTRO */}
           {mensajeExito && (
-            <div className="alert alert-success py-2 text-center" role="alert">
+            <div className="alert alert-success py-2" role="alert">
               {mensajeExito}
             </div>
           )}
@@ -102,15 +98,14 @@ export default function Login() {
           </button>
         </form>
 
-        {/* 5. AQUÍ AGREGAMOS EL ENLACE "CREAR UNA CUENTA" */}
-        <div className="text-center mt-4">
-          <span className="text-muted">¿No tienes cuenta? </span>
-          <Link to="/registro" className="fw-bold text-decoration-none">
+        <p className="text-center text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+          ¿No tiene una cuenta?{" "}
+          <Link to="/registro" className="fw-bold">
             Crear una cuenta
           </Link>
-        </div>
+        </p>
 
-        <p className="text-center text-muted mt-3 mb-0" style={{ fontSize: "0.85rem" }}>
+        <p className="text-center text-muted mt-2 mb-0" style={{ fontSize: "0.85rem" }}>
           Al ingresar, el sistema lo redirige a la pantalla según su rol.
         </p>
       </div>

@@ -15,20 +15,28 @@ public class OllamaClient
         _ollamaUrl = configuration["Ollama:Url"] ?? "http://ollama:11434";
     }
 
-    public async Task<string> GenerarRespuestaAsync(string prompt)
+    public async Task<string> GenerarRespuestaAsync(
+        string prompt, CancellationToken ct = default, int numPredict = 256)
     {
         var requestBody = new
         {
             model = "llama3",
             prompt = prompt,
             stream = false, // Para que devuelva toda la respuesta junta
-            format = "json" // Fuerza al modelo a responder con un JSON válido
+            format = "json", // Fuerza al modelo a responder con un JSON válido
+            // La respuesta esperada es un JSON corto. Limitar la generación evita que el modelo
+            // siga escribiendo después del objeto y reduce el tiempo de respuesta en CPU.
+            options = new
+            {
+                num_predict = numPredict,
+                temperature = 0.1
+            }
         };
 
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content);
+        var response = await _httpClient.PostAsync($"{_ollamaUrl}/api/generate", content, ct);
         
         if (!response.IsSuccessStatusCode)
         {

@@ -9,7 +9,7 @@
       "auth-registro": {
         "ClusterId": "auth",
         "AuthorizationPolicy": "Anonymous",
-        "Match": { "Path": "/auth/registro", "Methods": [ "POST" ] }
+        "Match": { "Path": "/auth/registro" }
       },
       "auth": {
         "ClusterId": "auth",
@@ -21,9 +21,39 @@
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/carreras/{**catch-all}" }
       },
+      "asignaturas": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/asignaturas/{**catch-all}" }
+      },
+      "planes-analiticos": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/planes-analiticos/{**catch-all}" }
+      },
+      "equivalencias-consulta": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/equivalencias/{**catch-all}", "Methods": [ "GET" ] }
+      },
+      "equivalencias-modificar": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/equivalencias/{**catch-all}" }
+      },
+      "memoria-consulta": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "autenticado",
+        "Match": { "Path": "/memoria/{**catch-all}", "Methods": [ "GET" ] }
+      },
+      "memoria-cargar": {
+        "ClusterId": "solicitudes",
+        "AuthorizationPolicy": "administrador",
+        "Match": { "Path": "/memoria/{**catch-all}" }
+      },
       "solicitudes": {
         "ClusterId": "solicitudes",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "gestor",
         "Match": { "Path": "/solicitudes/{**catch-all}" }
       },
       "reglas-consulta": {
@@ -36,11 +66,17 @@
         "AuthorizationPolicy": "administrador",
         "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
       },
-      "homologacion-estudiante": {
+      "homologacion-comite": {
         "ClusterId": "homologacion",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "comite",
         "Order": -1,
-        "Match": { "Path": "/homologacion/estudiante/{**catch-all}" }
+        "Match": { "Path": "/homologacion/comite/{**catch-all}" }
+      },
+      "homologacion-docente": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "docente",
+        "Order": -1,
+        "Match": { "Path": "/homologacion/docente/{**catch-all}" }
       },
       "homologacion-coordinador": {
         "ClusterId": "homologacion",
@@ -48,33 +84,10 @@
         "Order": -1,
         "Match": { "Path": "/homologacion/coordinador/{**catch-all}" }
       },
-feature/TA-18.2-endpoint-informe
-
-
-develop
-      "homologacion-informe": {
-        "ClusterId": "homologacion",
-        "AuthorizationPolicy": "autenticado",
-        "Match": { "Path": "/homologacion/{id}/informe", "Methods": [ "GET" ] }
-      },
-feature/TA-18.2-endpoint-informe
-
-
-develop
       "homologacion": {
         "ClusterId": "homologacion",
         "AuthorizationPolicy": "autenticado",
         "Match": { "Path": "/homologacion/{**catch-all}" }
-      },
-      "memoria-carga": {
-        "ClusterId": "catalogo",
-        "AuthorizationPolicy": "administrador",
-        "Match": { "Path": "/memoria/carga", "Methods": [ "POST" ] }
-      },
-      "memoria-consulta": {
-        "ClusterId": "catalogo",
-        "AuthorizationPolicy": "autenticado",
-        "Match": { "Path": "/memoria/{**catch-all}", "Methods": [ "GET" ] }
       },
       "documentos-descarga": {
         "ClusterId": "documentos",
@@ -84,21 +97,17 @@ develop
       },
       "documentos": {
         "ClusterId": "documentos",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "gestor",
         "Match": { "Path": "/documentos/{**catch-all}" }
       },
-      "memoria-estado": {
-        "ClusterId": "catalogo",
-        "AuthorizationPolicy": "autenticado",
-        "Match": { "Path": "/memoria/estado", "Methods": [ "GET" ] }
+      "salud": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "Anonymous",
+        "Order": -1,
+        "Match": { "Path": "/salud/{**catch-all}" }
       }
     },
     "Clusters": {
-      "catalogo": {
-        "Destinations": {
-          "d1": { "Address": "http://catalogo-service:8080/" }
-        }
-      },
       "auth": {
         "Destinations": {
           "d1": { "Address": "http://auth-service:8080/" }
@@ -126,11 +135,6 @@ develop
       "documentos": {
         "Destinations": {
           "d1": { "Address": "http://documentos-service:8080/" }
-        }
-      },
-      "catalogo": {
-        "Destinations": {
-          "d1": { "Address": "http://catalogo-service:8080/" }
         }
       }
     }

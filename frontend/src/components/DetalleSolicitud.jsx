@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const DECISIONES_VALIDAS = ["HOMOLOGABLE", "NO_HOMOLOGABLE"];
 
@@ -33,23 +33,41 @@ const textoDecision = (decision) => {
   return decision || "Pendiente";
 };
 
-export default function DetalleSolicitud({ solicitud, onVolver, onGuardar, cargando }) {
+const formatoFecha = (valor) =>
+  valor ? new Date(valor).toLocaleString("es-EC") : "-";
+
+const textoMateriasOrigen = (asig) => {
+  if ((asig.materiasOrigen?.length ?? 0) > 0) {
+    return asig.materiasOrigen
+      .map((m) =>
+        m.nota !== null && m.nota !== undefined
+          ? `${m.nombre} (nota ${m.nota})`
+          : m.nombre
+      )
+      .join(" + ");
+  }
+  return asig.asignaturaOrigen || "-";
+};
+
+export default function DetalleSolicitud({
+  solicitud,
+  onVolver,
+  onGuardar,
+  onDescargarInforme,
+  descargando,
+  cargando,
+}) {
   const [decisiones, setDecisiones] = useState(() => decisionesIniciales(solicitud));
   const [observaciones, setObservaciones] = useState(() => observacionesIniciales(solicitud));
   const [errorLocal, setErrorLocal] = useState("");
-
-  // Si el padre cambia de solicitud sin desmontar el componente, se reinician los campos.
-  useEffect(() => {
-    setDecisiones(decisionesIniciales(solicitud));
-    setObservaciones(observacionesIniciales(solicitud));
-    setErrorLocal("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solicitud?.solicitudId]);
 
   if (!solicitud) return null;
 
   const asignaturas = solicitud.asignaturas || [];
   const soloLectura = solicitud.estado !== "PENDIENTE_REVISION";
+  const resuelta = solicitud.estado === "RESUELTA";
+  const numero = solicitud.numeroProceso || `SOL-${String(solicitud.solicitudId).padStart(4, "0")}`;
+  const tieneResolucion = Boolean(solicitud.resolucion);
 
   const handleDecisionChange = (id, valor) => {
     setDecisiones((prev) => ({ ...prev, [id]: valor }));
@@ -94,20 +112,48 @@ export default function DetalleSolicitud({ solicitud, onVolver, onGuardar, carga
   return (
     <div className="card shadow-sm border-0 mt-3">
       <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 className="mb-0">Detalle de la Solicitud SOL-{solicitud.solicitudId}</h5>
-        <button className="btn btn-sm btn-outline-light" onClick={onVolver}>
-          Volver a la lista
-        </button>
+        <h5 className="mb-0">Detalle de la solicitud {numero}</h5>
+        <div className="d-flex gap-2">
+          {onDescargarInforme && (
+            <button
+              className="btn btn-sm btn-outline-light"
+              onClick={onDescargarInforme}
+              disabled={descargando}
+            >
+              {descargando ? "Descargando..." : "Descargar informe"}
+            </button>
+          )}
+          <button className="btn btn-sm btn-outline-light" onClick={onVolver}>
+            Volver a la lista
+          </button>
+        </div>
       </div>
 
       <div className="card-body">
         <div className="row mb-3">
           <div className="col-md-6">
-            <p className="mb-1"><strong>Estudiante:</strong> {solicitud.estudiante}</p>
+            <p className="mb-1">
+              <strong>Titular del trámite (récord):</strong> {solicitud.estudiante || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Cédula del titular:</strong> {solicitud.estudianteCedula || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Registrado por:</strong> {solicitud.comiteCorreo || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Coordinador:</strong> {solicitud.coordinadorCorreo || "Pendiente de informe"}
+            </p>
             <p className="mb-1"><strong>Tipo:</strong> {solicitud.tipo}</p>
             <p className="mb-1">
-              <strong>Módulo:</strong>{" "}
-              {solicitud.modulo === "EXTERNO" ? "Agente externo" : "Agente interno"}
+              <strong>Modalidad:</strong>{" "}
+              <span
+                className={`badge ${
+                  solicitud.modulo === "EXTERNO" ? "bg-info text-dark" : "bg-primary"
+                }`}
+              >
+                {solicitud.modulo || "INTERNO"}
+              </span>
             </p>
             {solicitud.modulo === "EXTERNO" && (
               <p className="mb-1">
@@ -126,26 +172,24 @@ export default function DetalleSolicitud({ solicitud, onVolver, onGuardar, carga
               </span>
             </p>
             <p className="mb-1">
-              <strong>Fecha de registro:</strong>{" "}
-              {solicitud.fecha ? new Date(solicitud.fecha).toLocaleString("es-EC") : "-"}
+              <strong>Fecha de registro:</strong> {formatoFecha(solicitud.fecha)}
             </p>
             <p className="mb-1">
-              <strong>Fecha del análisis:</strong>{" "}
-              {solicitud.fechaAnalisis ? new Date(solicitud.fechaAnalisis).toLocaleString("es-EC") : "-"}
+              <strong>Fecha del análisis:</strong> {formatoFecha(solicitud.fechaAnalisis)}
             </p>
             {solicitud.fechaInforme && (
               <p className="mb-0">
-                <strong>Fecha del informe:</strong>{" "}
-                {new Date(solicitud.fechaInforme).toLocaleString("es-EC")}
+                <strong>Fecha del informe:</strong> {formatoFecha(solicitud.fechaInforme)}
               </p>
             )}
           </div>
         </div>
 
         {soloLectura && (
-          <div className="alert alert-success">
-            El informe técnico ya fue emitido por {solicitud.coordinadorCorreo || "el Coordinador"}.
-            Los valores se muestran en modo lectura.
+          <div className={`alert ${resuelta ? "alert-success" : "alert-info"}`}>
+            {resuelta
+              ? "La solicitud fue resuelta por el Consejo Directivo. Los valores se muestran en modo lectura."
+              : `El informe técnico ya fue emitido por ${solicitud.coordinadorCorreo || "el Coordinador"}. Los valores se muestran en modo lectura.`}
           </div>
         )}
 
@@ -161,106 +205,130 @@ export default function DetalleSolicitud({ solicitud, onVolver, onGuardar, carga
               <thead className="table-light">
                 <tr>
                   <th>Asignatura</th>
+                  <th>Materias de origen</th>
                   <th>Propuesta del agente</th>
                   <th>Decisión del Coordinador *</th>
                   <th>Observación *</th>
+                  {tieneResolucion && <th>Decisión final</th>}
                 </tr>
               </thead>
               <tbody>
-                {asignaturas.map((asig) => {
-                  
-                  const esCombinada = asig.combinada;
-                  const materiasOrigen = asig.materiasOrigen || [];
-
-                  return (
-                    <tr key={asig.id}>
-                      <td>
-                        {/* Si es combinada, mostramos la etiqueta y las dos materias de origen */}
-                        {esCombinada ? (
-                          <div>
-                            <span className="badge bg-info text-dark mb-1">Combinada</span>
-                            <ul className="mb-0 ps-3">
-                              {materiasOrigen.map((m, i) => (
-                                <li key={i}>
-                                  <small>{m.nombre} <span className="text-muted">(Nota: {m.nota})</span></small>
-                                </li>
-                              ))}
-                            </ul>
-                            <div className="text-muted small mt-1">→ {asig.asignaturaDestino}</div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="fw-bold">{asig.asignaturaOrigen}</div>
-                            <div className="text-muted small">→ {asig.asignaturaDestino}</div>
-                          </>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge ${claseDecision(asig.propuesta?.decision)}`}>
-                          {textoDecision(asig.propuesta?.decision)}
-                        </span>
-                        <div className="small text-muted mt-1">
-                          Contenido {asig.propuesta?.porcentajeContenido ?? 0} % · Profundidad{" "}
-                          {asig.propuesta?.porcentajeProfundidad ?? 0} % · Horas{" "}
-                          {asig.propuesta?.porcentajeHoras ?? 0} %
+                {asignaturas.map((asig) => (
+                  <tr key={asig.id}>
+                    <td>
+                      <div className="fw-bold">{asig.asignaturaDestino}</div>
+                      {asig.combinada && (
+                        <span className="badge bg-info text-dark mt-1">Combinada</span>
+                      )}
+                    </td>
+                    <td className="small">{textoMateriasOrigen(asig)}</td>
+                    <td>
+                      <span className={`badge ${claseDecision(asig.propuesta?.decision)}`}>
+                        {textoDecision(asig.propuesta?.decision)}
+                      </span>
+                      <div className="small text-muted mt-1">
+                        Contenido {asig.propuesta?.porcentajeContenido ?? 0} % · Profundidad{" "}
+                        {asig.propuesta?.porcentajeProfundidad ?? 0} % · Horas{" "}
+                        {asig.propuesta?.porcentajeHoras ?? 0} %
+                      </div>
+                      {asig.propuesta?.justificacion && (
+                        <div className="small mt-1" title={asig.propuesta.justificacion}>
+                          {asig.propuesta.justificacion}
                         </div>
-                        {asig.propuesta?.justificacion && (
-                          <div className="small mt-1" title={asig.propuesta.justificacion}>
-                            {asig.propuesta.justificacion}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ minWidth: "170px" }}>
-                        {soloLectura ? (
-                          <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
-                            {textoDecision(asig.decisionCoordinador)}
+                      )}
+                    </td>
+                    <td style={{ minWidth: "170px" }}>
+                      {soloLectura ? (
+                        <span className={`badge ${claseDecision(asig.decisionCoordinador)}`}>
+                          {textoDecision(asig.decisionCoordinador)}
+                        </span>
+                      ) : (
+                        <select
+                          className="form-select form-select-sm"
+                          value={decisiones[asig.id] || ""}
+                          onChange={(e) => handleDecisionChange(asig.id, e.target.value)}
+                          disabled={cargando}
+                        >
+                          <option value="">Seleccione...</option>
+                          <option value="HOMOLOGABLE">HOMOLOGABLE</option>
+                          <option value="NO_HOMOLOGABLE">NO HOMOLOGABLE</option>
+                        </select>
+                      )}
+                    </td>
+                    <td style={{ minWidth: "220px" }}>
+                      {soloLectura ? (
+                        <span>{asig.observacionCoordinador || "-"}</span>
+                      ) : (
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="Escriba la observación..."
+                          value={observaciones[asig.id] || ""}
+                          onChange={(e) => handleObservacionChange(asig.id, e.target.value)}
+                          disabled={cargando}
+                        />
+                      )}
+                    </td>
+                    {tieneResolucion && (
+                      <td style={{ minWidth: "150px" }}>
+                        {asig.decisionFinal ? (
+                          <span className={`badge ${claseDecision(asig.decisionFinal)}`}>
+                            {textoDecision(asig.decisionFinal)}
                           </span>
                         ) : (
-                          <select
-                            className="form-select form-select-sm"
-                            value={decisiones[asig.id] || ""}
-                            onChange={(e) => handleDecisionChange(asig.id, e.target.value)}
-                            disabled={cargando}
-                          >
-                            <option value="">Seleccione...</option>
-                            <option value="HOMOLOGABLE">HOMOLOGABLE</option>
-                            <option value="NO_HOMOLOGABLE">NO HOMOLOGABLE</option>
-                          </select>
+                          <span className="text-muted">Sin decisión</span>
                         )}
                       </td>
-                      <td style={{ minWidth: "220px" }}>
-                        {soloLectura ? (
-                          <span>{asig.observacionCoordinador || "-"}</span>
-                        ) : (
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            placeholder="Escriba la observación..."
-                            value={observaciones[asig.id] || ""}
-                            onChange={(e) => handleObservacionChange(asig.id, e.target.value)}
-                            disabled={cargando}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                    )}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
-        <p className="text-muted small mb-0"></p>
-
         {!soloLectura && (
-          <div className="text-end mt-3">
-            <button
-              className="btn btn-success fw-bold"
-              onClick={handleGuardar}
-              disabled={cargando || asignaturas.length === 0}
-            >
-              {cargando ? "Emitiendo..." : "Emitir Informe Técnico"}
-            </button>
+          <>
+            <p className="text-muted small mb-0">
+              * Todos los campos son obligatorios para emitir el informe.
+            </p>
+            <div className="text-end mt-3">
+              <button
+                className="btn btn-success fw-bold"
+                onClick={handleGuardar}
+                disabled={cargando || asignaturas.length === 0}
+              >
+                {cargando ? "Emitiendo..." : "Emitir Informe Técnico"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {solicitud.resolucion && (
+          <div className="card border-dark mt-4">
+            <div className="card-header bg-dark text-white">
+              <h6 className="mb-0 fw-bold">Resolución registrada</h6>
+            </div>
+            <div className="card-body">
+              <div className="row mb-2">
+                <div className="col-md-3 fw-bold">Número</div>
+                <div className="col-md-9">{solicitud.resolucion.numeroResolucion}</div>
+              </div>
+              <div className="row mb-2">
+                <div className="col-md-3 fw-bold">Fecha</div>
+                <div className="col-md-9">{formatoFecha(solicitud.resolucion.fecha)}</div>
+              </div>
+              <div className="row mb-2">
+                <div className="col-md-3 fw-bold">Registrada por</div>
+                <div className="col-md-9">{solicitud.resolucion.registradoPor || "-"}</div>
+              </div>
+              {solicitud.resolucion.observacion && (
+                <div className="row mb-0">
+                  <div className="col-md-3 fw-bold">Observación</div>
+                  <div className="col-md-9">{solicitud.resolucion.observacion}</div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

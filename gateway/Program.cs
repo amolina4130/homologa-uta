@@ -52,9 +52,9 @@ builder.Services
 var authBuilder = builder.Services.AddAuthorizationBuilder()
     .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
     .AddPolicy("autenticado", p => p.RequireAuthenticatedUser())
-    .AddPolicy("estudiante", p => p.RequireRole("ESTUDIANTE"))
-    .AddPolicy("secretaria", p => p.RequireRole("SECRETARIA"))
-    .AddPolicy("consejo", p => p.RequireRole("CONSEJO"))
+    .AddPolicy("comite", p => p.RequireRole("COMITE"))
+    .AddPolicy("docente", p => p.RequireRole("DOCENTE"))
+    .AddPolicy("gestor", p => p.RequireRole("COMITE", "COORDINADOR", "ADMINISTRADOR"))
     .AddPolicy("administrador", p => p.RequireRole("ADMINISTRADOR"));
 
 // Leemos la política del Coordinador desde appsettings.json. 

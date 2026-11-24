@@ -25,6 +25,26 @@ public class AsignaturaAnalisisDto
 
     [Required(ErrorMessage = "El contenido de la asignatura de destino es obligatorio.")]
     public string ContenidoDestino { get; set; } = string.Empty;
+
+    /// <summary>Id de la asignatura de destino en el catálogo (HU-21/HU-22).</summary>
+    public int? AsignaturaDestinoId { get; set; }
+
+    public string? AreaOrigen { get; set; }
+    public string? AreaDestino { get; set; }
+    public string? NivelOrigen { get; set; }
+    public string? NivelDestino { get; set; }
+
+    /// <summary>Nota de la materia de origen, si viene de las materias aprobadas (HU-20).</summary>
+    public decimal? NotaOrigen { get; set; }
+
+    /// <summary>Materias de origen permitidas para una posible combinación (HU-22).</summary>
+    public List<string> MateriasOrigenPermitidas { get; set; } = new();
+
+    /// <summary>Notas de las materias aprobadas, para mostrarlas en los resultados (HU-22).</summary>
+    public Dictionary<string, decimal?> NotasMateriasOrigen { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Regla de equivalencia activa que se aplicó a esta asignatura (HU-14).</summary>
+    public string? EquivalenciaAplicada { get; set; }
 }
 
 /// <summary>Resultado del análisis de una solicitud.</summary>
@@ -50,6 +70,9 @@ public class ResultadoAnalisisAsignaturaDto
 {
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string AsignaturaDestino { get; set; } = string.Empty;
+    public int? AsignaturaDestinoId { get; set; }
+    public bool Combinada { get; set; }
+    public List<MateriaOrigenDto> MateriasOrigen { get; set; } = new();
     public int PorcentajeContenido { get; set; }
     public int PorcentajeProfundidad { get; set; }
     public int PorcentajeHoras { get; set; }
@@ -72,7 +95,15 @@ public class ResultadoSolicitudDto
     /// <summary>PENDIENTE_REVISION o INFORME_EMITIDO.</summary>
     public string Estado { get; set; } = string.Empty;
 
+    /// <summary>Titular del trámite según el récord académico; no es un usuario del sistema.</summary>
     public string Estudiante { get; set; } = string.Empty;
+
+    /// <summary>Cédula real del titular según el récord académico.</summary>
+    public string EstudianteCedula { get; set; } = string.Empty;
+
+    /// <summary>Correo de la cuenta del Comité que registró la solicitud.</summary>
+    public string ComiteCorreo { get; set; } = string.Empty;
+
     public DateTime FechaRegistro { get; set; }
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
@@ -91,6 +122,11 @@ public class AsignaturaResultadoSolicitudDto
     public int Id { get; set; }
     public string AsignaturaOrigen { get; set; } = string.Empty;
     public string AsignaturaDestino { get; set; } = string.Empty;
+    public int? AsignaturaDestinoId { get; set; }
+    public bool Combinada { get; set; }
+    public List<MateriaOrigenDto> MateriasOrigen { get; set; } = new();
+    public string? AreaOrigen { get; set; }
+    public string? AreaDestino { get; set; }
     public int PorcentajeContenido { get; set; }
     public int PorcentajeProfundidad { get; set; }
     public int PorcentajeHoras { get; set; }

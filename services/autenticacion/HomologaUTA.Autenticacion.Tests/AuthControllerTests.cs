@@ -52,7 +52,7 @@ namespace HomologaUTA.Autenticacion.Tests
             var hasher = new PasswordHasher<Usuario>();
             var tokenService = GetTokenService();
             
-            var rol = new Rol { Id = 1, Nombre = "Estudiante" };
+            var rol = new Rol { Id = 1, Nombre = "COMITE" };
             context.Roles.Add(rol);
 
             var usuario = new Usuario { Id = 1, Correo = "test@uta.edu.ec", RolId = 1, Rol = rol };

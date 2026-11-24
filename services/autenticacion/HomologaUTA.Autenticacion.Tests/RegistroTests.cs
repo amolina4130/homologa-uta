@@ -1,119 +1,141 @@
-using Xunit;
-using Microsoft.EntityFrameworkCore;
-using HomologaUTA.Autenticacion.Data;
-using HomologaUTA.Autenticacion.Models;
 using HomologaUTA.Autenticacion.Controllers;
-using HomologaUTA.Autenticacion.Services;
+using HomologaUTA.Autenticacion.Data;
 using HomologaUTA.Autenticacion.DTOs;
+using HomologaUTA.Autenticacion.Models;
+using HomologaUTA.Autenticacion.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Moq;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Moq;
 
-namespace HomologaUTA.Autenticacion.Tests
+namespace HomologaUTA.Autenticacion.Tests;
+
+public class RegistroTests
 {
-    public class RegistroTests
+    private static AuthDbContext GetDb() =>
+        new(new DbContextOptionsBuilder<AuthDbContext>()
+            .UseInMemoryDatabase("Registro_" + Guid.NewGuid())
+            .Options);
+
+    private static TokenService GetTokens()
     {
-        private AuthDbContext GetInMemoryDbContext()
+        var config = new Mock<IConfiguration>();
+        config.Setup(x => x["JWT_SECRET"]).Returns("clave-de-prueba-larga-para-el-test-123456-abcdef");
+        config.Setup(x => x["Jwt:ExpirationHours"]).Returns("8");
+        config.Setup(x => x["Jwt:Issuer"]).Returns("HomologaUTA");
+        config.Setup(x => x["Jwt:Audience"]).Returns("HomologaUTA");
+        return new TokenService(config.Object);
+    }
+
+    private static async Task<AuthDbContext> GetDbConRolAsync()
+    {
+        var db = GetDb();
+        db.Roles.AddRange(
+            new Rol { Id = 1, Nombre = "COMITE" },
+            new Rol { Id = 3, Nombre = "DOCENTE" });
+        await db.SaveChangesAsync();
+        return db;
+    }
+
+    [Fact]
+    public async Task Registro_Valido_CreaCuentaConRolComite()
+    {
+        using var db = await GetDbConRolAsync();
+        var hasher = new PasswordHasher<Usuario>();
+        var controller = new AuthController(db, hasher, GetTokens());
+
+        var result = await controller.Registro(new RegistroRequest
         {
-            var options = new DbContextOptionsBuilder<AuthDbContext>()
-                .UseInMemoryDatabase(databaseName: "TestDbRegistro_" + Guid.NewGuid().ToString())
-                .Options;
-            return new AuthDbContext(options);
-        }
+            Nombre = "Ana Pérez",
+            Correo = "ana@uta.edu.ec",
+            Contrasena = "Demo123!"
+        });
 
-        private TokenService GetTokenService()
+        var created = Assert.IsType<CreatedResult>(result);
+        var respuesta = Assert.IsType<RegistroResponse>(created.Value);
+        Assert.Equal("COMITE", respuesta.Rol);
+
+        var guardado = await db.Usuarios.SingleAsync();
+        Assert.Equal("Ana Pérez", guardado.Nombre);
+        Assert.Equal(1, guardado.RolId);
+        Assert.NotEqual("Demo123!", guardado.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Registro_RolDocente_CreaCuentaConRolDocente()
+    {
+        using var db = await GetDbConRolAsync();
+        var controller = new AuthController(db, new PasswordHasher<Usuario>(), GetTokens());
+
+        var result = await controller.Registro(new RegistroRequest
         {
-            var mockConfig = new Mock<IConfiguration>();
-            mockConfig.Setup(x => x["JWT_SECRET"]).Returns("clave-de-prueba-larga-para-el-test-123456-abcdef");
-            mockConfig.Setup(x => x["Jwt:ExpirationHours"]).Returns("8");
-            mockConfig.Setup(x => x["Jwt:Issuer"]).Returns("HomologaUTA");
-            mockConfig.Setup(x => x["Jwt:Audience"]).Returns("HomologaUTA");
-            return new TokenService(mockConfig.Object);
-        }
+            Nombre = "Carlos Docente",
+            Correo = "docente3@uta.edu.ec",
+            Contrasena = "Demo123!",
+            Rol = "DOCENTE"
+        });
 
-        // 1. Prueba de registro válido
-        [Fact]
-        public async Task Registro_Valido_DebeDevolverCreated()
+        var created = Assert.IsType<CreatedResult>(result);
+        var respuesta = Assert.IsType<RegistroResponse>(created.Value);
+        Assert.Equal("DOCENTE", respuesta.Rol);
+
+        var guardado = await db.Usuarios.SingleAsync();
+        Assert.Equal(3, guardado.RolId);
+    }
+
+    [Fact]
+    public async Task Registro_CorreoRepetido_DevuelveConflict()
+    {
+        using var db = await GetDbConRolAsync();
+        var hasher = new PasswordHasher<Usuario>();
+        var controller = new AuthController(db, hasher, GetTokens());
+        var request = new RegistroRequest { Nombre = "Ana", Correo = "ana@uta.edu.ec", Contrasena = "Demo123!" };
+
+        await controller.Registro(request);
+        var result = await controller.Registro(request);
+
+        Assert.IsType<ConflictObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Registro_ContrasenaCorta_DevuelveBadRequestConMensaje()
+    {
+        using var db = await GetDbConRolAsync();
+        var controller = new AuthController(db, new PasswordHasher<Usuario>(), GetTokens());
+
+        var result = await controller.Registro(new RegistroRequest
         {
-            // Arrange
-            var context = GetInMemoryDbContext();
-            var hasher = new PasswordHasher<Usuario>();
-            var tokenService = GetTokenService();
-            var controller = new AuthController(context, hasher, tokenService);
+            Nombre = "Ana",
+            Correo = "ana@uta.edu.ec",
+            Contrasena = "Ab1!"
+        });
 
-            // TODO: Descomentar cuando el endpoint POST /auth/registro esté implementado
-            // var request = new RegistroRequest { Nombre = "Juan", Correo = "juan@uta.edu.ec", Contrasena = "Demo123!" };
-            // var result = await controller.Registrar(request);
-            // Assert.IsType<CreatedResult>(result);
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("8", bad.Value!.ToString());
+    }
 
-            Assert.True(true); // Temporal
-        }
+    [Fact]
+    public async Task CuentaRegistrada_PuedeIniciarSesion()
+    {
+        using var db = await GetDbConRolAsync();
+        var hasher = new PasswordHasher<Usuario>();
+        var tokens = GetTokens();
 
-        // 2. Prueba de correo repetido
-        [Fact]
-        public async Task Registro_CorreoRepetido_DebeDevolverConflict()
+        var registro = new AuthController(db, hasher, tokens);
+        await registro.Registro(new RegistroRequest
         {
-            // Arrange
-            var context = GetInMemoryDbContext();
-            var hasher = new PasswordHasher<Usuario>();
-            var tokenService = GetTokenService();
-            var controller = new AuthController(context, hasher, tokenService);
+            Nombre = "Ana",
+            Correo = "ana@uta.edu.ec",
+            Contrasena = "Demo123!"
+        });
 
-            // Insertamos un usuario existente para simular el correo repetido
-            var rol = new Rol { Id = 1, Nombre = "ESTUDIANTE" };
-            context.Roles.Add(rol);
-            var usuario = new Usuario { Id = 1, Correo = "juan@uta.edu.ec", RolId = 1, Rol = rol };
-            usuario.PasswordHash = hasher.HashPassword(usuario, "Demo123!");
-            context.Usuarios.Add(usuario);
-            await context.SaveChangesAsync();
+        var login = new AuthController(db, hasher, tokens);
+        var result = await login.Login(new LoginRequest { Correo = "ana@uta.edu.ec", Contrasena = "Demo123!" });
 
-            // TODO: Descomentar cuando el endpoint esté implementado
-            // var request = new RegistroRequest { Nombre = "Juan", Correo = "juan@uta.edu.ec", Contrasena = "Demo123!" };
-            // var result = await controller.Registrar(request);
-            // Assert.IsType<ConflictObjectResult>(result);
-
-            Assert.True(true); // Temporal
-        }
-
-        // 3. Prueba de contraseña inválida
-        [Fact]
-        public async Task Registro_ContrasenaInvalida_DebeDevolverBadRequest()
-        {
-            // TODO: Descomentar cuando el endpoint esté implementado
-            // var request = new RegistroRequest { Nombre = "Juan", Correo = "juan@uta.edu.ec", Contrasena = "123" };
-            // var result = await controller.Registrar(request);
-            // Assert.IsType<BadRequestObjectResult>(result);
-
-            Assert.True(true); // Temporal
-        }
-
-        // 4. Prueba de que el rol creado es Estudiante
-        [Fact]
-        public async Task Registro_RolCreado_DebeSerEstudiante()
-        {
-            // TODO: Descomentar cuando el endpoint esté implementado
-            // var request = new RegistroRequest { Nombre = "Juan", Correo = "juan@uta.edu.ec", Contrasena = "Demo123!" };
-            // await controller.Registrar(request);
-            // var usuario = await context.Usuarios.FirstOrDefaultAsync(u => u.Correo == "juan@uta.edu.ec");
-            // Assert.NotNull(usuario);
-            // Assert.Equal("ESTUDIANTE", usuario.Rol.Nombre);
-
-            Assert.True(true); // Temporal
-        }
-
-        // 5. Prueba de inicio de sesión posterior
-        [Fact]
-        public async Task Registro_LoginPosterior_DebeFuncionar()
-        {
-            // TODO: Descomentar cuando el endpoint esté implementado
-            // var requestRegistro = new RegistroRequest { Nombre = "Juan", Correo = "juan@uta.edu.ec", Contrasena = "Demo123!" };
-            // await controller.Registrar(requestRegistro);
-            // var requestLogin = new LoginRequest { Correo = "juan@uta.edu.ec", Contrasena = "Demo123!" };
-            // var resultLogin = await controller.Login(requestLogin);
-            // Assert.IsType<OkObjectResult>(resultLogin);
-
-            Assert.True(true); // Temporal
-        }
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var respuesta = Assert.IsType<LoginResponse>(ok.Value);
+        Assert.Equal("ana@uta.edu.ec", respuesta.Correo);
+        Assert.False(string.IsNullOrWhiteSpace(respuesta.Token));
     }
 }

@@ -33,15 +33,29 @@ namespace HomologaUTA.Homologacion.Migrations
                     b.Property<int>("AnalisisSolicitudId")
                         .HasColumnType("int");
 
+                    b.Property<string>("AreaDestino")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("AreaOrigen")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
                     b.Property<string>("AsignaturaDestino")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("AsignaturaDestinoId")
+                        .HasColumnType("int");
+
                     b.Property<string>("AsignaturaOrigen")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("Combinada")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Decision")
                         .IsRequired()
@@ -88,6 +102,10 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CedulaEstudiante")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("CoordinadorCorreo")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -103,6 +121,21 @@ namespace HomologaUTA.Homologacion.Migrations
                     b.Property<DateTime?>("FechaInforme")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("InformeFinalTexto")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NombreEstudiante")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NombreFirmante")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NumeroMemorando")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<int>("SolicitudId")
                         .HasColumnType("int");
 
@@ -116,7 +149,7 @@ namespace HomologaUTA.Homologacion.Migrations
                     b.ToTable("AnalisisSolicitudes");
                 });
 
-            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DecisionAsignaturaResolucion", b =>
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DecisionResolucion", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -129,17 +162,154 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     b.Property<string>("DecisionFinal")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<int>("ResolucionConsejoId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ResolucionConsejoId");
+                    b.HasIndex("ResolucionConsejoId", "AsignaturaId")
+                        .IsUnique();
 
                     b.ToTable("DecisionesResolucion");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DelegacionDocente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CoordinadorCorreo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("DocenteCedula")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DocenteCorreo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DocenteCorreoInforme")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("EvaluacionesJson")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaDelegacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaRevision")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaSugerencia")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InformeTexto")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NombreDocente")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SolicitudId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SugerenciaJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocenteCorreo");
+
+                    b.HasIndex("SolicitudId", "DocenteCorreo")
+                        .IsUnique();
+
+                    b.ToTable("DelegacionesDocente");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.MateriaAprobada", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("EstadoSegunDocumento")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("FechaExtraccion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("Nota")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("Periodo")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("SolicitudId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SolicitudId");
+
+                    b.ToTable("MateriasAprobadas");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.MateriaOrigenResultado", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AnalisisAsignaturaId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("Nota")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnalisisAsignaturaId");
+
+                    b.ToTable("MateriasOrigenResultado");
                 });
 
             modelBuilder.Entity("HomologaUTA.Homologacion.Models.ResolucionConsejo", b =>
@@ -149,6 +319,9 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AnalisisSolicitudId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
@@ -165,15 +338,18 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
-                    b.Property<int>("SolicitudId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UsuarioRegistro")
+                    b.Property<string>("RegistradoPor")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("SolicitudId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AnalisisSolicitudId")
+                        .IsUnique();
 
                     b.HasIndex("SolicitudId")
                         .IsUnique();
@@ -192,18 +368,49 @@ namespace HomologaUTA.Homologacion.Migrations
                     b.Navigation("AnalisisSolicitud");
                 });
 
-            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DecisionAsignaturaResolucion", b =>
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DecisionResolucion", b =>
                 {
-                    b.HasOne("HomologaUTA.Homologacion.Models.ResolucionConsejo", null)
+                    b.HasOne("HomologaUTA.Homologacion.Models.ResolucionConsejo", "ResolucionConsejo")
                         .WithMany("Decisiones")
                         .HasForeignKey("ResolucionConsejoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ResolucionConsejo");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.MateriaOrigenResultado", b =>
+                {
+                    b.HasOne("HomologaUTA.Homologacion.Models.AnalisisAsignatura", "AnalisisAsignatura")
+                        .WithMany("MateriasOrigen")
+                        .HasForeignKey("AnalisisAsignaturaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AnalisisAsignatura");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.ResolucionConsejo", b =>
+                {
+                    b.HasOne("HomologaUTA.Homologacion.Models.AnalisisSolicitud", "AnalisisSolicitud")
+                        .WithOne("Resolucion")
+                        .HasForeignKey("HomologaUTA.Homologacion.Models.ResolucionConsejo", "AnalisisSolicitudId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AnalisisSolicitud");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.AnalisisAsignatura", b =>
+                {
+                    b.Navigation("MateriasOrigen");
                 });
 
             modelBuilder.Entity("HomologaUTA.Homologacion.Models.AnalisisSolicitud", b =>
                 {
                     b.Navigation("Asignaturas");
+
+                    b.Navigation("Resolucion");
                 });
 
             modelBuilder.Entity("HomologaUTA.Homologacion.Models.ResolucionConsejo", b =>

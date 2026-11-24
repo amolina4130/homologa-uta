@@ -1,7 +1,7 @@
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   return {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${token}`
@@ -16,7 +16,9 @@ const lanzarError = async (res, mensajePorDefecto) => {
   let mensaje = mensajePorDefecto;
   try {
     const cuerpo = await res.json();
-    if (cuerpo && cuerpo.error) mensaje = cuerpo.error;
+    if (cuerpo && (cuerpo.mensaje || cuerpo.error)) {
+      mensaje = cuerpo.mensaje || cuerpo.error;
+    }
   } catch {
     // La respuesta no trae JSON; se conserva el mensaje por defecto.
   }
@@ -51,6 +53,98 @@ export async function emitirInforme(id, informeCompleto) {
     body: JSON.stringify(informeCompleto),
   });
   if (!res.ok) await lanzarError(res, "Error al emitir el informe");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Delega la revisión a uno o dos docentes.
+export async function delegarDocentes(id, correos) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/delegar`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ correos }),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudieron delegar los docentes");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Estado de las delegaciones realizadas por el coordinador.
+export async function obtenerDelegaciones(id) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/delegaciones`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudieron cargar las delegaciones");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Detalle, delegaciones y textos de informes sugerido/final.
+export async function obtenerConsolidado(id) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/consolidado`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo cargar el consolidado");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Emite el informe final que se envía al Consejo Directivo.
+export async function emitirInformeFinal(id, payload) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo emitir el informe final");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Descarga el PDF del informe final con el token de la sesión.
+export async function descargarInformeFinal(id) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final/pdf`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo descargar el informe final");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Informe_final_${id}.pdf`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Descarga el informe sugerido que el Docente envió al Coordinador.
+export async function descargarInformeSugeridoDocente(id) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-docente/pdf`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo descargar el informe sugerido del Docente");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = `Informe_sugerido_docente_SOL-${String(id).padStart(4, "0")}.pdf`;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}
+
+// HU-17: registra la resolución del Consejo Directivo (solo con informe emitido).
+export async function registrarResolucion(id, resolucion) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${id}/resolucion`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(resolucion),
+  });
+  if (!res.ok) await lanzarError(res, "Error al registrar la resolución");
   const json = await res.json();
   return extraerDatos(json);
 }

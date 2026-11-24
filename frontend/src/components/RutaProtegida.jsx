@@ -3,11 +3,11 @@ import { useAuth } from "../context/AuthContext";
 import { jwtDecode } from "jwt-decode";
 import { useState } from "react";
 
-export default function RutaProtegida({ rolPermitido }) { 
-  const { token, rol, cerrarSesion } = useAuth(); 
-  
+export default function RutaProtegida({ rolPermitido }) {
+  const { token, rol, cerrarSesion } = useAuth();
+
   const [tiempoActual] = useState(() => Date.now() / 1000);
-  
+
   let esValido = false;
 
   if (token) {
@@ -22,11 +22,18 @@ export default function RutaProtegida({ rolPermitido }) {
   }
 
   if (!esValido) {
-    if (token) cerrarSesion(); 
+    if (token) cerrarSesion();
     return <Navigate to="/login" replace />;
   }
 
-  if (rolPermitido && rol !== rolPermitido) {
+  // Acepta un rol o un arreglo de roles permitidos.
+  const rolesPermitidos = Array.isArray(rolPermitido)
+    ? rolPermitido
+    : rolPermitido
+      ? [rolPermitido]
+      : [];
+
+  if (rolesPermitidos.length > 0 && !rolesPermitidos.includes(rol)) {
     return <Navigate to="/inicio" replace />;
   }
 

@@ -1,29 +1,18 @@
-﻿using System.Security.Claims;
-using System.Text;
-using System.Text.Json;
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.DTOs;
 using HomologaUTA.Solicitudes.Models;
-using HomologaUTA.Solicitudes.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace HomologaUTA.Solicitudes.Controllers;
 
 [ApiController]
 [Route("solicitudes")]
-// [Authorize] <--- Lo dejamos comentado para tus pruebas
+// El Gateway ya protege con JWT; aquí se leen los claims para validar al dueño.
 public class SolicitudesController : ControllerBase
 {
-    private const string CorreoPorDefecto = "estudiante@uta.edu.ec";
-
     private readonly SolicitudesDbContext _db;
-
-    private const int MaxUniversidad = 150;
-
-    // El contrato pide { mensaje }; se deja también "error" porque el frontend actual lo lee.
-    private BadRequestObjectResult ErrorUniversidad(string texto) =>
-        BadRequest(new { mensaje = texto, error = texto });
 
     public SolicitudesController(SolicitudesDbContext db)
     {
@@ -33,39 +22,45 @@ public class SolicitudesController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CrearSolicitud([FromBody] SolicitudRequest request)
     {
-        var error = Validar(request, out var modulo);
+        var error = ValidarRequest(request);
         if (error is not null)
-            return error;
+            return BadRequest(new { error });
 
+        var modulo = NormalizarModulo(request.Modulo);
         var correo = ObtenerCorreo();
 
         var solicitud = new Solicitud
         {
             Tipo = "Homologación",
-            // Número provisional: se reemplaza por el definitivo apenas la base asigna el Id.
-            NumeroProceso = "TMP-" + Guid.NewGuid().ToString("N")[..12],
             CarreraOrigenId = request.CarreraOrigenId,
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
+            // El Comité no ingresa al titular como usuario: el nombre y la cédula se toman
+            // del récord académico. Estos valores son solo el estado inicial.
+            EstudianteNombre = string.IsNullOrWhiteSpace(request.EstudianteNombre)
+                ? Solicitud.NombreSinIdentificar
+                : request.EstudianteNombre.Trim(),
+            EstudianteCedula = string.IsNullOrWhiteSpace(request.EstudianteCedula)
+                ? Solicitud.CedulaSinIdentificar
+                : request.EstudianteCedula.Trim(),
             Modulo = modulo,
             UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null,
             UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null,
-            // La solicitud nace REGISTRADA. Homologación la pasa a PENDIENTE_REVISION
-            // cuando el agente termina el análisis (así el Coordinador nunca ve una
-            // solicitud sin propuesta).
             Estado = EstadoSolicitud.REGISTRADA
         };
 
         foreach (var asigId in request.AsignaturasIds.Distinct())
-        {
             solicitud.Asignaturas.Add(new SolicitudAsignatura { AsignaturaId = asigId });
-        }
 
         _db.Solicitudes.Add(solicitud);
+        await _db.SaveChangesAsync();
+
+        // El número de proceso usa el Id ya generado: SOL-0004 (HU-16).
+        solicitud.NumeroProceso = $"SOL-{solicitud.Id:D4}";
 
         _db.HistorialEstados.Add(new HistorialEstado
         {
-            Solicitud = solicitud,
+            SolicitudId = solicitud.Id,
             EstadoAnterior = null,
             EstadoNuevo = solicitud.Estado,
             UsuarioCorreo = correo,
@@ -74,108 +69,76 @@ public class SolicitudesController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        // Con el Id ya asignado se arma el número de proceso definitivo (único porque el Id lo es).
-        solicitud.NumeroProceso = GeneradorNumeroProceso.Formatear(solicitud.Id);
-        await _db.SaveChangesAsync();
-
         return Created($"/solicitudes/{solicitud.Id}", new
         {
             id = solicitud.Id,
             numeroProceso = solicitud.NumeroProceso,
-            mensaje = "Solicitud registrada exitosamente.",
-            modulo = solicitud.Modulo,
-            universidadOrigen = solicitud.UniversidadOrigen,
-            universidadDestino = solicitud.UniversidadDestino
+            mensaje = "Solicitud registrada exitosamente."
         });
-    }
-
-    /// <summary>Edita una solicitud propia mientras siga REGISTRADA (antes de pasar a revisión).</summary>
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> EditarSolicitud(int id, [FromBody] SolicitudRequest request)
-    {
-        var solicitud = await _db.Solicitudes
-            .Include(s => s.Asignaturas)
-            .FirstOrDefaultAsync(s => s.Id == id);
-
-        if (solicitud is null)
-            return NotFound(new { mensaje = "Solicitud no encontrada.", error = "Solicitud no encontrada." });
-
-        var correo = ObtenerCorreo();
-        if (!string.Equals(solicitud.EstudianteCorreo, correo, StringComparison.OrdinalIgnoreCase))
-        {
-            const string texto = "No puede editar la solicitud de otro estudiante.";
-            return StatusCode(StatusCodes.Status403Forbidden, new { mensaje = texto, error = texto });
-        }
-
-        if (solicitud.Estado != EstadoSolicitud.REGISTRADA)
-        {
-            var texto = $"La solicitud ya está en estado {solicitud.Estado} y no se puede editar.";
-            return Conflict(new { mensaje = texto, error = texto });
-        }
-
-        var errorEntrada = Validar(request, out var modulo);
-        if (errorEntrada is not null)
-            return errorEntrada;
-
-        solicitud.CarreraOrigenId = request.CarreraOrigenId;
-        solicitud.CarreraDestinoId = request.CarreraDestinoId;
-        solicitud.Modulo = modulo;
-        solicitud.UniversidadOrigen = request.UniversidadOrigen?.Trim();
-        solicitud.UniversidadDestino = request.UniversidadDestino?.Trim();
-
-        _db.SolicitudAsignaturas.RemoveRange(solicitud.Asignaturas.ToList());
-        solicitud.Asignaturas.Clear();
-        foreach (var asigId in request.AsignaturasIds.Distinct())
-        {
-            solicitud.Asignaturas.Add(new SolicitudAsignatura { AsignaturaId = asigId });
-        }
-
-        // La edición no cambia el estado: queda como un movimiento con el mismo estado y una nota.
-        _db.HistorialEstados.Add(new HistorialEstado
-        {
-            SolicitudId = solicitud.Id,
-            EstadoAnterior = solicitud.Estado,
-            EstadoNuevo = solicitud.Estado,
-            UsuarioCorreo = correo,
-            FechaCambio = DateTime.UtcNow,
-            Detalle = "Solicitud editada por el estudiante."
-        });
-
-        await _db.SaveChangesAsync();
-
-        return Ok(await ArmarDetalleAsync(solicitud));
     }
 
     [HttpGet("mias")]
-    public async Task<IActionResult> ObtenerMisSolicitudes()
+    public async Task<IActionResult> ObtenerMisSolicitudes(
+        [FromQuery] string? estado,
+        [FromQuery] int? carreraId,
+        [FromQuery] DateTime? desde,
+        [FromQuery] DateTime? hasta)
     {
         var correo = ObtenerCorreo();
 
-        var solicitudes = await _db.Solicitudes
+        var consulta = _db.Solicitudes
+            .AsNoTracking()
             .Include(s => s.CarreraOrigen)
             .Include(s => s.CarreraDestino)
-            .Where(s => s.EstudianteCorreo == correo)
+            .Where(s => s.EstudianteCorreo == correo);
+
+        if (!string.IsNullOrWhiteSpace(estado))
+        {
+            var valor = estado.Trim().ToUpperInvariant();
+            consulta = consulta.Where(s => s.Estado == valor);
+        }
+
+        if (carreraId is > 0)
+            consulta = consulta.Where(s => s.CarreraOrigenId == carreraId || s.CarreraDestinoId == carreraId);
+
+        if (desde.HasValue)
+            consulta = consulta.Where(s => s.FechaRegistro >= desde.Value.Date);
+
+        if (hasta.HasValue)
+            consulta = consulta.Where(s => s.FechaRegistro < hasta.Value.Date.AddDays(1));
+
+        var solicitudes = await consulta
             .OrderByDescending(s => s.FechaRegistro)
-            .Select(s => new 
+            .Select(s => new
             {
                 Id = s.Id,
-                Numero = s.NumeroProceso,
-                NumeroProceso = s.NumeroProceso,
+                NumeroProceso = string.IsNullOrEmpty(s.NumeroProceso)
+                    ? "SOL-" + s.Id.ToString("D4")
+                    : s.NumeroProceso,
+                Numero = string.IsNullOrEmpty(s.NumeroProceso)
+                    ? "SOL-" + s.Id.ToString("D4")
+                    : s.NumeroProceso,
                 Tipo = s.Tipo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
+                ComiteCorreo = s.EstudianteCorreo,
                 Origen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 Destino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
-                FechaRegistro = s.FechaRegistro.ToString("yyyy-MM-dd"),
+                CarreraOrigenId = s.CarreraOrigenId,
+                CarreraDestinoId = s.CarreraDestinoId,
+                FechaRegistro = s.FechaRegistro,
                 Estado = s.Estado,
                 Modulo = s.Modulo,
                 UniversidadOrigen = s.UniversidadOrigen,
-                UniversidadDestino = s.UniversidadDestino
+                UniversidadDestino = s.UniversidadDestino,
+                PuedeEditar = s.Estado == EstadoSolicitud.REGISTRADA
             })
             .ToListAsync();
 
         return Ok(solicitudes);
     }
 
-    /// <summary>Datos de una solicitud propia (incluye el módulo de análisis).</summary>
+    /// <summary>Datos de una solicitud propia (incluye asignaturas y si se puede editar).</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> ObtenerSolicitud(int id)
     {
@@ -183,13 +146,176 @@ public class SolicitudesController : ControllerBase
 
         var solicitud = await _db.Solicitudes
             .AsNoTracking()
+            .Include(s => s.CarreraOrigen)
+            .Include(s => s.CarreraDestino)
             .Include(s => s.Asignaturas)
-            .FirstOrDefaultAsync(s => s.Id == id && s.EstudianteCorreo == correo);
+                .ThenInclude(a => a.Asignatura)
+            .FirstOrDefaultAsync(s => s.Id == id);
 
         if (solicitud is null)
             return NotFound(new { error = "Solicitud no encontrada." });
 
-        return Ok(await ArmarDetalleAsync(solicitud));
+        if (!PuedeVer(solicitud.EstudianteCorreo, correo))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "No tiene permiso para ver esta solicitud." });
+
+        return Ok(new
+        {
+            Id = solicitud.Id,
+            NumeroProceso = string.IsNullOrEmpty(solicitud.NumeroProceso)
+                ? $"SOL-{solicitud.Id:D4}"
+                : solicitud.NumeroProceso,
+            Numero = string.IsNullOrEmpty(solicitud.NumeroProceso)
+                ? $"SOL-{solicitud.Id:D4}"
+                : solicitud.NumeroProceso,
+            Tipo = solicitud.Tipo,
+            EstudianteNombre = solicitud.EstudianteNombre,
+            EstudianteCedula = solicitud.EstudianteCedula,
+            ComiteCorreo = solicitud.EstudianteCorreo,
+            CarreraOrigenId = solicitud.CarreraOrigenId,
+            CarreraDestinoId = solicitud.CarreraDestinoId,
+            Origen = solicitud.CarreraOrigen?.Nombre ?? "Origen",
+            Destino = solicitud.CarreraDestino?.Nombre ?? "Destino",
+            FechaRegistro = solicitud.FechaRegistro,
+            Estado = solicitud.Estado,
+            Modulo = solicitud.Modulo,
+            UniversidadOrigen = solicitud.UniversidadOrigen,
+            UniversidadDestino = solicitud.UniversidadDestino,
+            PuedeEditar = solicitud.Estado == EstadoSolicitud.REGISTRADA,
+            Asignaturas = solicitud.Asignaturas
+                .OrderBy(a => a.Id)
+                .Select(a => new
+                {
+                    id = a.Id,
+                    asignaturaId = a.AsignaturaId,
+                    nombre = a.Asignatura?.Nombre ?? string.Empty,
+                    nivel = a.Asignatura?.Nivel ?? string.Empty,
+                    creditos = a.Asignatura?.Creditos ?? 0,
+                    horas = a.Asignatura?.Horas ?? 0
+                })
+        });
+    }
+
+    /// <summary>Edita una solicitud mientras siga REGISTRADA (HU-16).</summary>
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> EditarSolicitud(int id, [FromBody] SolicitudRequest request)
+    {
+        var error = ValidarRequest(request);
+        if (error is not null)
+            return BadRequest(new { error });
+
+        var solicitud = await _db.Solicitudes
+            .Include(s => s.Asignaturas)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (solicitud is null)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        var correo = ObtenerCorreo();
+        if (!PuedeVer(solicitud.EstudianteCorreo, correo))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "No puede editar la solicitud de otro estudiante." });
+
+        if (solicitud.Estado != EstadoSolicitud.REGISTRADA)
+            return Conflict(new
+            {
+                mensaje = "La solicitud ya pasó a revisión y no se puede editar. Solo se edita mientras está REGISTRADA."
+            });
+
+        var modulo = NormalizarModulo(request.Modulo);
+        solicitud.CarreraOrigenId = request.CarreraOrigenId;
+        solicitud.CarreraDestinoId = request.CarreraDestinoId;
+        solicitud.EstudianteNombre = string.IsNullOrWhiteSpace(request.EstudianteNombre)
+            ? Solicitud.NombreSinIdentificar
+            : request.EstudianteNombre.Trim();
+        solicitud.EstudianteCedula = string.IsNullOrWhiteSpace(request.EstudianteCedula)
+            ? Solicitud.CedulaSinIdentificar
+            : request.EstudianteCedula.Trim();
+        solicitud.Modulo = modulo;
+        solicitud.UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null;
+        solicitud.UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null;
+
+        _db.SolicitudAsignaturas.RemoveRange(solicitud.Asignaturas);
+        solicitud.Asignaturas.Clear();
+        foreach (var asigId in request.AsignaturasIds.Distinct())
+            solicitud.Asignaturas.Add(new SolicitudAsignatura { SolicitudId = id, AsignaturaId = asigId });
+
+        _db.HistorialEstados.Add(new HistorialEstado
+        {
+            SolicitudId = id,
+            EstadoAnterior = solicitud.Estado,
+            EstadoNuevo = solicitud.Estado,
+            UsuarioCorreo = correo,
+            FechaCambio = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            id = solicitud.Id,
+            numeroProceso = solicitud.NumeroProceso,
+            mensaje = "Solicitud actualizada correctamente."
+        });
+    }
+
+    /// <summary>
+    /// Corrige el nombre y la cédula del titular del récord. No cambia el estado de la solicitud
+    /// ni genera informes: solo deja el dato listo para la revisión del Docente y el informe final.
+    /// </summary>
+    [HttpPost("{id:int}/titular")]
+    public async Task<IActionResult> ActualizarTitular(int id, [FromBody] ActualizarTitularRequest? request)
+    {
+        var solicitud = await _db.Solicitudes.FirstOrDefaultAsync(s => s.Id == id);
+        if (solicitud is null)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        if (!PuedeGestionar(solicitud.EstudianteCorreo))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "No puede modificar el titular de esta solicitud." });
+
+        var nombre = request?.Nombre?.Trim();
+        var cedula = request?.Cedula?.Trim();
+        var cambio = false;
+
+        if (!string.IsNullOrWhiteSpace(nombre) && nombre.Length <= 200 &&
+            !string.Equals(solicitud.EstudianteNombre, nombre, StringComparison.Ordinal))
+        {
+            solicitud.EstudianteNombre = nombre;
+            cambio = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cedula) && cedula.Length <= 50 &&
+            !string.Equals(solicitud.EstudianteCedula, cedula, StringComparison.Ordinal))
+        {
+            solicitud.EstudianteCedula = cedula;
+            cambio = true;
+        }
+
+        if (cambio)
+        {
+            _db.HistorialEstados.Add(new HistorialEstado
+            {
+                SolicitudId = id,
+                EstadoAnterior = solicitud.Estado,
+                EstadoNuevo = solicitud.Estado,
+                UsuarioCorreo = ObtenerCorreo(),
+                FechaCambio = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new
+        {
+            id,
+            numeroProceso = solicitud.NumeroProceso,
+            estudianteNombre = solicitud.EstudianteNombre,
+            estudianteCedula = solicitud.EstudianteCedula,
+            estado = solicitud.Estado,
+            mensaje = cambio
+                ? "Datos del titular actualizados. El estado de la solicitud no cambió."
+                : "No hay cambios en los datos del titular."
+        });
     }
 
     [HttpGet("{id:int}/historial")]
@@ -208,8 +334,7 @@ public class SolicitudesController : ControllerBase
                 h.EstadoAnterior,
                 h.EstadoNuevo,
                 Usuario = h.UsuarioCorreo,
-                Fecha = h.FechaCambio,
-                h.Detalle
+                Fecha = h.FechaCambio
             })
             .ToListAsync();
 
@@ -225,11 +350,14 @@ public class SolicitudesController : ControllerBase
             .Include(s => s.CarreraDestino)
             .Where(s => s.Estado == EstadoSolicitud.PENDIENTE_REVISION)
             .OrderBy(s => s.FechaRegistro)
-            .Select(s => new 
+            .Select(s => new
             {
                 Id = s.Id,
+                NumeroProceso = s.NumeroProceso,
                 FechaRegistro = s.FechaRegistro,
                 EstudianteCorreo = s.EstudianteCorreo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
                 Tipo = s.Tipo,
                 CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino"
@@ -246,17 +374,23 @@ public class SolicitudesController : ControllerBase
         if (string.IsNullOrEmpty(ids))
             return Ok(new List<object>());
 
-        var idList = ids.Split(',').Select(int.Parse).ToList();
+        var idList = ids.Split(',')
+            .Select(x => int.TryParse(x, out var n) ? n : 0)
+            .Where(n => n > 0)
+            .ToList();
 
         var solicitudes = await _db.Solicitudes
             .Include(s => s.CarreraOrigen)
             .Include(s => s.CarreraDestino)
             .Where(s => idList.Contains(s.Id))
-            .Select(s => new 
+            .Select(s => new
             {
                 Id = s.Id,
+                NumeroProceso = s.NumeroProceso,
                 FechaRegistro = s.FechaRegistro,
                 EstudianteCorreo = s.EstudianteCorreo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
                 Tipo = s.Tipo,
                 CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
@@ -267,114 +401,53 @@ public class SolicitudesController : ControllerBase
         return Ok(solicitudes);
     }
 
-    // ---------------------------------------------------------------
-    // Ayudas
-    // ---------------------------------------------------------------
+    private string ObtenerCorreo() =>
+        User.FindFirstValue(ClaimTypes.Email)
+        ?? User.FindFirstValue("email")
+        ?? "estudiante@uta.edu.ec";
 
-    // Reglas comunes de crear (POST) y editar (PUT). Devuelve el error, o null si todo está bien.
-    private IActionResult? Validar(SolicitudRequest request, out string modulo)
+    private bool PuedeVer(string propietario, string correo) =>
+        string.Equals(propietario, correo, StringComparison.OrdinalIgnoreCase)
+        || User.FindFirstValue("rol")?.Equals("ADMINISTRADOR", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool PuedeGestionar(string propietario)
     {
-        modulo = "INTERNO";
+        var correo = ObtenerCorreo();
+        var rolesGestores = new[] { "COORDINADOR", "COMITE", "ADMINISTRADOR" };
+        return string.Equals(propietario, correo, StringComparison.OrdinalIgnoreCase)
+               || rolesGestores.Any(r => User.FindFirstValue("rol")
+                   ?.Equals(r, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private static string NormalizarModulo(string? modulo) =>
+        string.Equals(modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase)
+            ? "EXTERNO"
+            : "INTERNO";
+
+    private static string? ValidarRequest(SolicitudRequest request)
+    {
+        if (request is null)
+            return "Los datos de la solicitud son obligatorios.";
+
+        // No se exige nombre/cédula al registrar: el titular del trámite se obtiene
+        // del récord académico que entrega el Comité y se guarda en la solicitud.
 
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
-            return BadRequest(new { mensaje = "Faltan campos obligatorios.", error = "Faltan campos obligatorios." });
+            return "Faltan campos obligatorios.";
 
         if (request.CarreraOrigenId == request.CarreraDestinoId)
-            return BadRequest(new { mensaje = "La carrera de origen y destino no pueden ser iguales.", error = "La carrera de origen y destino no pueden ser iguales." });
+            return "La carrera de origen y destino no pueden ser iguales.";
 
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
-            return BadRequest(new { mensaje = "Debe seleccionar al menos una asignatura.", error = "Debe seleccionar al menos una asignatura." });
+            return "Debe seleccionar al menos una asignatura.";
 
-        if (string.Equals(request.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase))
+        if (NormalizarModulo(request.Modulo) == "EXTERNO" &&
+            (string.IsNullOrWhiteSpace(request.UniversidadOrigen) ||
+             string.IsNullOrWhiteSpace(request.UniversidadDestino)))
         {
-            modulo = "EXTERNO";
-
-            if (string.IsNullOrWhiteSpace(request.UniversidadOrigen) ||
-                string.IsNullOrWhiteSpace(request.UniversidadDestino))
-            {
-                return BadRequest(new
-                {
-                    mensaje = "Para el agente externo debe indicar la universidad de origen y la universidad de destino.",
-                    error = "Para el agente externo debe indicar la universidad de origen y la universidad de destino."
-                });
-            }
-
-            // Validación de longitud
-            if (request.UniversidadOrigen.Trim().Length > MaxUniversidad || 
-                request.UniversidadDestino.Trim().Length > MaxUniversidad)
-            {
-                return BadRequest(new
-                {
-                    mensaje = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres.",
-                    error = $"El nombre de la universidad no puede superar los {MaxUniversidad} caracteres."
-                });
-            }
+            return "Para el agente externo debe indicar la universidad de origen y la universidad de destino.";
         }
 
         return null;
-    }
-    private async Task<object> ArmarDetalleAsync(Solicitud s)
-    {
-        var nombres = await _db.Carreras
-            .AsNoTracking()
-            .Where(c => c.Id == s.CarreraOrigenId || c.Id == s.CarreraDestinoId)
-            .ToDictionaryAsync(c => c.Id, c => c.Nombre);
-
-        string Nombre(int carreraId, string porDefecto) =>
-            nombres.TryGetValue(carreraId, out var n) ? n : porDefecto;
-
-        return new
-        {
-            Id = s.Id,
-            Numero = s.NumeroProceso,
-            NumeroProceso = s.NumeroProceso,
-            Tipo = s.Tipo,
-            CarreraOrigenId = s.CarreraOrigenId,
-            CarreraDestinoId = s.CarreraDestinoId,
-            Origen = Nombre(s.CarreraOrigenId, "Origen"),
-            Destino = Nombre(s.CarreraDestinoId, "Destino"),
-            AsignaturasIds = s.Asignaturas.Select(a => a.AsignaturaId).OrderBy(x => x).ToList(),
-            FechaRegistro = s.FechaRegistro,
-            Estado = s.Estado,
-            Modulo = s.Modulo,
-            UniversidadOrigen = s.UniversidadOrigen,
-            UniversidadDestino = s.UniversidadDestino
-        };
-    }
-
-    // Solicitudes no valida el JWT (lo hace el Gateway): se lee el correo de los claims y, si no
-    // hay, del contenido del token, igual que el controlador del Coordinador.
-    private string ObtenerCorreo()
-    {
-        var usuario = HttpContext?.User;
-        var delClaim = usuario?.FindFirstValue(ClaimTypes.Email) ?? usuario?.FindFirstValue("email");
-        if (!string.IsNullOrWhiteSpace(delClaim))
-            return delClaim;
-
-        var cabecera = HttpContext?.Request.Headers.Authorization.ToString() ?? string.Empty;
-        if (cabecera.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            var partes = cabecera["Bearer ".Length..].Trim().Split('.');
-            if (partes.Length == 3)
-            {
-                try
-                {
-                    var payload = partes[1].Replace('-', '+').Replace('_', '/');
-                    payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
-
-                    using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
-                    if (doc.RootElement.TryGetProperty("email", out var valor) &&
-                        valor.ValueKind == JsonValueKind.String &&
-                        !string.IsNullOrWhiteSpace(valor.GetString()))
-                        return valor.GetString()!;
-                }
-                catch (Exception ex) when (ex is FormatException or JsonException)
-                {
-                    // Token ilegible: se usa el correo por defecto.
-                }
-            }
-        }
-
-        return CorreoPorDefecto;
     }
 }

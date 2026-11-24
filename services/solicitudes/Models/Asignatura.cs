@@ -7,6 +7,10 @@ public class Asignatura
     public string Nivel { get; set; } = string.Empty;
     public int Creditos { get; set; }
     public int Horas { get; set; }
+
+    /// <summary>Área de conocimiento (Matemáticas, Física, Programación...).</summary>
+    public string Area { get; set; } = string.Empty;
+
     public int CarreraId { get; set; }
     public Carrera Carrera { get; set; } = null!;
 }

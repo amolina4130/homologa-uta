@@ -45,7 +45,7 @@ namespace HomologaUTA.Autenticacion.Migrations
                         new
                         {
                             Id = 1,
-                            Nombre = "ESTUDIANTE"
+                            Nombre = "COMITE"
                         },
                         new
                         {
@@ -55,16 +55,11 @@ namespace HomologaUTA.Autenticacion.Migrations
                         new
                         {
                             Id = 3,
-                            Nombre = "SECRETARIA"
+                            Nombre = "DOCENTE"
                         },
                         new
                         {
                             Id = 4,
-                            Nombre = "CONSEJO"
-                        },
-                        new
-                        {
-                            Id = 5,
                             Nombre = "ADMINISTRADOR"
                         });
                 });
@@ -77,6 +72,13 @@ namespace HomologaUTA.Autenticacion.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Cedula")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Correo")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -85,8 +87,8 @@ namespace HomologaUTA.Autenticacion.Migrations
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
                         .HasDefaultValue("");
 
                     b.Property<string>("PasswordHash")
@@ -95,6 +97,27 @@ namespace HomologaUTA.Autenticacion.Migrations
 
                     b.Property<int>("RolId")
                         .HasColumnType("int");
+
+                    b.Property<string>("Telefono")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)")
+                        .HasDefaultValue("");
 
                     b.HasKey("Id");
 

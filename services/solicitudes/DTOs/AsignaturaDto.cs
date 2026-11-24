@@ -5,6 +5,7 @@ public class AsignaturaDto
     public int Id { get; set; }
     public string Nombre { get; set; } = string.Empty;
     public string Nivel { get; set; } = string.Empty;
+    public string Area { get; set; } = string.Empty;
     public int Creditos { get; set; }
     public int Horas { get; set; }
 }

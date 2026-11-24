@@ -1,96 +1,89 @@
-using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.Clients;
-using HomologaUTA.Homologacion.Models;
+using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace HomologaUTA.Homologacion.Controllers;
 
+/// <summary>Resolución del Consejo Directivo sobre una solicitud con informe emitido (HU-17).</summary>
 [ApiController]
 [Route("homologacion")]
 public class ResolucionController : ControllerBase
 {
-    private readonly HomologacionDbContext _db;
+    private readonly ResolucionService _servicio;
     private readonly SolicitudesClient _solicitudes;
 
-    public ResolucionController(HomologacionDbContext db, SolicitudesClient solicitudes)
+    public ResolucionController(ResolucionService servicio, SolicitudesClient solicitudes)
     {
-        _db = db;
+        _servicio = servicio;
         _solicitudes = solicitudes;
     }
 
-    public class DecisionRequest
+    /// <summary>Registra la resolución del Consejo y deja la solicitud en RESUELTA.</summary>
+    /// <remarks>Solo se registra una vez y sobre una solicitud con informe técnico emitido.</remarks>
+    /// <response code="201">Resolución registrada</response>
+    /// <response code="403">El usuario no es Coordinador ni Consejo</response>
+    /// <response code="409">No hay informe emitido o ya existe la resolución</response>
+    [HttpPost("{id:int}/resolucion")]
+    [ProducesResponseType(typeof(ResolucionDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Registrar(
+        int id, [FromBody] RegistrarResolucionRequest request, CancellationToken ct)
     {
-        public int AsignaturaId { get; set; }
-        public string DecisionFinal { get; set; } = string.Empty;
-    }
+        if (id <= 0)
+            return BadRequest(new { mensaje = "El id de la solicitud debe ser mayor que cero." });
 
-    public class ResolucionRequest
-    {
-        public string NumeroResolucion { get; set; } = string.Empty;
-        public DateTime Fecha { get; set; }
-        public List<DecisionRequest> Decisiones { get; set; } = new();
-        public string? Observacion { get; set; }
-    }
+        if (!AutorizacionHomologacion.PuedeRegistrarResolucion(User))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { mensaje = "Solo el Coordinador puede registrar la resolución." });
 
-    [HttpPost("{id}/resolucion")]
-    [Authorize(Roles = "COORDINADOR")]
-    public async Task<IActionResult> RegistrarResolucion(int id, [FromBody] ResolucionRequest request)
-    {
-        // 1. Verificar que el análisis exista y esté en estado INFORME_EMITIDO
-        var analisis = await _db.AnalisisSolicitudes
-            .Include(a => a.Asignaturas)
-            .FirstOrDefaultAsync(a => a.SolicitudId == id);
+        var usuario = AutorizacionHomologacion.Correo(User) ?? "consejo@homologauta";
 
-        if (analisis is null)
-            return NotFound(new { mensaje = "La solicitud no tiene un análisis generado." });
-
-        if (analisis.Estado != EstadoAnalisis.INFORME_EMITIDO)
-            return Conflict(new { mensaje = "La solicitud no tiene un informe técnico emitido o ya fue resuelta." });
-
-        // 2. Verificar que no exista ya una resolución para esta solicitud
-        var existeResolucion = await _db.ResolucionesConsejo.AnyAsync(r => r.SolicitudId == id);
-        if (existeResolucion)
-            return Conflict(new { mensaje = "La resolución del Consejo ya fue registrada para esta solicitud." });
-
-        // 3. Obtener el usuario actual (Coordinador)
-        var correoUsuario = User.FindFirstValue(ClaimTypes.Email) ?? "coordinador@uta.edu.ec";
-
-        // 4. Crear la resolución
-        var resolucion = new ResolucionConsejo
-        {
-            SolicitudId = id,
-            NumeroResolucion = request.NumeroResolucion,
-            Fecha = request.Fecha,
-            Observacion = request.Observacion,
-            UsuarioRegistro = correoUsuario,
-            Decisiones = request.Decisiones.Select(d => new DecisionAsignaturaResolucion
-            {
-                AsignaturaId = d.AsignaturaId,
-                DecisionFinal = d.DecisionFinal
-            }).ToList()
-        };
-
-        _db.ResolucionesConsejo.Add(resolucion);
-
-        // 5. Cambiar el estado del análisis a RESUELTA
-        analisis.Estado = EstadoAnalisis.RESUELTA; // Asegúrate de tener este estado en tu enum/clase
-        await _db.SaveChangesAsync();
-
-        // 6. Actualizar el estado de la solicitud en el servicio de Solicitudes
         try
         {
-            await _solicitudes.CambiarEstadoAsync(id, "RESUELTA", correoUsuario);
+            var resolucion = await _servicio.RegistrarAsync(id, request, usuario, ct);
+            return CreatedAtAction(nameof(Obtener), new { id }, resolucion);
         }
-        catch (Exception ex)
+        catch (ResolucionException ex)
         {
-            // Si falla el servicio de solicitudes, la resolución ya está guardada. Se podría reintentar o loggear.
-            Console.WriteLine($"Error al actualizar estado en Solicitudes: {ex.Message}");
+            return StatusCode(ex.StatusCode, new { mensaje = ex.Message });
         }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { mensaje = ex.Message });
+        }
+    }
 
-        return CreatedAtAction(nameof(RegistrarResolucion), new { id = resolucion.Id }, new { mensaje = "Resolución registrada exitosamente.", resolucionId = resolucion.Id });
+    /// <summary>Consulta la resolución registrada para una solicitud.</summary>
+    /// <response code="200">Resolución registrada</response>
+    /// <response code="404">La solicitud todavía no tiene resolución</response>
+    [HttpGet("{id:int}/resolucion")]
+    [ProducesResponseType(typeof(ResolucionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Obtener(int id, CancellationToken ct)
+    {
+        if (id <= 0)
+            return BadRequest(new { mensaje = "El id de la solicitud debe ser mayor que cero." });
+
+        try
+        {
+            var info = await _solicitudes.ObtenerCompletaAsync(id, ct);
+            if (info is null)
+                return NotFound(new { mensaje = "Solicitud no encontrada." });
+
+            if (!AutorizacionHomologacion.PuedeAccederSolicitud(User, info.EstudianteCorreo))
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { mensaje = "No puede consultar la resolución de otro estudiante." });
+
+            var resolucion = await _servicio.ObtenerAsync(id, ct);
+            return resolucion is null
+                ? NotFound(new { mensaje = "La solicitud todavía no tiene una resolución del Consejo." })
+                : Ok(resolucion);
+        }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { mensaje = ex.Message });
+        }
     }
 }
