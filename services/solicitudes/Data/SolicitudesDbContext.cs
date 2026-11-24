@@ -99,6 +99,8 @@ public class SolicitudesDbContext : DbContext
             e.Property(s => s.Modulo).IsRequired().HasMaxLength(20).HasDefaultValue("INTERNO");
             e.Property(s => s.UniversidadOrigen).HasMaxLength(150);
             e.Property(s => s.UniversidadDestino).HasMaxLength(150);
+            e.Property(s => s.NumeroProceso).IsRequired().HasMaxLength(30);
+            e.HasIndex(s => s.NumeroProceso).IsUnique();
             
             e.HasOne(s => s.CarreraOrigen)
              .WithMany()
@@ -129,6 +131,7 @@ public class SolicitudesDbContext : DbContext
             e.Property(h => h.EstadoAnterior).HasMaxLength(50);
             e.Property(h => h.EstadoNuevo).IsRequired().HasMaxLength(50);
             e.Property(h => h.UsuarioCorreo).IsRequired().HasMaxLength(150);
+            e.Property(h => h.Detalle).HasMaxLength(200);
             e.HasOne(h => h.Solicitud)
              .WithMany()
              .HasForeignKey(h => h.SolicitudId)
