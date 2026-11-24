@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerSolicitudesDocente } from "../services/docenteService";
+import { obtenerCarreras, obtenerMisSolicitudes } from "../services/solicitudesService";
+import { descargarInforme } from "../services/homologacionService";
+import { TablaSolicitudes } from "../components/TablaSolicitudes";
 import { filtrarPendientes, numeroSolicitud } from "../utils/solicitudesDocente";
 
 const CAMPOS_PERFIL = [
@@ -20,25 +23,50 @@ const perfilInicial = (usuario) => ({
   telefono: usuario?.telefono || "",
 });
 
+const FILTROS_VACIOS = { estado: "", carreraId: "", desde: "", hasta: "" };
+
+const ESTADOS_SOLICITUD = [
+  { valor: "", etiqueta: "Todos los estados" },
+  { valor: "REGISTRADA", etiqueta: "REGISTRADA" },
+  { valor: "PENDIENTE_REVISION", etiqueta: "PENDIENTE_REVISION" },
+  { valor: "INFORME_EMITIDO", etiqueta: "INFORME_EMITIDO" },
+  { valor: "RESUELTA", etiqueta: "RESUELTA" },
+];
+
 export default function Inicio() {
   const { rol, usuario, guardarPerfil } = useAuth();
   const [pendientes, setPendientes] = useState([]);
   const [cargandoPendientes, setCargandoPendientes] = useState(true);
+  const [solicitudesDocente, setSolicitudesDocente] = useState([]);
   const [perfil, setPerfil] = useState(() => perfilInicial(usuario));
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [errorPerfil, setErrorPerfil] = useState("");
+  const [misSolicitudes, setMisSolicitudes] = useState([]);
+  const [cargandoMis, setCargandoMis] = useState(false);
+  const [errorMis, setErrorMis] = useState("");
+  const [mensajeMis, setMensajeMis] = useState("");
+  const [filtrosMis, setFiltrosMis] = useState(FILTROS_VACIOS);
+  const [carrerasMis, setCarrerasMis] = useState([]);
 
   useEffect(() => {
     if (rol !== "DOCENTE") return undefined;
 
     let activo = true;
+    setCargandoPendientes(true);
     obtenerSolicitudesDocente()
       .then((lista) => {
-        if (activo) setPendientes(filtrarPendientes(lista));
+        const arr = Array.isArray(lista) ? lista : [];
+        if (activo) {
+          setSolicitudesDocente(arr);
+          setPendientes(filtrarPendientes(arr));
+        }
       })
       .catch(() => {
-        if (activo) setPendientes([]);
+        if (activo) {
+          setSolicitudesDocente([]);
+          setPendientes([]);
+        }
       })
       .finally(() => {
         if (activo) setCargandoPendientes(false);
@@ -48,6 +76,54 @@ export default function Inicio() {
       activo = false;
     };
   }, [rol]);
+
+  const cargarMisSolicitudes = useCallback(async (criterios = {}) => {
+    setCargandoMis(true);
+    setErrorMis("");
+    try {
+      const data = await obtenerMisSolicitudes(criterios);
+      setMisSolicitudes(Array.isArray(data) ? data : data?.data || []);
+    } catch (e) {
+      setErrorMis(e.message || "No se pudieron cargar sus solicitudes.");
+    } finally {
+      setCargandoMis(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (rol !== "COORDINADOR") return;
+    cargarMisSolicitudes({});
+    obtenerCarreras()
+      .then((data) => setCarrerasMis(Array.isArray(data) ? data : []))
+      .catch(() => setCarrerasMis([]));
+  }, [rol, cargarMisSolicitudes]);
+
+  const cambiarFiltroMis = (campo, valor) => {
+    setFiltrosMis((prev) => ({ ...prev, [campo]: valor }));
+  };
+
+  const aplicarFiltrosMis = (ev) => {
+    ev.preventDefault();
+    setMensajeMis("");
+    cargarMisSolicitudes(filtrosMis);
+  };
+
+  const limpiarFiltrosMis = () => {
+    setFiltrosMis(FILTROS_VACIOS);
+    setMensajeMis("");
+    cargarMisSolicitudes({});
+  };
+
+  const descargarMiInforme = async (id) => {
+    setErrorMis("");
+    setMensajeMis("");
+    try {
+      await descargarInforme(id);
+      setMensajeMis(`Informe de SOL-${String(id).padStart(4, "0")} descargado.`);
+    } catch (e) {
+      setErrorMis(e.message || "No se pudo descargar el informe.");
+    }
+  };
 
   const cambiarPerfil = (clave, valor) => {
     setPerfil((prev) => ({ ...prev, [clave]: valor }));
@@ -71,175 +147,340 @@ export default function Inicio() {
     }
   };
 
-  if (rol === "DOCENTE") {
+  if (rol === "DOCENTE" || rol === "COORDINADOR") {
+    const esDocente = rol === "DOCENTE";
     const primera = pendientes[0];
     const total = pendientes.length;
-    const iniciales = (perfil.nombre || usuario?.correo || "D")
+    const iniciales = (perfil.nombre || usuario?.correo || (esDocente ? "D" : "C"))
       .trim()
       .split(/\s+/)
       .slice(0, 2)
       .map((parte) => parte[0]?.toUpperCase() || "")
       .join("");
 
-    return (
-      <div className="container mt-4">
-        <div className="row g-4">
-          <div className="col-lg-8">
-            <form className="card shadow-sm border-0 h-100" onSubmit={guardarDatos}>
-              <div className="card-header bg-primary text-white">
-                <h2 className="mb-0 fw-bold">Mi perfil</h2>
-                <small className="d-block fw-normal">
-                  Sus datos se usan para identificarlo en el sistema y en sus informes.
-                </small>
+    const etiquetaSolicitud = (s) =>
+      s?.numeroProceso || s?.numero || numeroSolicitud(s) || `SOL-${String(s?.solicitudId || "").padStart(4, "0")}`;
+    const rutaSolicitud = (s) =>
+      esDocente ? `/evaluar/${s.solicitudId}` : `/detalle-solicitud/${s.solicitudId}`;
+
+    const tarjetaPerfil = (
+      <form className={`card shadow-sm border-0 ${esDocente ? "h-100" : ""}`} onSubmit={guardarDatos}>
+        <div className="card-header bg-primary text-white">
+          <h2 className="mb-0 fw-bold">Mi perfil</h2>
+          <small className="d-block fw-normal">
+            Sus datos se usan para identificarlo en el sistema y en los informes.
+          </small>
+        </div>
+        <div className="card-body p-4">
+          <div className="d-flex align-items-center gap-3 mb-4">
+            <div
+              className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold fs-4"
+              style={{ width: "64px", height: "64px", flex: "0 0 auto" }}
+              aria-hidden="true"
+            >
+              {iniciales || (esDocente ? "D" : "C")}
+            </div>
+            <div>
+              <div className="fw-bold fs-5">
+                {perfil.nombre || usuario?.correo || (esDocente ? "Docente" : "Coordinador")}
               </div>
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center gap-3 mb-4">
-                  <div
-                    className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold fs-4"
-                    style={{ width: "64px", height: "64px", flex: "0 0 auto" }}
-                    aria-hidden="true"
-                  >
-                    {iniciales || "D"}
-                  </div>
-                  <div>
-                    <div className="fw-bold fs-5">
-                      {perfil.nombre || usuario?.correo || "Docente"}
-                    </div>
-                    <div className="text-muted small">
-                      {[perfil.titulo, perfil.tipo].filter(Boolean).join(" · ") || "Datos del docente"}
-                    </div>
-                    <div className="text-muted small">{usuario?.correo || "-"}</div>
-                  </div>
-                </div>
-
-                <div className="row g-3">
-                  {CAMPOS_PERFIL.map((campo) => (
-                    <div className="col-md-6" key={campo.clave}>
-                      <label htmlFor={`perfil-${campo.clave}`} className="form-label small fw-bold mb-1">
-                        {campo.etiqueta}
-                      </label>
-                      <input
-                        id={`perfil-${campo.clave}`}
-                        className="form-control form-control-sm"
-                        value={perfil[campo.clave] || ""}
-                        placeholder={campo.placeholder}
-                        onChange={(e) => cambiarPerfil(campo.clave, e.target.value)}
-                      />
-                    </div>
-                  ))}
-                  <div className="col-md-6">
-                    <label className="form-label small fw-bold mb-1">Correo de acceso</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={usuario?.correo || ""}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  <div className="col-md-6">
-                    <label className="form-label small fw-bold mb-1">Rol</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={rol || ""}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                </div>
-
-                {mensajePerfil && (
-                  <div className="alert alert-success small mt-3 mb-0">{mensajePerfil}</div>
-                )}
-                {errorPerfil && (
-                  <div className="alert alert-danger small mt-3 mb-0">{errorPerfil}</div>
-                )}
-
-                <div className="d-flex justify-content-end mt-4">
-                  <button
-                    type="submit"
-                    className="btn btn-primary fw-bold"
-                    disabled={guardandoPerfil}
-                  >
-                    {guardandoPerfil ? "Guardando..." : "Guardar mis datos"}
-                  </button>
-                </div>
+              <div className="text-muted small">
+                {[perfil.titulo, perfil.tipo].filter(Boolean).join(" · ") || `Datos del ${esDocente ? "docente" : "coordinador"}`}
               </div>
-            </form>
+              <div className="text-muted small">{usuario?.correo || "-"}</div>
+            </div>
           </div>
 
-          <div className="col-lg-4">
-            <div className="card shadow-sm border-0 h-100">
-              <div className="card-header bg-light fw-bold">Notificaciones</div>
-              <div className="card-body p-4">
-                <div className="d-flex align-items-start gap-3">
-                  <div className="position-relative" style={{ fontSize: "2.5rem", lineHeight: 1 }}>
-                    <span aria-hidden="true">🔔</span>
-                    {!cargandoPendientes && total > 0 && (
-                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                        {total > 9 ? "9+" : total}
-                        <span className="visually-hidden">
-                          solicitudes pendientes de revisar
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h5 className="fw-bold mb-1">
-                      {cargandoPendientes
-                        ? "Consultando avisos..."
-                        : total > 0
-                          ? `Tienes ${total} solicitud${total === 1 ? "" : "es"} por revisar`
-                          : "Sin solicitudes por revisar"}
-                    </h5>
-                    <p className="text-muted small mb-0">
-                      La campanita muestra un número solo cuando el Coordinador le asigna una
-                      revisión pendiente.
-                    </p>
-                  </div>
-                </div>
+          <div className="row g-3">
+            {CAMPOS_PERFIL.map((campo) => (
+              <div className={esDocente ? "col-md-6" : "col-12"} key={campo.clave}>
+                <label htmlFor={`perfil-${campo.clave}`} className="form-label small fw-bold mb-1">
+                  {campo.etiqueta}
+                </label>
+                <input
+                  id={`perfil-${campo.clave}`}
+                  className="form-control form-control-sm"
+                  value={perfil[campo.clave] || ""}
+                  placeholder={campo.placeholder}
+                  onChange={(e) => cambiarPerfil(campo.clave, e.target.value)}
+                />
+              </div>
+            ))}
+            <div className={esDocente ? "col-md-6" : "col-12"}>
+              <label className="form-label small fw-bold mb-1">Correo de acceso</label>
+              <input className="form-control form-control-sm" value={usuario?.correo || ""} readOnly disabled />
+            </div>
+            <div className={esDocente ? "col-md-6" : "col-12"}>
+              <label className="form-label small fw-bold mb-1">Rol</label>
+              <input className="form-control form-control-sm" value={rol || ""} readOnly disabled />
+            </div>
+          </div>
 
-                {!cargandoPendientes && total > 0 && (
-                  <div className="mt-4">
-                    <p className="mb-1 fw-semibold small">
-                      {numeroSolicitud(primera)} ·{" "}
-                      {primera.carreraOrigen || "Origen"} →{" "}
-                      {primera.carreraDestino || "Destino"}
-                    </p>
-                    <Link to={`/evaluar/${primera.solicitudId}`} className="btn btn-primary btn-sm w-100">
-                      Revisar ahora
-                    </Link>
-                    {total > 1 && (
-                      <ul className="mt-3 mb-0 small">
-                        {pendientes.slice(1).map((s) => (
-                          <li key={s.solicitudId}>
-                            <Link to={`/evaluar/${s.solicitudId}`}>
-                              {numeroSolicitud(s)}
-                            </Link>{" "}
-                            · pendiente de revisar
-                          </li>
-                        ))}
-                      </ul>
+          {mensajePerfil && <div className="alert alert-success small mt-3 mb-0">{mensajePerfil}</div>}
+          {errorPerfil && <div className="alert alert-danger small mt-3 mb-0">{errorPerfil}</div>}
+
+          <div className="d-flex justify-content-end mt-4">
+            <button type="submit" className="btn btn-primary fw-bold" disabled={guardandoPerfil}>
+              {guardandoPerfil ? "Guardando..." : "Guardar mis datos"}
+            </button>
+          </div>
+        </div>
+      </form>
+    );
+
+    const tarjetaPendientes = (
+      <div className={`card shadow-sm border-0 ${esDocente ? "h-100" : ""}`}>
+        <div className="card-header bg-light fw-bold">
+          {esDocente ? "Notificaciones" : "Solicitudes pendientes de revisión"}
+        </div>
+        <div className="card-body p-4">
+          <div className="d-flex align-items-start gap-3">
+            <div className="position-relative" style={{ fontSize: "2.5rem", lineHeight: 1 }}>
+              <span aria-hidden="true">{esDocente ? "🔔" : "📋"}</span>
+              {!cargandoPendientes && total > 0 && (
+                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                  {total > 9 ? "9+" : total}
+                  <span className="visually-hidden">solicitudes pendientes de revisar</span>
+                </span>
+              )}
+            </div>
+            <div>
+              <h5 className="fw-bold mb-1">
+                {cargandoPendientes
+                  ? "Consultando solicitudes..."
+                  : total > 0
+                    ? `${total} solicitud${total === 1 ? "" : "es"} pendiente${total === 1 ? "" : "s"}`
+                    : "Sin solicitudes pendientes"}
+              </h5>
+              <p className="text-muted small mb-0">
+                {esDocente
+                  ? "La campanita muestra un número solo cuando el Coordinador le asigna una revisión pendiente."
+                  : "Aquí ve las solicitudes que aún requieren su revisión, delegación o emisión de informe."}
+              </p>
+            </div>
+          </div>
+
+          {!cargandoPendientes && total > 0 && (
+            <div className="mt-4">
+              <p className="mb-1 fw-semibold small">
+                {etiquetaSolicitud(primera)} · {primera.carreraOrigen || "Origen"} → {primera.carreraDestino || "Destino"}
+              </p>
+              <Link to={rutaSolicitud(primera)} className="btn btn-primary btn-sm w-100">
+                {esDocente ? "Revisar ahora" : "Ver solicitud"}
+              </Link>
+              {total > 1 && (
+                <ul className="mt-3 mb-0 small">
+                  {pendientes.slice(1, 6).map((s) => (
+                    <li key={s.solicitudId}>
+                      <Link to={rutaSolicitud(s)}>{etiquetaSolicitud(s)}</Link>{" "}
+                      · pendiente de revisión
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+
+    if (esDocente) {
+      const formatoFecha = (valor) => (valor ? new Date(valor).toLocaleDateString("es-EC") : "-");
+      const YA_REVISADO = ["YA_REVISADO", "REVISADO"];
+
+      return (
+        <div className="container mt-4">
+          <div className="card shadow-sm border-0">
+            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center gap-2">
+              <div>
+                <h2 className="mb-0 fw-bold">Revisión docente</h2>
+                <small className="d-block fw-normal">
+                  Genere la sugerencia, revísela y envíe manualmente el informe al Coordinador.
+                </small>
+              </div>
+              <Link to="/solicitudes-docente" className="btn btn-light btn-sm fw-bold">
+                Ver todas
+              </Link>
+            </div>
+            <div className="card-body p-4">
+              {!cargandoPendientes && pendientes.length > 0 && (
+                <div className="alert alert-warning">
+                  Tienes {pendientes.length} solicitud{pendientes.length === 1 ? "" : "es"} pendiente{pendientes.length === 1 ? "" : "s"} de revisar. La primera es{" "}
+                  <Link to={`/evaluar/${pendientes[0].solicitudId}`} className="fw-bold">
+                    {numeroSolicitud(pendientes[0])}
+                  </Link>.
+                </div>
+              )}
+
+              <div className="table-responsive">
+                <table className="table table-hover align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Solicitud</th>
+                      <th>Coordinador</th>
+                      <th>Titular (récord)</th>
+                      <th>Modalidad</th>
+                      <th>Carreras</th>
+                      <th>Estado</th>
+                      <th className="text-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cargandoPendientes ? (
+                      <tr>
+                        <td colSpan="7" className="text-center py-4">Cargando solicitudes...</td>
+                      </tr>
+                    ) : solicitudesDocente.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="text-center py-4">No hay solicitudes asignadas para revisión.</td>
+                      </tr>
+                    ) : (
+                      solicitudesDocente.map((s) => {
+                        const id = s.solicitudId;
+                        const revisado = YA_REVISADO.includes(s.estadoDelegacion);
+                        const borrador = !revisado && Boolean(s.tieneSugerencia || s.fechaSugerencia);
+                        const puedeEvaluar = s.puedeEvaluar !== false && !revisado;
+                        return (
+                          <tr key={id}>
+                            <td>
+                              <div className="fw-bold">{s.numeroProceso || `SOL-${String(id).padStart(4, "0")}`}</div>
+                              <div className="small text-muted">{formatoFecha(s.fecha)}</div>
+                            </td>
+                            <td>{s.coordinadorCorreo || s.comiteCorreo || "-"}</td>
+                            <td>
+                              <span className="fw-semibold">{s.estudiante || "-"}</span>
+                              <div className="small text-muted">C.I.: {s.estudianteCedula || "-"}</div>
+                            </td>
+                            <td>
+                              <span className={`badge ${s.modulo === "EXTERNO" ? "bg-info text-dark" : "bg-primary"}`}>
+                                {s.modulo || "INTERNO"}
+                              </span>
+                            </td>
+                            <td>
+                              {s.carreraOrigen || "-"} → {s.carreraDestino || "-"}
+                              <div className="small text-muted">{s.totalAsignaturas ?? 0} asignatura(s)</div>
+                            </td>
+                            <td>
+                              {revisado ? (
+                                <span className="badge bg-secondary">Ya revisado</span>
+                              ) : borrador ? (
+                                <span className="badge bg-info text-dark">Sugerencia generada · sin enviar</span>
+                              ) : (
+                                <span className="badge bg-warning text-dark">{s.estadoDelegacion || "PENDIENTE"}</span>
+                              )}
+                            </td>
+                            <td className="text-center">
+                              {puedeEvaluar ? (
+                                <Link to={`/evaluar/${id}`} className="btn btn-sm btn-primary fw-bold">
+                                  {borrador ? "Continuar" : "Revisar"}
+                                </Link>
+                              ) : (
+                                <Link to={`/evaluar/${id}`} className="btn btn-sm btn-outline-secondary">
+                                  Ver
+                                </Link>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
-                  </div>
-                )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
+      );
+    }
 
-        <div className="card shadow-sm border-0 mt-4">
-          <div className="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+    return (
+      <div className="container mt-4">
+        <div className="card shadow-sm border-0">
+          <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center gap-2">
             <div>
-              <h5 className="fw-bold mb-1">Revisión por el Docente</h5>
-              <p className="text-muted small mb-0">
-                Genere la sugerencia con apoyo de IA, ponga sus observaciones, marque
-                <strong> REVISADO</strong> y envíe manualmente su informe al Coordinador. La URL y
-                los documentos ya están guardados en la solicitud.
-              </p>
+              <h2 className="mb-0 fw-bold">Mis solicitudes</h2>
+              <small className="d-block fw-normal">
+                Solicitudes registradas por usted. No es lo mismo que “Pendientes de revisión”.
+              </small>
             </div>
-            <Link to="/solicitudes-docente" className="btn btn-outline-primary">
-              Abrir mis revisiones
+            <Link to="/mis-solicitudes" className="btn btn-light btn-sm fw-bold">
+              Ver todas
             </Link>
+          </div>
+          <div className="card-body p-4">
+            <form className="row g-3 align-items-end mb-4" onSubmit={aplicarFiltrosMis}>
+              <div className="col-md-3">
+                <label htmlFor="inicioFiltroEstado" className="form-label fw-bold">Estado</label>
+                <select
+                  id="inicioFiltroEstado"
+                  className="form-select"
+                  value={filtrosMis.estado}
+                  onChange={(e) => cambiarFiltroMis("estado", e.target.value)}
+                >
+                  {ESTADOS_SOLICITUD.map((e) => (
+                    <option key={e.valor} value={e.valor}>{e.etiqueta}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-3">
+                <label htmlFor="inicioFiltroCarrera" className="form-label fw-bold">Carrera</label>
+                <select
+                  id="inicioFiltroCarrera"
+                  className="form-select"
+                  value={filtrosMis.carreraId}
+                  onChange={(e) => cambiarFiltroMis("carreraId", e.target.value)}
+                >
+                  <option value="">Todas las carreras</option>
+                  {carrerasMis.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-2">
+                <label htmlFor="inicioFiltroDesde" className="form-label fw-bold">Desde</label>
+                <input
+                  id="inicioFiltroDesde"
+                  type="date"
+                  className="form-control"
+                  value={filtrosMis.desde}
+                  onChange={(e) => cambiarFiltroMis("desde", e.target.value)}
+                />
+              </div>
+              <div className="col-md-2">
+                <label htmlFor="inicioFiltroHasta" className="form-label fw-bold">Hasta</label>
+                <input
+                  id="inicioFiltroHasta"
+                  type="date"
+                  className="form-control"
+                  value={filtrosMis.hasta}
+                  onChange={(e) => cambiarFiltroMis("hasta", e.target.value)}
+                />
+              </div>
+              <div className="col-md-2 d-flex gap-2">
+                <button type="submit" className="btn btn-primary fw-bold" disabled={cargandoMis}>Filtrar</button>
+                <button type="button" className="btn btn-outline-secondary" onClick={limpiarFiltrosMis} disabled={cargandoMis}>
+                  Limpiar
+                </button>
+              </div>
+            </form>
+
+            {mensajeMis && <div className="alert alert-success">{mensajeMis}</div>}
+            {errorMis && <div className="alert alert-danger">{errorMis}</div>}
+            {cargandoMis ? (
+              <div className="d-flex justify-content-center my-4">
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Cargando...</span>
+                </div>
+              </div>
+            ) : (
+              <TablaSolicitudes solicitudes={misSolicitudes} onDescargarInforme={descargarMiInforme} />
+            )}
+
+            <div className="d-flex justify-content-end mt-4">
+              <Link to="/delegar-docentes" className="btn btn-outline-primary fw-bold">
+                Solicitudes pendientes de revisión
+              </Link>
+            </div>
           </div>
         </div>
       </div>

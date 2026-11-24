@@ -9,6 +9,7 @@ import {
   delegarDocentes,
   obtenerDelegaciones,
   obtenerConsolidado,
+  previsualizarInformeFinal,
   emitirInformeFinal,
   descargarInformeFinal,
   descargarInformeSugeridoDocente,
@@ -137,6 +138,9 @@ export default function PanelCoordinador({ vista = "completo" }) {
   });
   const [informeFinalTexto, setInformeFinalTexto] = useState("");
   const [informeFinalGenerado, setInformeFinalGenerado] = useState(false);
+  const [informeFinalSolicitudId, setInformeFinalSolicitudId] = useState("");
+  const [borradorInformeFinal, setBorradorInformeFinal] = useState("");
+  const [generandoVistaPreviaFinal, setGenerandoVistaPreviaFinal] = useState(false);
   const [generandoFinal, setGenerandoFinal] = useState(false);
   const [descargandoFinal, setDescargandoFinal] = useState(false);
   const [descargandoSugerido, setDescargandoSugerido] = useState(false);
@@ -156,15 +160,47 @@ export default function PanelCoordinador({ vista = "completo" }) {
     setCargando(true);
     setError("");
     try {
-      const data = await obtenerSolicitudesPendientes();
-      setSolicitudes(data);
+      let data = await obtenerSolicitudesPendientes();
+      data = Array.isArray(data) ? data : [];
+
+      let inicial = "";
       setSolicitudActivaId((actual) => {
-        const inicial =
+        inicial =
           actual ||
-          (Array.isArray(data) && data[0]?.solicitudId ? String(data[0].solicitudId) : "");
-        if (inicial) prefillTitular(inicial, data);
+          (data[0]?.solicitudId ? String(data[0].solicitudId) : "");
         return inicial;
       });
+
+      if (inicial && !data.some((s) => String(s.solicitudId) === String(inicial))) {
+        try {
+          const detalle = await obtenerDetalleSolicitud(inicial);
+          if (detalle) {
+            data = [
+              {
+                solicitudId: detalle.solicitudId ?? Number(inicial),
+                numeroProceso: detalle.numeroProceso,
+                carreraOrigen: detalle.carreraOrigen,
+                carreraDestino: detalle.carreraDestino,
+                estado: detalle.estado,
+                estudiante: detalle.estudiante,
+                estudianteCedula: detalle.estudianteCedula,
+                fecha: detalle.fecha,
+                fechaAnalisis: detalle.fechaAnalisis,
+                modulo: detalle.modulo,
+                tipo: detalle.tipo,
+                totalAsignaturas: detalle.asignaturas?.length ?? 0,
+                comiteCorreo: detalle.comiteCorreo,
+              },
+              ...data,
+            ];
+          }
+        } catch {
+          // Si no se puede cargar la solicitud de la URL, se mantiene la lista pendiente.
+        }
+      }
+
+      setSolicitudes(data);
+      if (inicial) prefillTitular(inicial, data);
     } catch (e) {
       setError(e.message || "No se pudieron cargar las solicitudes pendientes.");
     } finally {
@@ -193,6 +229,8 @@ export default function PanelCoordinador({ vista = "completo" }) {
       const textoFinal = datosConsolidado?.informeFinalTexto || "";
       setInformeFinalTexto(textoFinal);
       setInformeFinalGenerado(Boolean(textoFinal));
+      setInformeFinalSolicitudId(textoFinal ? String(solicitudActivaId) : "");
+      setBorradorInformeFinal(textoFinal);
 
       const titular = datosConsolidado?.detalle;
       if (titular) {
@@ -224,6 +262,8 @@ export default function PanelCoordinador({ vista = "completo" }) {
         setAsignaturasFinales([]);
         setInformeFinalTexto("");
         setInformeFinalGenerado(false);
+        setInformeFinalSolicitudId("");
+        setBorradorInformeFinal("");
         return;
       }
       cargarConsolidado();
@@ -403,6 +443,56 @@ export default function PanelCoordinador({ vista = "completo" }) {
     );
   };
 
+  const construirPayloadInformeFinal = () => {
+    const base =
+      asignaturasFinales.length > 0
+        ? asignaturasFinales
+        : asignaturasParaInforme(consolidado, solicitudSeleccionada);
+    return {
+      base,
+      payload: {
+        asignaturas: base.map((a) => ({
+          asignaturaId: a.asignaturaId,
+          decision: a.decision,
+          observacion: (a.observacion || "").trim(),
+        })),
+        nombreEstudiante: (camposFinales.nombreEstudiante || "").trim(),
+        cedulaEstudiante: (camposFinales.cedulaEstudiante || "").trim(),
+        numeroMemorando: (camposFinales.numeroMemorando || "").trim(),
+        nombreFirmante: (camposFinales.nombreFirmante || "").trim(),
+      },
+    };
+  };
+
+  const generarVistaPreviaFinal = async () => {
+    setError("");
+    setExito("");
+    if (!solicitudActivaId) {
+      setError("Seleccione una solicitud para continuar.");
+      return;
+    }
+    if (!puedeGenerarFinal) {
+      setError("El informe final solo se habilita después de que el Docente haya revisado y emitido su informe sugerido.");
+      return;
+    }
+    const { base, payload } = construirPayloadInformeFinal();
+    if (base.length === 0) {
+      setError("No hay asignaturas consolidadas para generar la vista previa del informe final.");
+      return;
+    }
+    setGenerandoVistaPreviaFinal(true);
+    try {
+      const resultado = await previsualizarInformeFinal(solicitudActivaId, payload);
+      const texto = resultado?.texto || resultado?.informeFinalTexto || "";
+      setBorradorInformeFinal(texto);
+      setExito("Vista previa del informe final generada. Puede editarla antes de emitir.");
+    } catch (e) {
+      setError(e.message || "No se pudo generar la vista previa del informe final.");
+    } finally {
+      setGenerandoVistaPreviaFinal(false);
+    }
+  };
+
   const generarInformeFinal = async () => {
     setError("");
     setExito("");
@@ -417,11 +507,7 @@ export default function PanelCoordinador({ vista = "completo" }) {
       return;
     }
 
-    const base =
-      asignaturasFinales.length > 0
-        ? asignaturasFinales
-        : asignaturasParaInforme(consolidado, solicitudSeleccionada);
-
+    const { base, payload } = construirPayloadInformeFinal();
     if (base.length === 0) {
       setError("No hay asignaturas consolidadas para generar el informe final.");
       return;
@@ -430,15 +516,8 @@ export default function PanelCoordinador({ vista = "completo" }) {
     setGenerandoFinal(true);
     try {
       const resultado = await emitirInformeFinal(solicitudActivaId, {
-        asignaturas: base.map((a) => ({
-          asignaturaId: a.asignaturaId,
-          decision: a.decision,
-          observacion: (a.observacion || "").trim(),
-        })),
-        nombreEstudiante: (camposFinales.nombreEstudiante || "").trim(),
-        cedulaEstudiante: (camposFinales.cedulaEstudiante || "").trim(),
-        numeroMemorando: (camposFinales.numeroMemorando || "").trim(),
-        nombreFirmante: (camposFinales.nombreFirmante || "").trim(),
+        ...payload,
+        informeFinalTexto: (borradorInformeFinal || "").trim() || undefined,
       });
 
       const texto =
@@ -447,15 +526,18 @@ export default function PanelCoordinador({ vista = "completo" }) {
         resultado?.informeFinal ||
         resultado?.informe?.texto ||
         "";
-      setInformeFinalTexto(texto || informeFinalTexto);
+      const idFinal = String(solicitudActivaId);
+      const textoEmitido = texto || borradorInformeFinal || informeFinalTexto;
+      setInformeFinalTexto(textoEmitido);
       setInformeFinalGenerado(true);
-      setConsolidado((prev) => ({
-        ...(prev || {}),
-        informeFinalTexto: texto || prev?.informeFinalTexto,
-      }));
-      setExito(
-        "Informe final generado. Será enviado al Consejo Directivo."
-      );
+      setInformeFinalSolicitudId(idFinal);
+      setBorradorInformeFinal("");
+      setSolicitudes((prev) => prev.filter((s) => String(s.solicitudId) !== idFinal));
+      setSolicitudActivaId("");
+      setConsolidado(null);
+      setDelegaciones([]);
+      setAsignaturasFinales([]);
+      setExito("Informe final generado. Será enviado al Consejo Directivo.");
     } catch (e) {
       setError(e.message || "No se pudo generar el informe final.");
     } finally {
@@ -482,11 +564,16 @@ export default function PanelCoordinador({ vista = "completo" }) {
   };
 
   const descargarFinal = async () => {
+    const idDescarga = informeFinalSolicitudId || solicitudActivaId;
+    if (!idDescarga) {
+      setError("No hay un informe final generado para descargar.");
+      return;
+    }
     setError("");
     setExito("");
     setDescargandoFinal(true);
     try {
-      await descargarInformeFinal(solicitudActivaId);
+      await descargarInformeFinal(idDescarga);
       setExito("Informe final descargado en PDF.");
     } catch (e) {
       setError(e.message || "No se pudo descargar el informe final.");
@@ -507,6 +594,7 @@ export default function PanelCoordinador({ vista = "completo" }) {
   const filasSugeridas = consolidado?.informeSugeridoAsignaturas || [];
   const textoFinal = consolidado?.informeFinalTexto || informeFinalTexto;
   const puedeGenerarFinal = consolidado?.puedeGenerarInformeFinal === true;
+  const hayHomologables = asignaturasFinales.some((a) => a.decision === "HOMOLOGABLE");
   const revisadoPorDocente =
     consolidado?.revisadoPor ||
     revisadoPor(delegaciones.find((d) => d?.estado === "REVISADO") || {});
@@ -516,6 +604,10 @@ export default function PanelCoordinador({ vista = "completo" }) {
       : vista === "sugeridos" ? "INFORMES SUGERIDOS DEL DOCENTE"
         : vista === "final" ? "GENERAR INFORME FINAL"
           : "PANEL DEL COORDINADOR";
+  const solicitudesVista =
+    vista === "final"
+      ? solicitudes.filter((s) => s.estado !== "REGISTRADA" && s.estado !== "RESUELTA")
+      : solicitudes;
   const solicitudActiva = solicitudes.find(
     (s) => String(s.solicitudId) === String(solicitudActivaId)
   );
@@ -555,7 +647,7 @@ export default function PanelCoordinador({ vista = "completo" }) {
               disabled={cargando}
             >
               <option value="">Seleccione una solicitud</option>
-              {solicitudes.map((s) => (
+              {solicitudesVista.map((s) => (
                 <option key={s.solicitudId} value={s.solicitudId}>
                   {s.numeroProceso || `SOL-${String(s.solicitudId).padStart(4, "0")}`} ·{" "}
                   {s.carreraOrigen || "-"} → {s.carreraDestino || "-"}
@@ -566,37 +658,39 @@ export default function PanelCoordinador({ vista = "completo" }) {
         </div>
       )}
 
-      {!mostrarDetalle || !solicitudSeleccionada ? (
-        <ListaSolicitudes
-          solicitudes={solicitudes}
-          cargando={cargando}
-          onAbrir={abrirDetalle}
-        />
-      ) : (
-        <>
-          <DetalleSolicitud
-            key={solicitudSeleccionada.solicitudId}
-            solicitud={solicitudSeleccionada}
-            onVolver={() => {
-              setSolicitudSeleccionada(null);
-              setError("");
-            }}
-            onGuardar={guardarInforme}
-            onDescargarInforme={() => descargar(solicitudSeleccionada.solicitudId)}
-            descargando={descargando}
+      {vista === "completo" && (
+        !mostrarDetalle || !solicitudSeleccionada ? (
+          <ListaSolicitudes
+            solicitudes={solicitudes}
             cargando={cargando}
+            onAbrir={abrirDetalle}
           />
+        ) : (
+          <>
+            <DetalleSolicitud
+              key={solicitudSeleccionada.solicitudId}
+              solicitud={solicitudSeleccionada}
+              onVolver={() => {
+                setSolicitudSeleccionada(null);
+                setError("");
+              }}
+              onGuardar={guardarInforme}
+              onDescargarInforme={() => descargar(solicitudSeleccionada.solicitudId)}
+              descargando={descargando}
+              cargando={cargando}
+            />
 
-          {!solicitudSeleccionada.resolucion &&
-            solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
-              <FormularioResolucion
-                key={solicitudSeleccionada.solicitudId}
-                solicitud={solicitudSeleccionada}
-                onRegistrar={guardarResolucion}
-                cargando={cargando}
-              />
-            )}
-        </>
+            {!solicitudSeleccionada.resolucion &&
+              solicitudSeleccionada.estado === "INFORME_EMITIDO" && (
+                <FormularioResolucion
+                  key={solicitudSeleccionada.solicitudId}
+                  solicitud={solicitudSeleccionada}
+                  onRegistrar={guardarResolucion}
+                  cargando={cargando}
+                />
+              )}
+          </>
+        )
       )}
 
       <hr className="my-5" />
@@ -1046,6 +1140,15 @@ export default function PanelCoordinador({ vista = "completo" }) {
             </div>
           </div>
 
+          {asignaturasFinales.length > 0 && !hayHomologables && (
+            <div className="alert alert-warning mt-4">
+              <strong>No procede la homologación de materias.</strong> Tras la revisión del contenido
+              académico, ninguna de las asignaturas analizadas cumple con el porcentaje mínimo de
+              equivalencia requerido ni con las condiciones institucionales establecidas; por
+              consiguiente, no es posible homologar materias en la presente solicitud.
+            </div>
+          )}
+
           {asignaturasFinales.length > 0 && (
             <div className="mt-4">
               <h5 className="fw-bold">Decisión final por asignatura</h5>
@@ -1095,25 +1198,50 @@ export default function PanelCoordinador({ vista = "completo" }) {
             </div>
           )}
 
-          <div className="d-flex flex-wrap gap-2 mt-3">
-            <button
-              type="button"
-              className="btn btn-success fw-bold"
-              onClick={generarInformeFinal}
-              disabled={generandoFinal || !solicitudActivaId || !puedeGenerarFinal}
-            >
-              {generandoFinal ? "Generando..." : "Generar informe final"}
-            </button>
-            {informeFinalGenerado && (
+          <div className="mt-4">
+            <div className="d-flex flex-wrap gap-2 mb-3">
               <button
                 type="button"
-                className="btn btn-outline-primary"
-                onClick={descargarFinal}
-                disabled={descargandoFinal}
+                className="btn btn-outline-primary fw-bold"
+                onClick={generarVistaPreviaFinal}
+                disabled={generandoVistaPreviaFinal || !solicitudActivaId || !puedeGenerarFinal}
               >
-                {descargandoFinal ? "Descargando..." : "Descargar PDF final"}
+                {generandoVistaPreviaFinal ? "Generando vista previa..." : "Generar vista previa"}
               </button>
-            )}
+              <button
+                type="button"
+                className="btn btn-success fw-bold"
+                onClick={generarInformeFinal}
+                disabled={generandoFinal || !solicitudActivaId || !puedeGenerarFinal}
+              >
+                {generandoFinal ? "Emitiendo..." : "Emitir informe final"}
+              </button>
+              {informeFinalGenerado && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={descargarFinal}
+                  disabled={descargandoFinal}
+                >
+                  {descargandoFinal ? "Descargando..." : "Descargar PDF final"}
+                </button>
+              )}
+            </div>
+
+            <label htmlFor="borradorInformeFinal" className="form-label fw-bold">
+              Texto del informe final (editable antes de emitir)
+            </label>
+            <textarea
+              id="borradorInformeFinal"
+              className="form-control"
+              rows={14}
+              value={borradorInformeFinal}
+              onChange={(e) => setBorradorInformeFinal(e.target.value)}
+              placeholder="Genere la vista previa para obtener el texto del informe, edítelo si es necesario y luego emita el informe final."
+            />
+            <div className="form-text">
+              Puede editar este texto antes de emitir. Si lo deja con contenido, se enviará tal como aparece aquí.
+            </div>
           </div>
         </div>
       </div>

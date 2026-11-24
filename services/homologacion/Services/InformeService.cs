@@ -7,14 +7,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HomologaUTA.Homologacion.Services;
 
-/// <summary>Genera el informe PDF de homologación (HU-18).</summary>
-public interface IInformeService
-{
-    /// <summary>Devuelve los bytes del PDF de la solicitud.</summary>
-    /// <exception cref="InformeException">404 si la solicitud o su análisis no existen.</exception>
-    Task<byte[]> GenerarPdfAsync(int solicitudId, CancellationToken ct = default);
-}
-
 /// <summary>
 /// Arma los datos del informe con la solicitud real, el análisis del agente, la decisión del
 /// Coordinador y, si ya existe, la resolución del Consejo Directivo. La generación del PDF la

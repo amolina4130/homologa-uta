@@ -215,4 +215,44 @@ public static class PlantillaInformeFinal
             });
         }).GeneratePdf();
     }
+
+    /// <summary>Genera un PDF simple a partir del texto final (usado cuando el Coordinador editó el informe).</summary>
+    public static byte[] GenerarPdfDesdeTexto(string texto, DatosInformeFinal datos)
+    {
+        var textoSeguro = string.IsNullOrWhiteSpace(texto) ? string.Empty : texto.Trim();
+        var datosPdf = new DatosInformeBase
+        {
+            NumeroProceso = datos.NumeroProceso,
+            NumeroMemorando = datos.NumeroMemorando,
+            NombreEstudiante = datos.NombreEstudiante,
+            CedulaEstudiante = datos.CedulaEstudiante,
+            CarreraOrigen = datos.CarreraOrigen,
+            CarreraDestino = datos.CarreraDestino,
+            CedulaFirmante = datos.CedulaFirmante,
+            Fecha = datos.Fecha
+        };
+
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(1.5f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(9).FontColor(Colors.Grey.Darken4));
+
+                page.Header().Element(header =>
+                    ContenidoInforme.EncabezadoPdf(
+                        header,
+                        datosPdf,
+                        "INFORME FINAL DE HOMOLOGACIÓN",
+                        Destinatario,
+                        "Coordinación de Homologación",
+                        "Homologación de asignaturas"));
+
+                page.Content().PaddingVertical(10).Text(textoSeguro).LineHeight(1.4f);
+
+                page.Footer().Element(ContenidoInforme.PiePdf);
+            });
+        }).GeneratePdf();
+    }
 }

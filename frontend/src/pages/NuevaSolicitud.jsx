@@ -113,6 +113,9 @@ export default function NuevaSolicitud() {
     
     if (!origen || !destino) return alert("Seleccione carrera de origen y destino");
     if (origen === destino) return alert("La carrera de origen y destino no pueden ser iguales");
+    if (estudianteCedula.trim() && !/^\d{10}$/.test(estudianteCedula.trim())) {
+      return alert("La cédula del estudiante debe tener exactamente 10 dígitos.");
+    }
     if (seleccionadas.length === 0) return alert("Seleccione al menos una asignatura para homologar");
 
     const esExterno = modulo === "EXTERNO";
@@ -175,17 +178,17 @@ export default function NuevaSolicitud() {
           await analizarSolicitud(solicitudId);
           setTipoMensaje("success");
           setMensaje(
-            "Solicitud registrada. Ahora registre la URL de la carpeta y delegue al Docente; él generará y enviará el informe sugerido."
+            "Solicitud registrada. Continúe subiendo el récord académico; luego podrá delegar al Docente."
           );
         } catch (e) {
           setTipoMensaje("warning");
           setMensaje(
-            `Solicitud registrada, pero el análisis técnico no se pudo generar: ${e.message || "error desconocido"}. Puede registrarla igual y delegar.`
+            `Solicitud registrada, pero el análisis técnico no se pudo generar: ${e.message || "error desconocido"}. Puede continuar subiendo el récord y delegar.`
           );
         }
 
         setTimeout(
-          () => navigate(`/ruta-carpeta?solicitudId=${solicitudId}&modo=URL`),
+          () => navigate(`/adjuntar-documentos?solicitudId=${solicitudId}`),
           1600
         );
       } else {
@@ -291,10 +294,12 @@ export default function NuevaSolicitud() {
                             <input
                               id="estudianteCedula"
                               type="text"
+                              inputMode="numeric"
+                              maxLength={10}
                               className="form-control form-control-sm"
                               value={estudianteCedula}
-                              onChange={(e) => setEstudianteCedula(e.target.value)}
-                              placeholder="Si se deja vacío, se toma del récord"
+                              onChange={(e) => setEstudianteCedula(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                              placeholder="10 dígitos; si se deja vacío, se toma del récord"
                             />
                           </div>
                         </div>
@@ -338,26 +343,53 @@ export default function NuevaSolicitud() {
                     
                     <div className="mb-3">
                       <label className="form-label fw-bold">Carrera Origen</label>
-                      <select className="form-select" value={origen} onChange={(e) => setOrigen(e.target.value)} required>
+                      <select
+                        className="form-select"
+                        value={origen}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setOrigen(valor);
+                          if (valor && valor === destino) setDestino("");
+                        }}
+                        required
+                      >
                         <option value="">Seleccione una carrera...</option>
-                        {carreras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                      </select>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label className="form-label fw-bold">Carrera Destino</label>
-                      <select className="form-select" value={destino} onChange={(e) => setDestino(e.target.value)} required>
-                        <option value="">Seleccione una carrera...</option>
-                        {carreras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                        {carreras.map(c => (
+                          <option key={c.id} value={c.id} disabled={String(c.id) === String(destino)}>
+                            {c.nombre}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
+                    <div className="mb-3">
+                      <label className="form-label fw-bold">Carrera Destino</label>
+                      <select
+                        className="form-select"
+                        value={destino}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          setDestino(valor);
+                          if (valor && valor === origen) setOrigen("");
+                        }}
+                        required
+                      >
+                        <option value="">Seleccione una carrera...</option>
+                        {carreras.map(c => (
+                          <option key={c.id} value={c.id} disabled={String(c.id) === String(origen)}>
+                            {c.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">La carrera de destino debe ser diferente a la de origen.</div>
+                    </div>
+
                     <div className="alert alert-info small py-2 mb-3">
-                      Aquí solo se registra la solicitud. Después adjunte la URL o la carpeta de
-                      documentos y delegue al Docente: él será quien revise, edite y envíe el
-                      informe sugerido. <strong>Desarrollo de Proyectos, Titulación y Prácticas
-                      Laborales no se homologan</strong> por regla institucional y aparecerán como
-                      “No” en la revisión.
+                      Aquí solo se registra la solicitud. Después suba el récord académico y delegue al
+                      Docente: él revisará, editará y enviará el informe sugerido. Para modalidad externa,
+                      además registre la URL/carpeta compartida. <strong>Desarrollo de Proyectos,
+                      Titulación y Prácticas Laborales no se homologan</strong> por regla institucional
+                      y aparecerán como “No” en la revisión.
                     </div>
                   </div>
 
@@ -419,29 +451,43 @@ export default function NuevaSolicitud() {
                                 No hay materias recomendadas para homologar.
                               </div>
                             ) : (
-                              <div
-                                className="border rounded p-2 bg-light"
-                                style={{ maxHeight: '160px', overflowY: 'auto' }}
-                              >
-                                <table className="table table-sm table-borderless mb-0 small">
-                                  <thead>
-                                    <tr>
-                                      <th>Materia de origen</th>
-                                      <th>Destino sugerido</th>
-                                      <th className="text-center">%</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {recomendacionesAptas.map((r) => (
-                                      <tr key={r.asignaturaId}>
-                                        <td>{r.asignaturaOrigen}</td>
-                                        <td>{r.asignaturaDestino || "-"}</td>
-                                        <td className="text-center">{r.porcentajeContenido}%</td>
+                              <>
+                                <div
+                                  className="border rounded p-2 bg-light"
+                                  style={{ maxHeight: '160px', overflowY: 'auto' }}
+                                >
+                                  <table className="table table-sm table-borderless mb-0 small">
+                                    <thead>
+                                      <tr>
+                                        <th>Materia de origen</th>
+                                        <th>Destino sugerido</th>
+                                        <th className="text-center">%</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                                    </thead>
+                                    <tbody>
+                                      {recomendacionesAptas.map((r) => (
+                                        <tr key={r.asignaturaId}>
+                                          <td>{r.asignaturaOrigen}</td>
+                                          <td>{r.asignaturaDestino || "-"}</td>
+                                          <td className="text-center">{r.porcentajeContenido}%</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm mt-2 py-0 px-2"
+                                  onClick={() => {
+                                    const ids = recomendacionesAptas
+                                      .map((r) => Number(r.asignaturaId))
+                                      .filter((id) => asignaturasDisponibles.some((a) => Number(a.id) === id));
+                                    setSeleccionadas((prev) => Array.from(new Set([...prev, ...ids])));
+                                  }}
+                                >
+                                  Aplicar recomendación
+                                </button>
+                              </>
                             )}
                             <div className="form-text mt-1">
                               Solo una recomendación; no decide ni genera el informe final.

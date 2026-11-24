@@ -86,7 +86,8 @@ const MisSolicitudes = () => {
             <div className="card-header bg-primary text-white">
               <h4 className="mb-0 fw-bold">Mis Solicitudes</h4>
               <small className="d-block fw-normal">
-                Solicitudes registradas por el {rol === "COORDINADOR" ? "Coordinador" : "Comité"}
+                Solicitudes registradas por usted como {rol === "COORDINADOR" ? "Coordinador" : "Comité"}.
+                No es lo mismo que “Solicitudes pendientes de revisión”, que son las que aún requieren su gestión o decisión.
               </small>
             </div>
             <div className="card-body p-4">

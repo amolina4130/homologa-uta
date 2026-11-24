@@ -29,6 +29,9 @@ public class SolicitudesController : ControllerBase
         var modulo = NormalizarModulo(request.Modulo);
         var correo = ObtenerCorreo();
 
+        await using var tx = await _db.Database.BeginTransactionAsync();
+        var siguienteNumero = await ObtenerSiguienteNumeroProcesoAsync();
+
         var solicitud = new Solicitud
         {
             Tipo = "Homologación",
@@ -46,7 +49,8 @@ public class SolicitudesController : ControllerBase
             Modulo = modulo,
             UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null,
             UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null,
-            Estado = EstadoSolicitud.REGISTRADA
+            Estado = EstadoSolicitud.REGISTRADA,
+            NumeroProceso = siguienteNumero
         };
 
         foreach (var asigId in request.AsignaturasIds.Distinct())
@@ -54,9 +58,6 @@ public class SolicitudesController : ControllerBase
 
         _db.Solicitudes.Add(solicitud);
         await _db.SaveChangesAsync();
-
-        // El número de proceso usa el Id ya generado: SOL-0004 (HU-16).
-        solicitud.NumeroProceso = $"SOL-{solicitud.Id:D4}";
 
         _db.HistorialEstados.Add(new HistorialEstado
         {
@@ -68,6 +69,7 @@ public class SolicitudesController : ControllerBase
         });
 
         await _db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return Created($"/solicitudes/{solicitud.Id}", new
         {
@@ -431,6 +433,12 @@ public class SolicitudesController : ControllerBase
 
         // No se exige nombre/cédula al registrar: el titular del trámite se obtiene
         // del récord académico que entrega el Comité y se guarda en la solicitud.
+        var cedula = request.EstudianteCedula?.Trim();
+        if (!string.IsNullOrWhiteSpace(cedula) &&
+            (cedula.Length != 10 || !cedula.All(char.IsDigit)))
+        {
+            return "La cédula del estudiante debe tener exactamente 10 dígitos.";
+        }
 
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
             return "Faltan campos obligatorios.";
@@ -449,5 +457,19 @@ public class SolicitudesController : ControllerBase
         }
 
         return null;
+    }
+
+    private async Task<string> ObtenerSiguienteNumeroProcesoAsync()
+    {
+        // Secuencia legible y consecutiva: SOL-0001, SOL-0002, ...
+        // No depende del Id IDENTITY (puede saltar por reinicios de SQL Server).
+        var maximo = await _db.Database
+            .SqlQueryRaw<int>(@"
+                SELECT ISNULL(MAX(CAST(SUBSTRING(NumeroProceso, 5, 30) AS int)), 0) AS [Value]
+                FROM Solicitudes WITH (UPDLOCK, HOLDLOCK)
+                WHERE NumeroProceso LIKE 'SOL-[0-9][0-9][0-9][0-9]%'")
+            .SingleAsync();
+
+        return $"SOL-{maximo + 1:D4}";
     }
 }

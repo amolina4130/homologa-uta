@@ -591,8 +591,12 @@ public class CoordinadorService
             })
             .ToList();
 
+        var textoPersonalizado = string.IsNullOrWhiteSpace(request.InformeFinalTexto)
+            ? null
+            : request.InformeFinalTexto.Trim();
+
         var filas = ConstruirFilasInforme(detalle, evaluaciones);
-        var texto = PlantillaInformeFinal.GenerarTexto(new DatosInformeFinal
+        var texto = textoPersonalizado ?? PlantillaInformeFinal.GenerarTexto(new DatosInformeFinal
         {
             NumeroProceso = detalle.NumeroProceso,
             NumeroMemorando = memorando,
@@ -629,6 +633,80 @@ public class CoordinadorService
 
         return ConstruirResultadoInforme(
             analisis, coordinadorCorreo, estadoActualizado, texto, nombre, cedula, memorando, firmante);
+    }
+
+    /// <summary>
+    /// Genera una vista previa del texto del informe final sin emitirlo ni persistir cambios.
+    /// El Coordinador puede editar este texto antes de emitir el informe final.
+    /// </summary>
+    public async Task<string> GenerarVistaPreviaInformeFinalAsync(
+        int solicitudId,
+        InformeFinalRequest request,
+        string coordinadorCorreo,
+        CancellationToken ct = default)
+    {
+        if (request is null)
+            throw new InformeException(400, "Debe enviar los datos del informe final.");
+
+        var analisis = await _db.AnalisisSolicitudes
+            .AsNoTracking()
+            .Include(a => a.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
+            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct)
+            ?? throw new InformeException(404, "La solicitud no tiene un anǭlisis para revisar.");
+
+        var revisionDocente = await _db.DelegacionesDocente
+            .AsNoTracking()
+            .AnyAsync(d => d.SolicitudId == solicitudId &&
+                           d.Estado == EstadoDelegacionDocente.REVISADO &&
+                           !string.IsNullOrWhiteSpace(d.InformeTexto), ct);
+        if (!revisionDocente)
+            throw new InformeException(409,
+                "El informe final solo se puede generar despuǸs de que el Docente haya revisado " +
+                "y emitido su informe sugerido.");
+
+        var asignaturas = request.Asignaturas ?? new List<InformeAsignaturaDto>();
+        ValidarInforme(analisis, new EmitirInformeRequest { Asignaturas = asignaturas });
+
+        var detalle = await ObtenerDetalleAsync(solicitudId, ct)
+                      ?? throw new InformeException(404, "Solicitud no encontrada.");
+
+        var nombre = string.IsNullOrWhiteSpace(request.NombreEstudiante)
+            ? detalle.Estudiante
+            : request.NombreEstudiante.Trim();
+        var cedula = string.IsNullOrWhiteSpace(request.CedulaEstudiante)
+            ? (string.IsNullOrWhiteSpace(detalle.EstudianteCedula) ? "-" : detalle.EstudianteCedula.Trim())
+            : request.CedulaEstudiante.Trim();
+        var memorando = string.IsNullOrWhiteSpace(request.NumeroMemorando)
+            ? detalle.NumeroProceso
+            : request.NumeroMemorando.Trim();
+        var firmante = string.IsNullOrWhiteSpace(request.NombreFirmante)
+            ? coordinadorCorreo
+            : request.NombreFirmante.Trim();
+
+        var evaluaciones = asignaturas
+            .Select(a => new EvaluacionAsignaturaDto
+            {
+                AsignaturaId = a.AsignaturaId,
+                Homologable = NormalizarDecision(a.Decision) == DecisionAnalisis.HOMOLOGABLE,
+                Justificacion = a.Observacion.Trim()
+            })
+            .ToList();
+
+        var filas = ConstruirFilasInforme(detalle, evaluaciones);
+        return PlantillaInformeFinal.GenerarTexto(new DatosInformeFinal
+        {
+            NumeroProceso = detalle.NumeroProceso,
+            NumeroMemorando = memorando,
+            NombreEstudiante = nombre,
+            CedulaEstudiante = cedula,
+            CarreraOrigen = detalle.CarreraOrigen,
+            CarreraDestino = detalle.CarreraDestino,
+            Asignaturas = filas,
+            Firmante = firmante,
+            CoordinadorCorreo = coordinadorCorreo,
+            Fecha = DateTime.UtcNow
+        });
     }
 
     /// <summary>PDF del informe final con los datos guardados al emitirlo.</summary>
@@ -676,6 +754,9 @@ public class CoordinadorService
             CoordinadorCorreo = analisis.CoordinadorCorreo,
             Fecha = analisis.FechaInforme ?? DateTime.UtcNow
         };
+
+        if (!string.IsNullOrWhiteSpace(analisis.InformeFinalTexto))
+            return PlantillaInformeFinal.GenerarPdfDesdeTexto(analisis.InformeFinalTexto, datos);
 
         return PlantillaInformeFinal.GenerarPdf(datos);
     }

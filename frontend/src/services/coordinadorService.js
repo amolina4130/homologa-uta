@@ -90,6 +90,19 @@ export async function obtenerConsolidado(id) {
 }
 
 // Emite el informe final que se envía al Consejo Directivo.
+// Genera una vista previa editable del informe final sin emitirlo.
+export async function previsualizarInformeFinal(id, payload) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final/vista-previa`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo generar la vista previa del informe final");
+  const json = await res.json();
+  return extraerDatos(json);
+}
+
+// Emite el informe final que se envía al Consejo Directivo.
 export async function emitirInformeFinal(id, payload) {
   const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final`, {
     method: "POST",

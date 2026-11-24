@@ -38,9 +38,9 @@ export default function SolicitudesDocente() {
       <div className="card shadow-sm border-0">
         <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
           <div>
-            <h4 className="mb-0 fw-bold">REVISIÓN DOCENTE CON IA</h4>
+            <h4 className="mb-0 fw-bold">REVISIÓN DOCENTE</h4>
             <small className="d-block fw-normal">
-              Genere la sugerencia con IA, revísela y envíe manualmente el informe al Coordinador
+              Genere la sugerencia, revísela y envíe manualmente el informe al Coordinador
             </small>
           </div>
         </div>

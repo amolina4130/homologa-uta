@@ -48,7 +48,7 @@ export async function generarSugerenciaDocente(id, payload = {}) {
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
-  if (!res.ok) await lanzarError(res, "No se pudo generar la sugerencia con IA");
+  if (!res.ok) await lanzarError(res, "No se pudo generar la sugerencia");
   return extraerDatos(await res.json());
 }
 
