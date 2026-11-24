@@ -123,7 +123,7 @@ public class InformeService : IInformeService
             NumeroProceso = string.IsNullOrWhiteSpace(info.NumeroProceso)
                 ? $"SOL-{info.Id:D4}"
                 : info.NumeroProceso,
-            Estudiante = info.EstudianteCorreo,
+            Estudiante = CoordinadorService.NombreEstudiante(info),
             Tipo = info.Tipo,
             Modulo = info.Modulo,
             CarreraOrigen = info.CarreraOrigen,

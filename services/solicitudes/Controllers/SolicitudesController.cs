@@ -35,6 +35,14 @@ public class SolicitudesController : ControllerBase
             CarreraOrigenId = request.CarreraOrigenId,
             CarreraDestinoId = request.CarreraDestinoId,
             EstudianteCorreo = correo,
+            // El Comité no ingresa al titular como usuario: el nombre y la cédula se toman
+            // del récord académico. Estos valores son solo el estado inicial.
+            EstudianteNombre = string.IsNullOrWhiteSpace(request.EstudianteNombre)
+                ? Solicitud.NombreSinIdentificar
+                : request.EstudianteNombre.Trim(),
+            EstudianteCedula = string.IsNullOrWhiteSpace(request.EstudianteCedula)
+                ? Solicitud.CedulaSinIdentificar
+                : request.EstudianteCedula.Trim(),
             Modulo = modulo,
             UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null,
             UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null,
@@ -111,6 +119,9 @@ public class SolicitudesController : ControllerBase
                     ? "SOL-" + s.Id.ToString("D4")
                     : s.NumeroProceso,
                 Tipo = s.Tipo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
+                ComiteCorreo = s.EstudianteCorreo,
                 Origen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 Destino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
                 CarreraOrigenId = s.CarreraOrigenId,
@@ -158,6 +169,9 @@ public class SolicitudesController : ControllerBase
                 ? $"SOL-{solicitud.Id:D4}"
                 : solicitud.NumeroProceso,
             Tipo = solicitud.Tipo,
+            EstudianteNombre = solicitud.EstudianteNombre,
+            EstudianteCedula = solicitud.EstudianteCedula,
+            ComiteCorreo = solicitud.EstudianteCorreo,
             CarreraOrigenId = solicitud.CarreraOrigenId,
             CarreraDestinoId = solicitud.CarreraDestinoId,
             Origen = solicitud.CarreraOrigen?.Nombre ?? "Origen",
@@ -211,6 +225,12 @@ public class SolicitudesController : ControllerBase
         var modulo = NormalizarModulo(request.Modulo);
         solicitud.CarreraOrigenId = request.CarreraOrigenId;
         solicitud.CarreraDestinoId = request.CarreraDestinoId;
+        solicitud.EstudianteNombre = string.IsNullOrWhiteSpace(request.EstudianteNombre)
+            ? Solicitud.NombreSinIdentificar
+            : request.EstudianteNombre.Trim();
+        solicitud.EstudianteCedula = string.IsNullOrWhiteSpace(request.EstudianteCedula)
+            ? Solicitud.CedulaSinIdentificar
+            : request.EstudianteCedula.Trim();
         solicitud.Modulo = modulo;
         solicitud.UniversidadOrigen = modulo == "EXTERNO" ? request.UniversidadOrigen?.Trim() : null;
         solicitud.UniversidadDestino = modulo == "EXTERNO" ? request.UniversidadDestino?.Trim() : null;
@@ -236,6 +256,65 @@ public class SolicitudesController : ControllerBase
             id = solicitud.Id,
             numeroProceso = solicitud.NumeroProceso,
             mensaje = "Solicitud actualizada correctamente."
+        });
+    }
+
+    /// <summary>
+    /// Corrige el nombre y la cédula del titular del récord. No cambia el estado de la solicitud
+    /// ni genera informes: solo deja el dato listo para la revisión del Docente y el informe final.
+    /// </summary>
+    [HttpPost("{id:int}/titular")]
+    public async Task<IActionResult> ActualizarTitular(int id, [FromBody] ActualizarTitularRequest? request)
+    {
+        var solicitud = await _db.Solicitudes.FirstOrDefaultAsync(s => s.Id == id);
+        if (solicitud is null)
+            return NotFound(new { error = "Solicitud no encontrada." });
+
+        if (!PuedeGestionar(solicitud.EstudianteCorreo))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "No puede modificar el titular de esta solicitud." });
+
+        var nombre = request?.Nombre?.Trim();
+        var cedula = request?.Cedula?.Trim();
+        var cambio = false;
+
+        if (!string.IsNullOrWhiteSpace(nombre) && nombre.Length <= 200 &&
+            !string.Equals(solicitud.EstudianteNombre, nombre, StringComparison.Ordinal))
+        {
+            solicitud.EstudianteNombre = nombre;
+            cambio = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cedula) && cedula.Length <= 50 &&
+            !string.Equals(solicitud.EstudianteCedula, cedula, StringComparison.Ordinal))
+        {
+            solicitud.EstudianteCedula = cedula;
+            cambio = true;
+        }
+
+        if (cambio)
+        {
+            _db.HistorialEstados.Add(new HistorialEstado
+            {
+                SolicitudId = id,
+                EstadoAnterior = solicitud.Estado,
+                EstadoNuevo = solicitud.Estado,
+                UsuarioCorreo = ObtenerCorreo(),
+                FechaCambio = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+
+        return Ok(new
+        {
+            id,
+            numeroProceso = solicitud.NumeroProceso,
+            estudianteNombre = solicitud.EstudianteNombre,
+            estudianteCedula = solicitud.EstudianteCedula,
+            estado = solicitud.Estado,
+            mensaje = cambio
+                ? "Datos del titular actualizados. El estado de la solicitud no cambió."
+                : "No hay cambios en los datos del titular."
         });
     }
 
@@ -277,6 +356,8 @@ public class SolicitudesController : ControllerBase
                 NumeroProceso = s.NumeroProceso,
                 FechaRegistro = s.FechaRegistro,
                 EstudianteCorreo = s.EstudianteCorreo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
                 Tipo = s.Tipo,
                 CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino"
@@ -308,6 +389,8 @@ public class SolicitudesController : ControllerBase
                 NumeroProceso = s.NumeroProceso,
                 FechaRegistro = s.FechaRegistro,
                 EstudianteCorreo = s.EstudianteCorreo,
+                EstudianteNombre = s.EstudianteNombre,
+                EstudianteCedula = s.EstudianteCedula,
                 Tipo = s.Tipo,
                 CarreraOrigen = s.CarreraOrigen != null ? s.CarreraOrigen.Nombre : "Origen",
                 CarreraDestino = s.CarreraDestino != null ? s.CarreraDestino.Nombre : "Destino",
@@ -327,6 +410,15 @@ public class SolicitudesController : ControllerBase
         string.Equals(propietario, correo, StringComparison.OrdinalIgnoreCase)
         || User.FindFirstValue("rol")?.Equals("ADMINISTRADOR", StringComparison.OrdinalIgnoreCase) == true;
 
+    private bool PuedeGestionar(string propietario)
+    {
+        var correo = ObtenerCorreo();
+        var rolesGestores = new[] { "COORDINADOR", "COMITE", "ADMINISTRADOR" };
+        return string.Equals(propietario, correo, StringComparison.OrdinalIgnoreCase)
+               || rolesGestores.Any(r => User.FindFirstValue("rol")
+                   ?.Equals(r, StringComparison.OrdinalIgnoreCase) == true);
+    }
+
     private static string NormalizarModulo(string? modulo) =>
         string.Equals(modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase)
             ? "EXTERNO"
@@ -336,6 +428,9 @@ public class SolicitudesController : ControllerBase
     {
         if (request is null)
             return "Los datos de la solicitud son obligatorios.";
+
+        // No se exige nombre/cédula al registrar: el titular del trámite se obtiene
+        // del récord académico que entrega el Comité y se guarda en la solicitud.
 
         if (request.CarreraOrigenId == 0 || request.CarreraDestinoId == 0)
             return "Faltan campos obligatorios.";

@@ -53,7 +53,7 @@
       },
       "solicitudes": {
         "ClusterId": "solicitudes",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "gestor",
         "Match": { "Path": "/solicitudes/{**catch-all}" }
       },
       "reglas-consulta": {
@@ -66,11 +66,17 @@
         "AuthorizationPolicy": "administrador",
         "Match": { "Path": "/reglas/{**catch-all}", "Methods": [ "PUT" ] }
       },
-      "homologacion-estudiante": {
+      "homologacion-comite": {
         "ClusterId": "homologacion",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "comite",
         "Order": -1,
-        "Match": { "Path": "/homologacion/estudiante/{**catch-all}" }
+        "Match": { "Path": "/homologacion/comite/{**catch-all}" }
+      },
+      "homologacion-docente": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "docente",
+        "Order": -1,
+        "Match": { "Path": "/homologacion/docente/{**catch-all}" }
       },
       "homologacion-coordinador": {
         "ClusterId": "homologacion",
@@ -91,8 +97,14 @@
       },
       "documentos": {
         "ClusterId": "documentos",
-        "AuthorizationPolicy": "estudiante",
+        "AuthorizationPolicy": "gestor",
         "Match": { "Path": "/documentos/{**catch-all}" }
+      },
+      "salud": {
+        "ClusterId": "homologacion",
+        "AuthorizationPolicy": "Anonymous",
+        "Order": -1,
+        "Match": { "Path": "/salud/{**catch-all}" }
       }
     },
     "Clusters": {

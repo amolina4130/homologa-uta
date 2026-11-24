@@ -28,8 +28,11 @@ export default function TablaMateriasAprobadas({
   const [errorLocal, setErrorLocal] = useState("");
 
   useEffect(() => {
-    setFilas(normalizar(materias));
-    setErrorLocal("");
+    const timer = setTimeout(() => {
+      setFilas(normalizar(materias));
+      setErrorLocal("");
+    }, 0);
+    return () => clearTimeout(timer);
   }, [materias]);
 
   const cambiar = (indice, campo, valor) => {

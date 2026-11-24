@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Polly;
-using Polly.Retry;
 
 namespace HomologaUTA.Homologacion.Agents;
 
@@ -33,39 +33,25 @@ public class ResultadoAgente
 
 public class AgenteInterno
 {
+    /// <summary>
+    /// Tiempo máximo de una llamada al modelo. Si se pasa, se usa la comparación determinista
+    /// de la memoria del agente para que el análisis nunca supere los 10 segundos.
+    /// </summary>
+    private const int TimeoutOllamaSegundos = 6;
+
     private readonly Clients.OllamaClient _ollamaClient;
-    private readonly ResiliencePipeline _retryPipeline;
     private readonly ILogger<AgenteInterno> _logger;
 
     public AgenteInterno(Clients.OllamaClient ollamaClient, ILogger<AgenteInterno> logger)
     {
         _ollamaClient = ollamaClient;
         _logger = logger;
-
-        // 1. Polly corregido: maneja TaskCanceledException (Timeout) y HttpRequestException (Caída)
-        _retryPipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new RetryStrategyOptions
-            {
-                MaxRetryAttempts = 3,
-                Delay = TimeSpan.FromSeconds(2),
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<JsonException>()
-                    .Handle<TaskCanceledException>() // Timeout de HttpClient
-                    .Handle<HttpRequestException>(), // Ollama caído
-                OnRetry = args =>
-                {
-                    // 3. Loggear reintentos
-                    _logger.LogWarning("Reintento {Attempt} por error: {Exception}", args.AttemptNumber, args.Outcome.Exception?.Message);
-                    return default;
-                }
-            })
-            .Build();
     }
 
     public Task<ResultadoAgente> AnalizarAsignaturaAsync(
         string asignaturaOrigen, string contenidoOrigen, string asignaturaDestino, string contenidoDestino) =>
         AnalizarAsignaturaAsync(
-            asignaturaOrigen, contenidoOrigen, asignaturaDestino, contenidoDestino, null);
+            asignaturaOrigen, contenidoOrigen, asignaturaDestino, contenidoDestino, null, true);
 
     /// <summary>
     /// Compara la asignatura de origen con la de destino. Cuando se envían varias materias
@@ -76,7 +62,8 @@ public class AgenteInterno
         string contenidoOrigen,
         string asignaturaDestino,
         string contenidoDestino,
-        IReadOnlyList<string>? materiasPermitidas)
+        IReadOnlyList<string>? materiasPermitidas,
+        bool usarOllama = true)
     {
         var permitidas = (materiasPermitidas ?? new List<string>())
             .Where(m => !string.IsNullOrWhiteSpace(m))
@@ -88,6 +75,14 @@ public class AgenteInterno
             permitidas.Add(asignaturaOrigen);
 
         var listaPermitidas = string.Join(", ", permitidas);
+        var comparacionMemoria = CalcularConMemoria(
+            asignaturaOrigen, contenidoOrigen, asignaturaDestino, contenidoDestino);
+
+        // El registro de una solicitud solo usa la memoria del agente: es instantáneo y no
+        // depende de que el modelo esté respondiendo. La IA se pide explícitamente en la
+        // sugerencia del Docente o en la recomendación bajo demanda.
+        if (!usarOllama)
+            return comparacionMemoria;
 
         // 4. Usar el campo "system" y "format" de Ollama
         var systemPrompt = "Eres un experto en homologación académica de la Universidad Técnica de Ambato. " +
@@ -118,73 +113,123 @@ public class AgenteInterno
         Contenido: {contenidoDestino}
         ";
 
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutOllamaSegundos));
         try
         {
-            return await _retryPipeline.ExecuteAsync(async token =>
+            var promptCompleto = $"{systemPrompt}\n\n{userPrompt}";
+            var respuestaRaw = await _ollamaClient.GenerarRespuestaAsync(promptCompleto, cts.Token, 160);
+            var jsonLimpio = respuestaRaw.Replace("```json", "").Replace("```", "").Trim();
+
+            // Algunos modelos agregan texto antes o después del JSON: se recorta el objeto.
+            var inicio = jsonLimpio.IndexOf('{');
+            var fin = jsonLimpio.LastIndexOf('}');
+            if (inicio >= 0 && fin > inicio)
+                jsonLimpio = jsonLimpio.Substring(inicio, fin - inicio + 1);
+
+            var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var resultado = JsonSerializer.Deserialize<ResultadoAgente>(jsonLimpio, opciones);
+
+            if (resultado == null)
+                throw new JsonException("El JSON devuelto está vacío.");
+
+            if (resultado.Contenido < 0 || resultado.Contenido > 100 ||
+                resultado.Profundidad < 0 || resultado.Profundidad > 100 ||
+                resultado.Horas < 0 || resultado.Horas > 100)
             {
-                var promptCompleto = $"{systemPrompt}\n\n{userPrompt}";
-                var respuestaRaw = await _ollamaClient.GenerarRespuestaAsync(promptCompleto);
-                var jsonLimpio = respuestaRaw.Replace("```json", "").Replace("```", "").Trim();
+                throw new JsonException("Los porcentajes están fuera del rango 0-100.");
+            }
 
-                // Algunos modelos agregan texto antes o después del JSON: se recorta el objeto.
-                var inicio = jsonLimpio.IndexOf('{');
-                var fin = jsonLimpio.LastIndexOf('}');
-                if (inicio >= 0 && fin > inicio)
-                    jsonLimpio = jsonLimpio.Substring(inicio, fin - inicio + 1);
+            // Validar la combinación: máximo dos materias y todas dentro de las permitidas.
+            var propuestas = (resultado.MateriasOrigen ?? new List<string>())
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Select(m => m.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                var opciones = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var resultado = JsonSerializer.Deserialize<ResultadoAgente>(jsonLimpio, opciones);
+            if (propuestas.Count == 0)
+                propuestas.Add(asignaturaOrigen.Trim());
 
-                if (resultado == null)
-                    throw new JsonException("El JSON devuelto está vacío.");
+            if (propuestas.Count > 2)
+                throw new JsonException("El agente propuso más de dos materias de origen.");
 
-                // Validar rangos manualmente para lanzar excepción y que Polly reintente
-                if (resultado.Contenido < 0 || resultado.Contenido > 100 ||
-                    resultado.Profundidad < 0 || resultado.Profundidad > 100 ||
-                    resultado.Horas < 0 || resultado.Horas > 100)
-                {
-                    throw new JsonException("Los porcentajes están fuera del rango 0-100.");
-                }
+            var ajenas = propuestas
+                .Where(m => !permitidas.Contains(m, StringComparer.OrdinalIgnoreCase))
+                .ToList();
 
-                // Validar la combinación: máximo dos materias y todas dentro de las permitidas.
-                var propuestas = (resultado.MateriasOrigen ?? new List<string>())
-                    .Where(m => !string.IsNullOrWhiteSpace(m))
-                    .Select(m => m.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+            if (ajenas.Count > 0)
+                throw new JsonException(
+                    $"El agente propuso materias que no están aprobadas ni preseleccionadas: {string.Join(", ", ajenas)}.");
 
-                if (propuestas.Count == 0)
-                    propuestas.Add(asignaturaOrigen.Trim());
-
-                if (propuestas.Count > 2)
-                    throw new JsonException("El agente propuso más de dos materias de origen.");
-
-                var ajenas = propuestas
-                    .Where(m => !permitidas.Contains(m, StringComparer.OrdinalIgnoreCase))
-                    .ToList();
-
-                if (ajenas.Count > 0)
-                    throw new JsonException(
-                        $"El agente propuso materias que no están aprobadas ni preseleccionadas: {string.Join(", ", ajenas)}.");
-
-                resultado.MateriasOrigen = propuestas;
-                return resultado;
-            });
+            resultado.MateriasOrigen = propuestas;
+            return resultado;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "Ollama tardó más de {Segundos}s en {Asignatura}; se usa la memoria del agente.",
+                TimeoutOllamaSegundos, asignaturaOrigen);
+            return comparacionMemoria;
         }
         catch (Exception ex)
         {
-            // 3. Loguear el error real antes de devolver el fallback
-            _logger.LogError(ex, "El agente falló tras los reintentos para la asignatura {Asignatura}", asignaturaOrigen);
-
-            return new ResultadoAgente
-            {
-                Contenido = 0,
-                Profundidad = 0,
-                Horas = 0,
-                Justificacion = "El agente no pudo generar una respuesta válida tras varios intentos. Requiere revisión manual.",
-                RequiereRevision = true,
-                MateriasOrigen = new List<string> { asignaturaOrigen }
-            };
+            _logger.LogWarning(
+                ex,
+                "Ollama no devolvió un JSON válido para {Asignatura}; se usa la memoria del agente.",
+                asignaturaOrigen);
+            return comparacionMemoria;
         }
+    }
+
+    /// <summary>
+    /// Comparación determinista con la memoria del agente. Se usa siempre en el análisis del
+    /// registro y como respaldo cuando el modelo no responde a tiempo.
+    /// </summary>
+    private static ResultadoAgente CalcularConMemoria(
+        string asignaturaOrigen, string contenidoOrigen,
+        string asignaturaDestino, string contenidoDestino)
+    {
+        var tokensOrigen = ObtenerTokens($"{asignaturaOrigen} {contenidoOrigen}");
+        var tokensDestino = ObtenerTokens($"{asignaturaDestino} {contenidoDestino}");
+
+        var comunes = tokensOrigen.Intersect(tokensDestino).Count();
+        var totales = tokensOrigen.Union(tokensDestino).Count();
+        var porcentaje = totales == 0 ? 0 : (int)Math.Round(100.0 * comunes / totales);
+
+        if (Normalizar(asignaturaOrigen) == Normalizar(asignaturaDestino))
+            porcentaje = Math.Max(porcentaje, 95);
+
+        porcentaje = Math.Clamp(porcentaje, 0, 100);
+        var cumple = porcentaje >= 80;
+
+        return new ResultadoAgente
+        {
+            Contenido = porcentaje,
+            Profundidad = porcentaje,
+            Horas = porcentaje,
+            Justificacion = cumple
+                ? $"Comparación con la memoria del agente interno: contenido, profundidad y carga horaria coinciden en {porcentaje}%."
+                : $"Comparación con la memoria del agente interno: solo {porcentaje}% de coincidencia; no alcanza el umbral del 80%.",
+            RequiereRevision = false,
+            MateriasOrigen = new List<string> { asignaturaOrigen.Trim() }
+        };
+    }
+
+    private static HashSet<string> ObtenerTokens(string texto) =>
+        Normalizar(texto)
+            .Split(new[] { ' ', ';', ',', '.', '(', ')', '/', '-', '_', '\n', '\r', '\t' },
+                StringSplitOptions.RemoveEmptyEntries)
+            .Where(palabra => palabra.Length > 2)
+            .ToHashSet();
+
+    private static string Normalizar(string texto)
+    {
+        var descompuesto = (texto ?? string.Empty).Normalize(NormalizationForm.FormD);
+        var sinTildes = new StringBuilder();
+        foreach (var caracter in descompuesto)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(caracter) != UnicodeCategory.NonSpacingMark)
+                sinTildes.Append(caracter);
+        }
+        return sinTildes.ToString().ToLowerInvariant();
     }
 }

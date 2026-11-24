@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+
 export default function Carreras() {
   const [carreras, setCarreras] = useState([]);
   const [carreraSeleccionada, setCarreraSeleccionada] = useState(null);
@@ -7,8 +9,8 @@ export default function Carreras() {
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("http://localhost:8080/carreras", { headers: { "Authorization": `Bearer ${token}` } })
+    const token = sessionStorage.getItem("token");
+    fetch(`${GATEWAY_URL}/carreras`, { headers: { "Authorization": `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => {
         // ORDENAMOS LAS CARRERAS POR ID (1, 2, 3...)
@@ -21,8 +23,8 @@ export default function Carreras() {
 
   const verMalla = (carrera) => {
     setCarreraSeleccionada(carrera);
-    const token = localStorage.getItem("token");
-    fetch(`http://localhost:8080/carreras/${carrera.id}/asignaturas`, { headers: { "Authorization": `Bearer ${token}` } })
+    const token = sessionStorage.getItem("token");
+    fetch(`${GATEWAY_URL}/carreras/${carrera.id}/asignaturas`, { headers: { "Authorization": `Bearer ${token}` } })
       .then(res => res.json())
       .then(data => setAsignaturas(data))
       .catch(() => console.error("Error mallas"));

@@ -1,3 +1,7 @@
+import { formatearTamano } from "../utils/formato";
+
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+
 export default function ListaDocumentos({ documentos }) {
   if (!documentos || documentos.length === 0) {
     return <p className="mb-3">No hay documentos adjuntos a esta solicitud.</p>;
@@ -18,7 +22,7 @@ export default function ListaDocumentos({ documentos }) {
         {documentos.map((doc, index) => {
           // Buscamos el ID en cualquiera de sus formatos
           const idDoc = doc.id || doc.Id;
-          
+
           // Buscamos el nombre original para mostrarlo en la tabla
           const nombreArchivo = doc.nombre || doc.Nombre || doc.nombreArchivo || doc.NombreArchivo || "Documento.pdf";
 
@@ -26,7 +30,7 @@ export default function ListaDocumentos({ documentos }) {
             <tr key={index}>
               <td>{nombreArchivo}</td>
               <td>{doc.tipoDocumento || doc.TipoDocumento || "Malla"}</td>
-              <td>{doc.tamano || "-"}</td>
+              <td>{formatearTamano(doc)}</td>
               <td>
                 <span className="badge bg-success">
                   ● {doc.estado || doc.Estado || "PROCESADO"}
@@ -34,9 +38,9 @@ export default function ListaDocumentos({ documentos }) {
               </td>
               <td className="text-center">
                 {/* ENLACE DIRECTO POR ID */}
-                <a 
-                  href={`http://localhost:8080/documentos/descargar/${idDoc}`} 
-                  target="_blank" 
+                <a
+                  href={`${GATEWAY_URL}/documentos/descargar/${idDoc}`}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="btn btn-sm btn-outline-primary"
                 >

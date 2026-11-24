@@ -45,6 +45,12 @@ public class ResultadoExtraccionRecordDto
     public List<MateriaAprobadaDto> Materias { get; set; } = new();
     public bool RequiereRevision { get; set; }
     public string? Motivo { get; set; }
+
+    /// <summary>Nombre real del titular, leído del récord ya guardado en la solicitud.</summary>
+    public string? NombreEstudiante { get; set; }
+
+    /// <summary>Cédula real del titular, leída del récord ya guardado en la solicitud.</summary>
+    public string? CedulaEstudiante { get; set; }
 }
 
 public class MateriaAprobadaDto

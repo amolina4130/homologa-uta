@@ -39,6 +39,13 @@ public class AnalisisSolicitud
     /// <summary>Fecha en que se emitió el informe técnico (null mientras no se emita).</summary>
     public DateTime? FechaInforme { get; set; }
 
+    // Datos del informe final del Coordinador. Se guardan para poder regenerar el PDF.
+    public string? InformeFinalTexto { get; set; }
+    public string? NombreEstudiante { get; set; }
+    public string? CedulaEstudiante { get; set; }
+    public string? NumeroMemorando { get; set; }
+    public string? NombreFirmante { get; set; }
+
     public List<AnalisisAsignatura> Asignaturas { get; set; } = new();
 
     /// <summary>Resolución del Consejo Directivo; null mientras no se registre (HU-17).</summary>

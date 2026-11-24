@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FiltroNivel from '../components/FiltroNivel';
-import { analizarSolicitud, analizarSolicitudExterna } from '../services/homologacionService';
+import { analizarSolicitud } from '../services/homologacionService';
+import { recomendarPorCarrera } from '../services/docenteService';
+import { useAuth } from '../context/AuthContext';
+
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 export default function NuevaSolicitud() {
   const navigate = useNavigate();
+  const { rol } = useAuth();
   const [carreras, setCarreras] = useState([]);
   const [asignaturasDisponibles, setAsignaturasDisponibles] = useState([]);
-  
-  // TIPO ESTÁTICO (FIJO)
-  const tipo = "Homologación";
   
   const [modulo, setModulo] = useState("INTERNO");
   const [universidadOrigen, setUniversidadOrigen] = useState("");
   const [universidadDestino, setUniversidadDestino] = useState("");
+  const [estudianteNombre, setEstudianteNombre] = useState("");
+  const [estudianteCedula, setEstudianteCedula] = useState("");
   const [origen, setOrigen] = useState("");
   const [destino, setDestino] = useState("");
   const [seleccionadas, setSeleccionadas] = useState([]);
@@ -24,10 +28,13 @@ export default function NuevaSolicitud() {
   const [tipoMensaje, setTipoMensaje] = useState("danger");
   const [cargando, setCargando] = useState(false);
   const [errorReintento, setErrorReintento] = useState(false);
+  const [recomendacion, setRecomendacion] = useState(null);
+  const [recomendando, setRecomendando] = useState(false);
+  const [errorRecomendacion, setErrorRecomendacion] = useState("");
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("http://localhost:8080/carreras", {
+    const token = sessionStorage.getItem("token");
+    fetch(`${GATEWAY_URL}/carreras`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -44,8 +51,8 @@ export default function NuevaSolicitud() {
       return () => clearTimeout(timer);
     }
     
-    const token = localStorage.getItem("token");
-    fetch(`http://localhost:8080/carreras/${origen}/asignaturas`, {
+    const token = sessionStorage.getItem("token");
+    fetch(`${GATEWAY_URL}/carreras/${origen}/asignaturas`, {
       headers: { "Authorization": `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -69,6 +76,38 @@ export default function NuevaSolicitud() {
     (a) => nivelSeleccionado === "Todos" || a.nivel === nivelSeleccionado
   );
 
+  const pedirRecomendacion = async () => {
+    if (!origen || !destino) {
+      return alert("Seleccione la carrera de origen y la de destino para pedir la recomendación");
+    }
+    if (origen === destino) {
+      return alert("La carrera de origen y destino no pueden ser iguales");
+    }
+
+    setRecomendando(true);
+    setErrorRecomendacion("");
+    setRecomendacion(null);
+    try {
+      const resultado = await recomendarPorCarrera({
+        carreraOrigenId: parseInt(origen),
+        carreraDestinoId: parseInt(destino),
+        asignaturasOrigenIds: seleccionadas,
+      });
+      setRecomendacion(resultado || { recomendaciones: [] });
+    } catch (e) {
+      setErrorRecomendacion(
+        e.message || "No se pudo obtener la recomendación del agente interno."
+      );
+    } finally {
+      setRecomendando(false);
+    }
+  };
+
+  // Solo se muestran las materias que el agente interno marca como homologables.
+  const recomendacionesAptas = (recomendacion?.recomendaciones || []).filter(
+    (r) => r.homologable
+  );
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     
@@ -84,10 +123,10 @@ export default function NuevaSolicitud() {
     setCargando(true);
     setMensaje("");
     setErrorReintento(false);
-    const token = localStorage.getItem("token");
+    const token = sessionStorage.getItem("token");
     
     try {
-      const res = await fetch("http://localhost:8080/solicitudes", {
+      const res = await fetch(`${GATEWAY_URL}/solicitudes`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({ 
@@ -97,7 +136,9 @@ export default function NuevaSolicitud() {
           universidadDestino: esExterno ? universidadDestino.trim() : null,
           carreraOrigenId: parseInt(origen), 
           carreraDestinoId: parseInt(destino), 
-          asignaturasIds: seleccionadas
+          asignaturasIds: seleccionadas,
+          estudianteNombre: estudianteNombre.trim(),
+          estudianteCedula: estudianteCedula.trim()
           // ELIMINADO: estudianteCorreo (el backend lo saca del token)
         })
       });
@@ -113,30 +154,40 @@ export default function NuevaSolicitud() {
           return;
         }
 
-        // Flujo externo: primero hay que subir los documentos procesados y luego el agente externo analiza.
+        // El registro NO pide el informe a la IA. Solo guarda la solicitud y su análisis
+        // técnico; el informe lo genera y envía el Docente después de la delegación.
         if (esExterno) {
           setTipoMensaje("success");
-          setMensaje("Solicitud externa registrada. Adjunte la malla, el historial y los sílabos para analizarla.");
-          setTimeout(() => navigate(`/adjuntar-documentos?solicitudId=${solicitudId}&volver=resultado`), 1200);
+          setMensaje(
+            "Solicitud externa registrada. Ahora registre la URL de la carpeta y adjunte el récord; después delegue al Docente."
+          );
+          setTimeout(
+            () => navigate(`/ruta-carpeta?solicitudId=${solicitudId}&modo=URL`),
+            1200
+          );
           return;
         }
 
-        // Encadenamos el análisis con las asignaturas reales de la solicitud.
+        // Análisis técnico determinista de las materias seleccionadas (no es el informe IA).
         setTipoMensaje("info");
-        setMensaje("Solicitud registrada. Generando el análisis del agente...");
+        setMensaje("Solicitud registrada. Guardando el análisis técnico de las materias...");
         try {
           await analizarSolicitud(solicitudId);
           setTipoMensaje("success");
-          setMensaje("¡Solicitud registrada y analizada con éxito!");
+          setMensaje(
+            "Solicitud registrada. Ahora registre la URL de la carpeta y delegue al Docente; él generará y enviará el informe sugerido."
+          );
         } catch (e) {
-          // La solicitud ya existe: el estudiante puede reintentar el análisis en la pantalla de resultado.
           setTipoMensaje("warning");
           setMensaje(
-            `Solicitud registrada, pero el análisis no se pudo generar: ${e.message || "error desconocido"}.`
+            `Solicitud registrada, pero el análisis técnico no se pudo generar: ${e.message || "error desconocido"}. Puede registrarla igual y delegar.`
           );
         }
 
-        setTimeout(() => navigate(`/resultado/${solicitudId}`), 1200);
+        setTimeout(
+          () => navigate(`/ruta-carpeta?solicitudId=${solicitudId}&modo=URL`),
+          1600
+        );
       } else {
         const errorData = await res.json().catch(() => ({}));
         setTipoMensaje("danger");
@@ -157,6 +208,9 @@ export default function NuevaSolicitud() {
           <div className="card shadow-sm border-0">
             <div className="card-header bg-primary text-white">
               <h4 className="mb-0 fw-bold">Registrar Nueva Solicitud</h4>
+              <small className="d-block fw-normal">
+                Solicitud registrada por el {rol === "COORDINADOR" ? "Coordinador" : "Comité"}
+              </small>
             </div>
             <div className="card-body p-4">
               
@@ -190,15 +244,65 @@ export default function NuevaSolicitud() {
                     </div>
 
                     <div className="mb-3">
-                      <label className="form-label fw-bold">Módulo de análisis</label>
-                      <select 
-                        className="form-select" 
-                        value={modulo} 
-                        onChange={(e) => setModulo(e.target.value)}
-                      >
-                        <option value="INTERNO">Agente interno (reglas normativas UTA)</option>
-                        <option value="EXTERNO">Agente externo (universidades externas)</option>
-                      </select>
+                      <label className="form-label fw-bold">Modalidad de homologación</label>
+                      <div className="btn-group w-100" role="group" aria-label="Modalidad de homologación">
+                        <button
+                          type="button"
+                          className={`btn btn-outline-primary ${modulo === "INTERNO" ? "active" : ""}`}
+                          onClick={() => setModulo("INTERNO")}
+                        >
+                          INTERNO · Agente UTA
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-outline-primary ${modulo === "EXTERNO" ? "active" : ""}`}
+                          onClick={() => setModulo("EXTERNO")}
+                        >
+                          EXTERNO · Otra universidad
+                        </button>
+                      </div>
+                      <div className="form-text">
+                        En ambas modalidades el Coordinador entrega el récord académico: de ahí se toman
+                        el nombre y la cédula del titular para el informe.
+                      </div>
+                    </div>
+
+                    <div className="card border-light bg-light mb-3">
+                      <div className="card-body p-3">
+                        <h6 className="fw-bold mb-2">Datos del titular del récord (opcionales)</h6>
+                        <div className="row g-2">
+                          <div className="col-md-6">
+                            <label htmlFor="estudianteNombre" className="form-label small mb-1">
+                              Nombre del estudiante
+                            </label>
+                            <input
+                              id="estudianteNombre"
+                              type="text"
+                              className="form-control form-control-sm"
+                              value={estudianteNombre}
+                              onChange={(e) => setEstudianteNombre(e.target.value)}
+                              placeholder="Si se deja vacío, se toma del récord"
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label htmlFor="estudianteCedula" className="form-label small mb-1">
+                              Cédula del estudiante
+                            </label>
+                            <input
+                              id="estudianteCedula"
+                              type="text"
+                              className="form-control form-control-sm"
+                              value={estudianteCedula}
+                              onChange={(e) => setEstudianteCedula(e.target.value)}
+                              placeholder="Si se deja vacío, se toma del récord"
+                            />
+                          </div>
+                        </div>
+                        <div className="form-text mt-1">
+                          El titular no es usuario del sistema. Si no los conoce, déjelos vacíos: se
+                          completan al adjuntar el récord y se pueden corregir en Delegar docentes.
+                        </div>
+                      </div>
                     </div>
 
                     {modulo === "EXTERNO" && (
@@ -247,6 +351,14 @@ export default function NuevaSolicitud() {
                         {carreras.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                       </select>
                     </div>
+
+                    <div className="alert alert-info small py-2 mb-3">
+                      Aquí solo se registra la solicitud. Después adjunte la URL o la carpeta de
+                      documentos y delegue al Docente: él será quien revise, edite y envíe el
+                      informe sugerido. <strong>Desarrollo de Proyectos, Titulación y Prácticas
+                      Laborales no se homologan</strong> por regla institucional y aparecerán como
+                      “No” en la revisión.
+                    </div>
                   </div>
 
                   <div className="col-md-6 ps-md-4">
@@ -281,6 +393,63 @@ export default function NuevaSolicitud() {
                         ))
                       )}
                     </div>
+
+                    {modulo === "INTERNO" && (
+                      <div className="mt-2 text-end">
+                        <button
+                          type="button"
+                          className="btn btn-link btn-sm p-0"
+                          onClick={pedirRecomendacion}
+                          disabled={recomendando || cargando}
+                          title="Solo una recomendación; no decide la homologación ni genera el informe final"
+                        >
+                          {recomendando
+                            ? "Consultando recomendación..."
+                            : "Recomendación de materia a homologar"}
+                        </button>
+
+                        {errorRecomendacion && (
+                          <div className="small text-danger mt-1">{errorRecomendacion}</div>
+                        )}
+
+                        {recomendacion && !recomendando && (
+                          <div className="mt-2 text-start">
+                            {recomendacionesAptas.length === 0 ? (
+                              <div className="small text-muted">
+                                No hay materias recomendadas para homologar.
+                              </div>
+                            ) : (
+                              <div
+                                className="border rounded p-2 bg-light"
+                                style={{ maxHeight: '160px', overflowY: 'auto' }}
+                              >
+                                <table className="table table-sm table-borderless mb-0 small">
+                                  <thead>
+                                    <tr>
+                                      <th>Materia de origen</th>
+                                      <th>Destino sugerido</th>
+                                      <th className="text-center">%</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {recomendacionesAptas.map((r) => (
+                                      <tr key={r.asignaturaId}>
+                                        <td>{r.asignaturaOrigen}</td>
+                                        <td>{r.asignaturaDestino || "-"}</td>
+                                        <td className="text-center">{r.porcentajeContenido}%</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            <div className="form-text mt-1">
+                              Solo una recomendación; no decide ni genera el informe final.
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

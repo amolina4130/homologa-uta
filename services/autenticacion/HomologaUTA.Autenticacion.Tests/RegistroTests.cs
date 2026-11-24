@@ -31,13 +31,15 @@ public class RegistroTests
     private static async Task<AuthDbContext> GetDbConRolAsync()
     {
         var db = GetDb();
-        db.Roles.Add(new Rol { Id = 1, Nombre = "ESTUDIANTE" });
+        db.Roles.AddRange(
+            new Rol { Id = 1, Nombre = "COMITE" },
+            new Rol { Id = 3, Nombre = "DOCENTE" });
         await db.SaveChangesAsync();
         return db;
     }
 
     [Fact]
-    public async Task Registro_Valido_CreaCuentaConRolEstudiante()
+    public async Task Registro_Valido_CreaCuentaConRolComite()
     {
         using var db = await GetDbConRolAsync();
         var hasher = new PasswordHasher<Usuario>();
@@ -52,12 +54,34 @@ public class RegistroTests
 
         var created = Assert.IsType<CreatedResult>(result);
         var respuesta = Assert.IsType<RegistroResponse>(created.Value);
-        Assert.Equal("Estudiante", respuesta.Rol);
+        Assert.Equal("COMITE", respuesta.Rol);
 
         var guardado = await db.Usuarios.SingleAsync();
         Assert.Equal("Ana Pérez", guardado.Nombre);
         Assert.Equal(1, guardado.RolId);
         Assert.NotEqual("Demo123!", guardado.PasswordHash);
+    }
+
+    [Fact]
+    public async Task Registro_RolDocente_CreaCuentaConRolDocente()
+    {
+        using var db = await GetDbConRolAsync();
+        var controller = new AuthController(db, new PasswordHasher<Usuario>(), GetTokens());
+
+        var result = await controller.Registro(new RegistroRequest
+        {
+            Nombre = "Carlos Docente",
+            Correo = "docente3@uta.edu.ec",
+            Contrasena = "Demo123!",
+            Rol = "DOCENTE"
+        });
+
+        var created = Assert.IsType<CreatedResult>(result);
+        var respuesta = Assert.IsType<RegistroResponse>(created.Value);
+        Assert.Equal("DOCENTE", respuesta.Rol);
+
+        var guardado = await db.Usuarios.SingleAsync();
+        Assert.Equal(3, guardado.RolId);
     }
 
     [Fact]

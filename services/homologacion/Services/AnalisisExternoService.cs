@@ -9,8 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace HomologaUTA.Homologacion.Services;
 
 /// <summary>
-/// Envía la documentación al agente externo y guarda su decisión por asignatura con su justificación,
-/// sin imponerle reglas. Si el agente falla, no se guarda nada: se puede reintentar sin perder datos.
+/// Envía la documentación al agente externo y guarda su decisión por asignatura con su justificación.
+/// No impone el umbral del 80 %, pero aplica la regla institucional de materias no homologables.
+/// Si el agente falla, no se guarda nada: se puede reintentar sin perder datos.
 /// Desde HU-21/HU-22 solo se envían las asignaturas candidatas de la preselección y el agente puede
 /// proponer una combinación de hasta dos materias de origen.
 /// </summary>
@@ -163,7 +164,7 @@ public class AnalisisExternoService
         entrada.SolicitudId = solicitudId;
 
         if (string.IsNullOrWhiteSpace(entrada.Estudiante))
-            entrada.Estudiante = info.EstudianteCorreo;
+            entrada.Estudiante = CoordinadorService.NombreEstudiante(info);
         if (string.IsNullOrWhiteSpace(entrada.CarreraOrigen))
             entrada.CarreraOrigen = info.CarreraOrigen;
         if (string.IsNullOrWhiteSpace(entrada.CarreraDestino))
@@ -208,7 +209,7 @@ public class AnalisisExternoService
 
                 entrada.MateriasDestino = info.Asignaturas.Select(a => new MateriaDestinoAgenteExternoDto
                 {
-                    AsignaturaId = a.AsignaturaDestinoId,
+                    AsignaturaId = a.AsignaturaDestinoId ?? 0,
                     Nombre = a.AsignaturaDestino,
                     Area = a.AreaDestino,
                     Nivel = a.NivelDestino,
@@ -360,7 +361,16 @@ public class AnalisisExternoService
         string justificacion;
         bool requiereRevision;
 
-        if (excedeCombinacion)
+        var motivoExclusion = ReglasHomologacion.MotivoSiNoHomologable(
+            string.Join(" + ", origenes), a.NombreDestino);
+        if (motivoExclusion is not null)
+        {
+            // La regla institucional de materias no homologables también aplica al agente externo.
+            decision = DecisionAnalisis.NO_HOMOLOGABLE;
+            justificacion = motivoExclusion;
+            requiereRevision = false;
+        }
+        else if (excedeCombinacion)
         {
             decision = DecisionAnalisis.REQUIERE_REVISION;
             justificacion = "El agente externo propuso más de dos materias de origen. Requiere revisión manual.";

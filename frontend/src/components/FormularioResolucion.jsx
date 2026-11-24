@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const DECISIONES_VALIDAS = ["HOMOLOGABLE", "NO_HOMOLOGABLE"];
 
@@ -30,16 +30,6 @@ export default function FormularioResolucion({ solicitud, onRegistrar, cargando 
   const [observacion, setObservacion] = useState("");
   const [decisiones, setDecisiones] = useState(() => decisionesIniciales(solicitud));
   const [errorLocal, setErrorLocal] = useState("");
-
-  // Si el padre cambia de solicitud sin desmontar el componente, se reinician los campos.
-  useEffect(() => {
-    setDecisiones(decisionesIniciales(solicitud));
-    setNumeroResolucion("");
-    setFecha(hoy());
-    setObservacion("");
-    setErrorLocal("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solicitud?.solicitudId]);
 
   if (!solicitud) return null;
 

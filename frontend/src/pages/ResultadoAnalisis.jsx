@@ -245,8 +245,19 @@ export default function ResultadoAnalisis() {
             </div>
           </div>
           <div className="row mb-2">
-            <div className="col-md-2 fw-bold">Estudiante</div>
-            <div className="col-md-10">{resultado?.estudiante}</div>
+            <div className="col-md-2 fw-bold">Titular (récord)</div>
+            <div className="col-md-10">
+              {resultado?.estudiante || "-"}
+              {resultado?.estudianteCedula && (
+                <span className="text-muted small ms-2">
+                  C.I.: {resultado.estudianteCedula}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="row mb-2">
+            <div className="col-md-2 fw-bold">Registrado por</div>
+            <div className="col-md-10">{resultado?.comiteCorreo || "-"}</div>
           </div>
           {esExterno && (resultado?.universidadOrigen || resultado?.universidadDestino) && (
             <div className="row mb-2">

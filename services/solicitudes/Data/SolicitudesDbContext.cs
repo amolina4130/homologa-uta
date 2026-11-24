@@ -93,6 +93,8 @@ public class SolicitudesDbContext : DbContext
             e.HasIndex(s => s.NumeroProceso).IsUnique();
             e.Property(s => s.Tipo).IsRequired().HasMaxLength(50);
             e.Property(s => s.EstudianteCorreo).IsRequired().HasMaxLength(150);
+            e.Property(s => s.EstudianteNombre).IsRequired().HasMaxLength(200);
+            e.Property(s => s.EstudianteCedula).IsRequired().HasMaxLength(30);
             e.Property(s => s.Estado).IsRequired().HasMaxLength(50);
             e.Property(s => s.Modulo).IsRequired().HasMaxLength(20).HasDefaultValue("INTERNO");
             e.Property(s => s.UniversidadOrigen).HasMaxLength(150);

@@ -59,19 +59,23 @@ export default function Equivalencias() {
   }, [rol, cargarTodo]);
 
   useEffect(() => {
-    if (formulario.carreraOrigenId) {
+    if (!formulario.carreraOrigenId) return;
+    const timer = setTimeout(() => {
       cargarAsignaturas(Number(formulario.carreraOrigenId)).catch(() => {
         setError("No se pudieron cargar las asignaturas de la carrera de origen.");
       });
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [formulario.carreraOrigenId, cargarAsignaturas]);
 
   useEffect(() => {
-    if (formulario.carreraDestinoId) {
+    if (!formulario.carreraDestinoId) return;
+    const timer = setTimeout(() => {
       cargarAsignaturas(Number(formulario.carreraDestinoId)).catch(() => {
         setError("No se pudieron cargar las asignaturas de la carrera de destino.");
       });
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [formulario.carreraDestinoId, cargarAsignaturas]);
 
   const cambiar = (campo, valor) => {

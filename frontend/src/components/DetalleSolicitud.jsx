@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 const DECISIONES_VALIDAS = ["HOMOLOGABLE", "NO_HOMOLOGABLE"];
 
@@ -60,14 +60,6 @@ export default function DetalleSolicitud({
   const [decisiones, setDecisiones] = useState(() => decisionesIniciales(solicitud));
   const [observaciones, setObservaciones] = useState(() => observacionesIniciales(solicitud));
   const [errorLocal, setErrorLocal] = useState("");
-
-  // Si el padre cambia de solicitud sin desmontar el componente, se reinician los campos.
-  useEffect(() => {
-    setDecisiones(decisionesIniciales(solicitud));
-    setObservaciones(observacionesIniciales(solicitud));
-    setErrorLocal("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solicitud?.solicitudId]);
 
   if (!solicitud) return null;
 
@@ -140,11 +132,28 @@ export default function DetalleSolicitud({
       <div className="card-body">
         <div className="row mb-3">
           <div className="col-md-6">
-            <p className="mb-1"><strong>Estudiante:</strong> {solicitud.estudiante}</p>
+            <p className="mb-1">
+              <strong>Titular del trámite (récord):</strong> {solicitud.estudiante || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Cédula del titular:</strong> {solicitud.estudianteCedula || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Registrado por:</strong> {solicitud.comiteCorreo || "-"}
+            </p>
+            <p className="mb-1">
+              <strong>Coordinador:</strong> {solicitud.coordinadorCorreo || "Pendiente de informe"}
+            </p>
             <p className="mb-1"><strong>Tipo:</strong> {solicitud.tipo}</p>
             <p className="mb-1">
-              <strong>Módulo:</strong>{" "}
-              {solicitud.modulo === "EXTERNO" ? "Agente externo" : "Agente interno"}
+              <strong>Modalidad:</strong>{" "}
+              <span
+                className={`badge ${
+                  solicitud.modulo === "EXTERNO" ? "bg-info text-dark" : "bg-primary"
+                }`}
+              >
+                {solicitud.modulo || "INTERNO"}
+              </span>
             </p>
             {solicitud.modulo === "EXTERNO" && (
               <p className="mb-1">

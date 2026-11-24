@@ -30,7 +30,7 @@ export default function Login() {
 
     setCargando(true);
     try {
-      // El AuthContext ya se encarga de guardar el usuario en el localStorage
+      // El AuthContext ya se encarga de guardar el usuario en el sessionStorage
       const rol = await iniciarSesion(correo, contrasena);
       navigate(rutaPorRol(rol));
     } catch (err) {

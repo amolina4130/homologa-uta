@@ -39,16 +39,26 @@ public static class AutorizacionHomologacion
     public static bool EsCoordinadorOAdministrador(ClaimsPrincipal? user) =>
         EsRol(user, "COORDINADOR", "ADMINISTRADOR");
 
-    /// <summary>El Consejo Directivo registra la resolución; el Coordinador puede hacerlo por él.</summary>
-    public static bool PuedeRegistrarResolucion(ClaimsPrincipal? user) =>
-        EsRol(user, "CONSEJO", "COORDINADOR", "ADMINISTRADOR");
+    public static bool EsComiteOAdministrador(ClaimsPrincipal? user) =>
+        EsRol(user, "COMITE", "ADMINISTRADOR");
 
-    public static bool EsGestor(ClaimsPrincipal? user) =>
-        EsRol(user, "COORDINADOR", "CONSEJO", "SECRETARIA", "ADMINISTRADOR");
+    public static bool EsDocenteOAdministrador(ClaimsPrincipal? user) =>
+        EsRol(user, "DOCENTE", "ADMINISTRADOR");
 
     /// <summary>
-    /// El estudiante solo accede a sus propias solicitudes; el Coordinador (y los roles que
-    /// revisan los expedientes) puede acceder a cualquiera.
+    /// La resolución la registra el Coordinador. El Consejo Directivo es solo destinatario
+    /// del informe final y no usuario del sistema.
+    /// </summary>
+    public static bool PuedeRegistrarResolucion(ClaimsPrincipal? user) =>
+        EsRol(user, "COORDINADOR", "ADMINISTRADOR");
+
+    /// <summary>Quienes pueden revisar expedientes: Comité, Coordinador y Docentes.</summary>
+    public static bool EsGestor(ClaimsPrincipal? user) =>
+        EsRol(user, "COMITE", "COORDINADOR", "DOCENTE", "ADMINISTRADOR");
+
+    /// <summary>
+    /// El Comité sube los documentos; los roles que revisan los expedientes pueden acceder
+    /// a cualquiera. Sin delegación, el docente solo ve las solicitudes asignadas.
     /// </summary>
     public static bool PuedeAccederSolicitud(ClaimsPrincipal? user, string? correoDueno)
     {

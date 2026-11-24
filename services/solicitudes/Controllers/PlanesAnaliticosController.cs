@@ -40,24 +40,31 @@ public class PlanesAnaliticosController : ControllerBase
             : Ok(plan);
     }
 
-    /// <summary>Carga masiva de planes analíticos desde PDF (solo Administrador).</summary>
+    /// <summary>Carga masiva de planes analíticos y sílabos desde PDF (solo Administrador).</summary>
     [HttpPost("planes-analiticos/carga")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> Cargar([FromForm] List<IFormFile> archivos, CancellationToken ct)
+    public async Task<IActionResult> Cargar(
+        [FromForm] List<IFormFile> archivos,
+        [FromQuery] bool reemplazar = false,
+        [FromQuery] int? carreraId = null,
+        CancellationToken ct = default)
     {
         if (!AutorizacionServicio.EsAdministrador(User))
             return StatusCode(StatusCodes.Status403Forbidden,
-                new { mensaje = "Solo el Administrador puede cargar planes analíticos." });
+                new { mensaje = "Solo el Administrador puede cargar planes analíticos y sílabos." });
 
         if (archivos is null || archivos.Count == 0)
             return BadRequest(new { mensaje = "Adjunte al menos un archivo PDF." });
 
-        var resultado = await _carga.CargarAsync(archivos, ct);
+        var resultado = await _carga.CargarAsync(archivos, reemplazar, carreraId, ct);
         return Ok(new
         {
             cargados = resultado.Cargados,
+            planes = resultado.Planes,
+            silabos = resultado.Silabos,
+            reemplazados = resultado.Reemplazados,
             omitidos = resultado.Omitidos.Select(o => new { archivo = o.Archivo, motivo = o.Motivo })
         });
     }

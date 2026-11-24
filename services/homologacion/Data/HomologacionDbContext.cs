@@ -16,12 +16,19 @@ public class HomologacionDbContext : DbContext
     public DbSet<ResolucionConsejo> ResolucionesConsejo => Set<ResolucionConsejo>();
     public DbSet<DecisionResolucion> DecisionesResolucion => Set<DecisionResolucion>();
 
+    // Delegación a docentes y emisión del informe final
+    public DbSet<DelegacionDocente> DelegacionesDocente => Set<DelegacionDocente>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<AnalisisSolicitud>(e =>
         {
             e.Property(a => a.Estado).IsRequired().HasMaxLength(50);
             e.Property(a => a.CoordinadorCorreo).HasMaxLength(200);
+            e.Property(a => a.NombreEstudiante).HasMaxLength(200);
+            e.Property(a => a.CedulaEstudiante).HasMaxLength(50);
+            e.Property(a => a.NumeroMemorando).HasMaxLength(100);
+            e.Property(a => a.NombreFirmante).HasMaxLength(200);
 
             // Un solo análisis vigente por solicitud
             e.HasIndex(a => a.SolicitudId).IsUnique();
@@ -95,6 +102,24 @@ public class HomologacionDbContext : DbContext
              .OnDelete(DeleteBehavior.Cascade);
 
             e.HasIndex(d => new { d.ResolucionConsejoId, d.AsignaturaId }).IsUnique();
+        });
+
+        modelBuilder.Entity<DelegacionDocente>(e =>
+        {
+            e.Property(d => d.DocenteCorreo).IsRequired().HasMaxLength(200);
+            e.Property(d => d.CoordinadorCorreo).IsRequired().HasMaxLength(200).HasDefaultValue("");
+            e.Property(d => d.Estado).IsRequired().HasMaxLength(30);
+            e.Property(d => d.NombreDocente).HasMaxLength(200);
+            e.Property(d => d.DocenteCedula).HasMaxLength(50);
+            e.Property(d => d.DocenteCorreoInforme).HasMaxLength(200);
+            e.Property(d => d.InformeTexto).HasMaxLength(8000);
+            e.Property(d => d.EvaluacionesJson).HasMaxLength(8000);
+            e.Property(d => d.SugerenciaJson).HasColumnType("nvarchar(max)");
+
+            // Un mismo docente no puede recibir dos veces la misma solicitud.
+            e.HasIndex(d => new { d.SolicitudId, d.DocenteCorreo }).IsUnique();
+
+            e.HasIndex(d => d.DocenteCorreo);
         });
     }
 }

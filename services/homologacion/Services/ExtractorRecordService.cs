@@ -104,6 +104,28 @@ public class ExtractorRecordService
             };
         }
 
+        // El nombre y la cédula del titular vienen del mismo récord, tanto en INTERNO como
+        // en EXTERNO. Se guardan en Solicitudes para que el informe no use el correo del Comité.
+        string? nombreTitular = null;
+        string? cedulaTitular = null;
+        if (!string.IsNullOrWhiteSpace(extraido.Nombre) || !string.IsNullOrWhiteSpace(extraido.Cedula))
+        {
+            try
+            {
+                await _solicitudes.ActualizarTitularAsync(
+                    solicitudId, extraido.Nombre, extraido.Cedula, "sistema@homologauta", ct);
+                nombreTitular = extraido.Nombre;
+                cedulaTitular = extraido.Cedula;
+            }
+            catch (SolicitudesNoDisponibleException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Se extrajeron los datos del titular del récord {SolicitudId} pero no se pudieron guardar",
+                    solicitudId);
+            }
+        }
+
         // La extracción reemplaza lo que se había guardado antes.
         var anteriores = await _db.MateriasAprobadas
             .Where(m => m.SolicitudId == solicitudId)
@@ -140,7 +162,9 @@ public class ExtractorRecordService
         {
             RequiereRevision = false,
             Motivo = null,
-            Materias = nuevas.Select(MateriaAprobadaMapper.ToDto).ToList()
+            Materias = nuevas.Select(MateriaAprobadaMapper.ToDto).ToList(),
+            NombreEstudiante = nombreTitular,
+            CedulaEstudiante = cedulaTitular
         };
     }
 

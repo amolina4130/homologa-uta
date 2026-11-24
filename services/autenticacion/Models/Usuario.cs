@@ -11,4 +11,11 @@ public class Usuario
     public string PasswordHash { get; set; } = string.Empty;
     public int RolId { get; set; }
     public Rol Rol { get; set; } = null!;
+
+    // Perfil editable por el usuario. No cambia el correo de acceso ni el rol.
+    public string Tipo { get; set; } = string.Empty;
+    public string Titulo { get; set; } = string.Empty;
+    public string Cedula { get; set; } = string.Empty;
+    public string Telefono { get; set; } = string.Empty;
+
 }

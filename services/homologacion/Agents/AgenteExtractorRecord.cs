@@ -24,6 +24,12 @@ public class MateriaRecordAgente
 public class ResultadoRecordAgente
 {
     public List<MateriaRecordAgente> Materias { get; set; } = new();
+
+    /// <summary>Nombre del titular tal como aparece en el récord académico.</summary>
+    public string? Nombre { get; set; }
+
+    /// <summary>Cédula del titular tal como aparece en el récord académico.</summary>
+    public string? Cedula { get; set; }
 }
 
 /// <summary>
@@ -74,14 +80,18 @@ public class AgenteExtractorRecord
             "Debes devolver ÚNICAMENTE un JSON válido con la estructura pedida.";
 
         var userPrompt = $@"
-Extrae del siguiente récord académico TODAS las materias con su nota, su estado según el documento
-(aprobado, reprobado, retirado, etc.) y el periodo si aparece. Devuelve un JSON con esta forma exacta:
+Extrae del siguiente récord académico el nombre y la cédula del titular y TODAS las materias con
+su nota, su estado según el documento (aprobado, reprobado, retirado, etc.) y el periodo si aparece.
+El nombre y la cédula son datos del titular del trámite, NO un usuario ni un rol del sistema.
+Devuelve un JSON con esta forma exacta:
 {{
+  ""nombre"": ""(nombre completo del titular o null si no aparece)"",
+  ""cedula"": ""(cédula del titular o null si no aparece)"",
   ""materias"": [
     {{ ""nombre"": ""(nombre de la materia)"", ""nota"": (número o null), ""estadoSegunDocumento"": ""aprobado"", ""periodo"": ""(periodo o null)"" }}
   ]
 }}
-No agregues texto fuera del JSON. Si no hay materias, devuelve {{ ""materias"": [] }}.
+No agregues texto fuera del JSON. Si no hay materias, devuelve {{ ""nombre"": null, ""cedula"": null, ""materias"": [] }}.
 
 RÉCORD:
 {textoRecord}
@@ -124,10 +134,19 @@ RÉCORD:
                     : materia.EstadoSegunDocumento.Trim();
             }
 
+            resultado.Nombre = string.IsNullOrWhiteSpace(resultado.Nombre)
+                ? null
+                : resultado.Nombre.Trim();
+            resultado.Cedula = string.IsNullOrWhiteSpace(resultado.Cedula)
+                ? null
+                : resultado.Cedula.Trim();
+
             return resultado;
         }, ct);
 
-        _logger.LogInformation("El agente extrajo {Total} materias del récord", respuesta.Materias.Count);
+        _logger.LogInformation(
+            "El agente extrajo {Total} materias y los datos del titular del récord",
+            respuesta.Materias.Count);
         return respuesta;
     }
 }

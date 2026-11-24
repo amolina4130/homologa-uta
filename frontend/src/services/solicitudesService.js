@@ -1,9 +1,8 @@
-// Forzamos la URL directa al puerto 8080 (Gateway)
-const GATEWAY_URL = "http://localhost:8080";
+const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 // Función auxiliar para obtener el token
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
@@ -122,6 +121,20 @@ export async function actualizarSolicitud(id, solicitudData) {
     throw await leerMensaje(res, "Error al actualizar la solicitud");
   }
 
+  return await res.json();
+}
+
+// Corrige nombre y cédula del titular del récord sin cambiar el estado de la solicitud.
+export async function actualizarTitularSolicitud(id, nombre, cedula) {
+  const res = await fetch(`${GATEWAY_URL}/solicitudes/${id}/titular`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ nombre, cedula }),
+  });
+
+  if (!res.ok) {
+    throw await leerMensaje(res, "No se pudieron guardar los datos del titular");
+  }
   return await res.json();
 }
 

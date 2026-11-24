@@ -8,7 +8,15 @@ public class SolicitudInfoDto
     public int Id { get; set; }
     public string NumeroProceso { get; set; } = string.Empty;
     public string Tipo { get; set; } = string.Empty;
+    /// <summary>Correo de la cuenta que registra: siempre el Comité, nunca el estudiante.</summary>
     public string EstudianteCorreo { get; set; } = string.Empty;
+
+    /// <summary>Nombre real del estudiante, usado en los informes.</summary>
+    public string EstudianteNombre { get; set; } = string.Empty;
+
+    /// <summary>Cédula real del estudiante, usada en los informes.</summary>
+    public string EstudianteCedula { get; set; } = string.Empty;
+
     public DateTime FechaRegistro { get; set; }
     public int CarreraOrigenId { get; set; }
     public int CarreraDestinoId { get; set; }
@@ -44,7 +52,7 @@ public class AsignaturaSolicitudDto
     public int HorasOrigen { get; set; }
     public string ContenidoOrigen { get; set; } = string.Empty;
 
-    public int AsignaturaDestinoId { get; set; }
+    public int? AsignaturaDestinoId { get; set; }
     public string AsignaturaDestino { get; set; } = string.Empty;
     public string NivelDestino { get; set; } = string.Empty;
     public string AreaDestino { get; set; } = string.Empty;
@@ -64,10 +72,21 @@ public class PendienteDto
     /// <summary>Número de proceso visible, por ejemplo SOL-0004 (HU-16).</summary>
     public string NumeroProceso { get; set; } = string.Empty;
 
-    /// <summary>Fecha en que el estudiante registró la solicitud.</summary>
+    /// <summary>Fecha en que el Comité registró la solicitud.</summary>
     public DateTime Fecha { get; set; }
 
+    /// <summary>Nombre real del estudiante (lo que debe verse en la columna Estudiante).</summary>
     public string Estudiante { get; set; } = string.Empty;
+    public string EstudianteCedula { get; set; } = string.Empty;
+
+    /// <summary>Correo del Comité que registró la solicitud.</summary>
+    public string ComiteCorreo { get; set; } = string.Empty;
+
+    /// <summary>INTERNO o EXTERNO, para hacer visible la modalidad en la bandeja.</summary>
+    public string Modulo { get; set; } = "INTERNO";
+    public string? UniversidadOrigen { get; set; }
+    public string? UniversidadDestino { get; set; }
+
     public string Tipo { get; set; } = string.Empty;
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
@@ -93,7 +112,15 @@ public class DetalleSolicitudDto
     public string Estado { get; set; } = string.Empty;
 
     public DateTime Fecha { get; set; }
+
+    /// <summary>Nombre real del estudiante al que pertenece la homologación.</summary>
     public string Estudiante { get; set; } = string.Empty;
+
+    public string EstudianteCedula { get; set; } = string.Empty;
+
+    /// <summary>Correo del Comité que registró la solicitud (auditoría).</summary>
+    public string ComiteCorreo { get; set; } = string.Empty;
+
     public string Tipo { get; set; } = string.Empty;
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;
@@ -190,6 +217,13 @@ public class ResultadoInformeDto
     public bool EstadoSolicitudActualizado { get; set; }
 
     public List<InformeAsignaturaResultadoDto> Asignaturas { get; set; } = new();
+
+    // Datos del informe final dirigido al Consejo Directivo (opcionales en el informe técnico).
+    public string? InformeFinalTexto { get; set; }
+    public string? NombreEstudiante { get; set; }
+    public string? CedulaEstudiante { get; set; }
+    public string? NumeroMemorando { get; set; }
+    public string? NombreFirmante { get; set; }
 }
 
 public class InformeAsignaturaResultadoDto

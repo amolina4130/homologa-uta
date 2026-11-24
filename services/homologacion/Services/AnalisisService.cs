@@ -71,11 +71,11 @@ public class AnalisisService
             throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");
 
         EntradasPreseleccion? preseleccion = null;
-        IReadOnlyList<AsignaturaAnalisisDto> entradas;
+        List<AsignaturaAnalisisDto> entradas;
 
         if (asignaturas is { Count: > 0 })
         {
-            entradas = asignaturas;
+            entradas = asignaturas.ToList();
         }
         else
         {
@@ -89,11 +89,23 @@ public class AnalisisService
             }
 
             entradas = preseleccion.UsaMateriasAprobadas
-                ? preseleccion.Entradas
+                ? preseleccion.Entradas.ToList()
                 : ConstruirAsignaturas(info);
         }
 
-        var sinCandidata = preseleccion?.SinCandidata ?? new List<MateriaSinCandidataDto>();
+        var sinCandidata = preseleccion?.SinCandidata?.ToList() ?? new List<MateriaSinCandidataDto>();
+
+        // Solicitudes marca las asignaturas sin equivalencia en su catálogo con un centinela.
+        // Antes de llamar al agente se intenta una candidata real en la memoria destino; las que
+        // no la tengan quedan en revisión como "Sin equivalente probable".
+        foreach (var pendiente in await _preseleccion.ResolverSinEquivalenteAsync(info, entradas, ct))
+        {
+            if (!sinCandidata.Any(s => string.Equals(
+                    s.MateriaOrigen, pendiente.MateriaOrigen, StringComparison.OrdinalIgnoreCase)))
+            {
+                sinCandidata.Add(pendiente);
+            }
+        }
 
         if (entradas.Count == 0 && sinCandidata.Count == 0)
             throw new AnalisisSolicitudException(400, "La solicitud no tiene asignaturas para analizar.");
@@ -233,7 +245,9 @@ public class AnalisisService
                 ? "Agente externo"
                 : "Agente interno",
             Estado = analisis.Estado,
-            Estudiante = info.EstudianteCorreo,
+            Estudiante = CoordinadorService.NombreEstudiante(info),
+            EstudianteCedula = CoordinadorService.CedulaEstudiante(info),
+            ComiteCorreo = info.EstudianteCorreo,
             FechaRegistro = info.FechaRegistro,
             CarreraOrigen = info.CarreraOrigen,
             CarreraDestino = info.CarreraDestino,
@@ -293,6 +307,24 @@ public class AnalisisService
     /// </summary>
     private async Task<ResultadoAgente> AnalizarConAgenteAsync(AsignaturaAnalisisDto entrada)
     {
+        // Regla institucional de materias no homologables: estas materias no se homologan aunque exista una
+        // equivalencia registrada o el contenido parezca idéntico. Se evalúan primero para
+        // que ninguna otra regla pueda marcarlas como homologables.
+        var motivoExclusion = ReglasHomologacion.MotivoSiNoHomologable(
+            entrada.AsignaturaOrigen, entrada.AsignaturaDestino);
+        if (motivoExclusion is not null)
+        {
+            return new ResultadoAgente
+            {
+                Contenido = 0,
+                Profundidad = 0,
+                Horas = 0,
+                Justificacion = motivoExclusion,
+                RequiereRevision = false,
+                MateriasOrigen = new List<string> { entrada.AsignaturaOrigen }
+            };
+        }
+
         if (!string.IsNullOrWhiteSpace(entrada.EquivalenciaAplicada))
         {
             return new ResultadoAgente
@@ -306,12 +338,16 @@ public class AnalisisService
             };
         }
 
+        // El análisis del registro usa la memoria del agente (mallas, planes analíticos y
+        // equivalencias). Así termina en milisegundos y no depende de la disponibilidad de
+        // Ollama. La IA se solicita después, cuando el Docente genera su sugerencia.
         return await _agente.AnalizarAsignaturaAsync(
             entrada.AsignaturaOrigen,
             entrada.ContenidoOrigen,
             entrada.AsignaturaDestino,
             entrada.ContenidoDestino,
-            entrada.MateriasOrigenPermitidas.Count > 0 ? entrada.MateriasOrigenPermitidas : null);
+            entrada.MateriasOrigenPermitidas.Count > 0 ? entrada.MateriasOrigenPermitidas : null,
+            usarOllama: false);
     }
 
     private AnalisisAsignatura ConstruirFila(AsignaturaAnalisisDto entrada, ResultadoAgente agente)
@@ -335,7 +371,9 @@ public class AnalisisService
                 : $"{d.Justificacion} Análisis del agente: {agente.Justificacion.Trim()}";
         }
 
-        if (!string.IsNullOrWhiteSpace(entrada.EquivalenciaAplicada) &&
+        if (!ReglasHomologacion.EsMateriaNoHomologable(
+                entrada.AsignaturaOrigen, entrada.AsignaturaDestino) &&
+            !string.IsNullOrWhiteSpace(entrada.EquivalenciaAplicada) &&
             !justificacion.Contains(entrada.EquivalenciaAplicada, StringComparison.OrdinalIgnoreCase))
         {
             justificacion = $"{entrada.EquivalenciaAplicada.Trim()} {justificacion}";

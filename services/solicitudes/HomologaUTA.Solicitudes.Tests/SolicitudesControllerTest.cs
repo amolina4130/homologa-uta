@@ -50,6 +50,8 @@ namespace HomologaUTA.Solicitudes.Tests
             var request = new SolicitudRequest
             {
                 // El campo Tipo ya no existe
+                EstudianteNombre = "Estudiante Prueba",
+                EstudianteCedula = "1234567890",
                 CarreraOrigenId = 1,
                 CarreraDestinoId = 1, // Carreras iguales (esto debe fallar)
                 AsignaturasIds = new List<int> { 1, 2 }
@@ -97,6 +99,8 @@ namespace HomologaUTA.Solicitudes.Tests
             
             var request = new SolicitudRequest
             {
+                EstudianteNombre = "Estudiante Prueba",
+                EstudianteCedula = "1234567890",
                 CarreraOrigenId = 1,
                 CarreraDestinoId = 2,
                 AsignaturasIds = new List<int> { 1 }
@@ -110,6 +114,29 @@ namespace HomologaUTA.Solicitudes.Tests
             var solicitudGuardada = await context.Solicitudes.FirstOrDefaultAsync();
             Assert.NotNull(solicitudGuardada);
             Assert.Equal("Homologación", solicitudGuardada.Tipo);
+            Assert.Equal("Estudiante Prueba", solicitudGuardada.EstudianteNombre);
+            Assert.Equal("1234567890", solicitudGuardada.EstudianteCedula);
+        }
+
+        [Fact]
+        public async Task CrearSolicitud_SinDatosDelTitular_UsaValoresPendientesDelRecord()
+        {
+            using var context = GetInMemoryDbContext();
+            var controller = GetControllerWithUser(context, "comite@uta.edu.ec");
+            var request = new SolicitudRequest
+            {
+                CarreraOrigenId = 1,
+                CarreraDestinoId = 2,
+                AsignaturasIds = new List<int> { 1 }
+            };
+
+            var result = await controller.CrearSolicitud(request);
+
+            Assert.IsType<CreatedResult>(result);
+            var guardada = await context.Solicitudes.SingleAsync();
+            Assert.Equal("Estudiante sin identificar", guardada.EstudianteNombre);
+            Assert.Equal("-", guardada.EstudianteCedula);
+            Assert.Equal("comite@uta.edu.ec", guardada.EstudianteCorreo);
         }
     }
 }

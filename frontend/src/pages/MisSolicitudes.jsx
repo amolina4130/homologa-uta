@@ -5,6 +5,7 @@ import {
   obtenerMisSolicitudes,
 } from "../services/solicitudesService";
 import { descargarInforme } from "../services/homologacionService";
+import { useAuth } from "../context/AuthContext";
 
 const FILTROS_VACIOS = { estado: "", carreraId: "", desde: "", hasta: "" };
 
@@ -17,6 +18,7 @@ const ESTADOS = [
 ];
 
 const MisSolicitudes = () => {
+  const { rol } = useAuth();
   const [solicitudes, setSolicitudes] = useState([]);
   const [carreras, setCarreras] = useState([]);
   const [filtros, setFiltros] = useState(FILTROS_VACIOS);
@@ -83,6 +85,9 @@ const MisSolicitudes = () => {
           <div className="card shadow-sm border-0">
             <div className="card-header bg-primary text-white">
               <h4 className="mb-0 fw-bold">Mis Solicitudes</h4>
+              <small className="d-block fw-normal">
+                Solicitudes registradas por el {rol === "COORDINADOR" ? "Coordinador" : "Comité"}
+              </small>
             </div>
             <div className="card-body p-4">
               <form className="row g-3 align-items-end mb-4" onSubmit={aplicarFiltros}>

@@ -95,7 +95,15 @@ public class ResultadoSolicitudDto
     /// <summary>PENDIENTE_REVISION o INFORME_EMITIDO.</summary>
     public string Estado { get; set; } = string.Empty;
 
+    /// <summary>Titular del trámite según el récord académico; no es un usuario del sistema.</summary>
     public string Estudiante { get; set; } = string.Empty;
+
+    /// <summary>Cédula real del titular según el récord académico.</summary>
+    public string EstudianteCedula { get; set; } = string.Empty;
+
+    /// <summary>Correo de la cuenta del Comité que registró la solicitud.</summary>
+    public string ComiteCorreo { get; set; } = string.Empty;
+
     public DateTime FechaRegistro { get; set; }
     public string CarreraOrigen { get; set; } = string.Empty;
     public string CarreraDestino { get; set; } = string.Empty;

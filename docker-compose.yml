@@ -50,10 +50,10 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ISSUER=${JWT_ISSUER:-HomologaUTA}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-HomologaUTA}
-      - SEED_ESTUDIANTE_PASSWORD=${SEED_ESTUDIANTE_PASSWORD}
+      - SEED_COMITE_PASSWORD=${SEED_COMITE_PASSWORD}
       - SEED_COORDINADOR_PASSWORD=${SEED_COORDINADOR_PASSWORD}
-      - SEED_SECRETARIA_PASSWORD=${SEED_SECRETARIA_PASSWORD}
-      - SEED_CONSEJO_PASSWORD=${SEED_CONSEJO_PASSWORD}
+      - SEED_DOCENTE_PASSWORD=${SEED_DOCENTE_PASSWORD}
+      - SEED_DOCENTE2_PASSWORD=${SEED_DOCENTE2_PASSWORD}
       - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD}
     ports:
       - "5001:8080"
@@ -95,10 +95,21 @@ services:
     environment:
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_DOCUMENTOS:-HomologaUTA_Documentos};User Id=sa;Password=${SQL_SA_PASSWORD:-HomologaUTA_2026!};TrustServerCertificate=True;
       - RabbitMQ__Host=rabbitmq
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=${JWT_ISSUER:-HomologaUTA}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-HomologaUTA}
+      - Documentos__Raiz=/app/documentos
+      - Documentos__MaxArchivosCarpeta=50
+      # Permite escribir la ruta real del equipo: C:\Users\Usuario\Downloads\...
+      - Documentos__Raices__0__Windows=C:/Users/Usuario/Downloads
+      - Documentos__Raices__0__Contenedor=/app/descargas
     ports:
       - "5003:8080"
     volumes:
       - pdf_data:/app/pdfs
+      - ./documentos:/app/documentos
+      # Solo lectura: el sistema nunca modifica los archivos del usuario.
+      - ${DESCARGAS_HOST:-C:/Users/Usuario/Downloads}:/app/descargas:ro
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -151,8 +162,6 @@ services:
         condition: service_started
       ollama:
         condition: service_started
-      ollama-init:
-        condition: service_completed_successfully
       rabbitmq:
         condition: service_started
     networks:
@@ -206,7 +215,8 @@ services:
     networks:
       - homologa_network
 
-  # 11. Carga del modelo del agente interno (llama3) antes de arrancar Homologación
+  # 11. Carga del modelo del agente interno (opcional). Si falla la descarga,
+  #     Homologación arranca igual y su estado se consulta en /salud/ollama.
   ollama-init:
     image: ollama/ollama:latest
     container_name: homologa_ollama_init
@@ -214,7 +224,28 @@ services:
       - ollama
     environment:
       - OLLAMA_HOST=http://ollama:11434
-    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull llama3"]
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        MODELO="$${OLLAMA_MODEL:-llama3}"
+        echo "Esperando a Ollama en $$OLLAMA_HOST ..."
+        intento=0
+        until ollama list >/dev/null 2>&1; do
+          intento=$$((intento + 1))
+          if [ "$$intento" -ge 60 ]; then
+            echo "Ollama no respondió a tiempo; se omite la descarga de $$MODELO."
+            exit 0
+          fi
+          sleep 2
+        done
+        if ollama show "$$MODELO" >/dev/null 2>&1; then
+          echo "El modelo $$MODELO ya está disponible."
+        else
+          echo "Descargando el modelo $$MODELO ..."
+          ollama pull "$$MODELO" || echo "No se pudo descargar $$MODELO; Homologación seguirá disponible."
+        fi
     restart: "no"
     networks:
       - homologa_network

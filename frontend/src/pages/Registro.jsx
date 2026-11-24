@@ -39,6 +39,7 @@ export default function Registro() {
   const [correo, setCorreo] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [confirmacion, setConfirmacion] = useState("");
+  const [rol, setRol] = useState("COMITE");
   const [errores, setErrores] = useState({});
   const [errorServidor, setErrorServidor] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -53,7 +54,7 @@ export default function Registro() {
 
     setCargando(true);
     try {
-      await registrar(nombre.trim(), correo.trim(), contrasena);
+      await registrar(nombre.trim(), correo.trim(), contrasena, rol);
       navigate("/login", {
         state: {
           mensajeExito:
@@ -80,7 +81,25 @@ export default function Registro() {
         </div>
 
         <form onSubmit={crearCuenta} noValidate>
-          <h4 className="mb-4 text-center">Crear una cuenta</h4>
+          <h4 className="mb-4 text-center">Registro de usuario</h4>
+
+          <div className="mb-3">
+            <label htmlFor="rol" className="form-label fw-bold">
+              Tipo de usuario
+            </label>
+            <select
+              id="rol"
+              className="form-select"
+              value={rol}
+              onChange={(e) => setRol(e.target.value)}
+            >
+              <option value="COMITE">Comité</option>
+              <option value="DOCENTE">Docente</option>
+            </select>
+            <div className="form-text">
+              El Coordinador y el Administrador se crean con cuentas semilla; el titular del trámite no es usuario del sistema.
+            </div>
+          </div>
 
           <div className="mb-3">
             <label htmlFor="nombre" className="form-label fw-bold">
@@ -106,7 +125,7 @@ export default function Registro() {
               type="email"
               className={`form-control ${errores.correo ? "is-invalid" : ""}`}
               value={correo}
-              placeholder="estudiante@uta.edu.ec"
+              placeholder="comite@uta.edu.ec"
               onChange={(e) => setCorreo(e.target.value)}
             />
             {errores.correo && <div className="invalid-feedback">{errores.correo}</div>}

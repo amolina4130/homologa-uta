@@ -37,6 +37,12 @@
     <Protobuf Include="Protos\reglas.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <!-- Logos del membrete de los informes (se copian al contenedor al publicar). -->
+  <ItemGroup>
+    <None Update="Assets\logo-uta.png" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Assets\logo-fisei.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Esta línea permite que el proyecto use el cliente de Ollama y HttpClient -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

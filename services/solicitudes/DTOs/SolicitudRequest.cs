@@ -7,6 +7,12 @@ public class SolicitudRequest
     public int CarreraDestinoId { get; set; }
     public List<int> AsignaturasIds { get; set; } = new();
 
+    /// <summary>Nombre real del estudiante del trámite (lo registra el Comité).</summary>
+    public string EstudianteNombre { get; set; } = string.Empty;
+
+    /// <summary>Cédula real del estudiante del trámite.</summary>
+    public string EstudianteCedula { get; set; } = string.Empty;
+
     /// <summary>Módulo de análisis: INTERNO (agente UTA) o EXTERNO (agente de otra universidad).</summary>
     public string Modulo { get; set; } = "INTERNO";
 

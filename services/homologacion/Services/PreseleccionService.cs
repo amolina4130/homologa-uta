@@ -24,6 +24,9 @@ public class EntradasPreseleccion
 /// </summary>
 public class PreseleccionService
 {
+    /// <summary>Valor que Solicitudes envía cuando no hay equivalencia en su catálogo.</summary>
+    public const string SinEquivalenteEnMallaDestino = "Sin equivalente en la malla destino";
+
     private readonly HomologacionDbContext _db;
     private readonly SolicitudesClient _solicitudes;
     private readonly IMemoriaClient _memoria;
@@ -193,6 +196,81 @@ public class PreseleccionService
             Entradas = entradas,
             SinCandidata = preseleccion.SinCandidata
         };
+    }
+
+    /// <summary>
+    /// Resuelve el centinela "Sin equivalente en la malla destino" que envía Solicitudes (HU-14).
+    /// Reutiliza la preselección por área y nivel (HU-21) contra la memoria de la carrera destino:
+    /// si encuentra una candidata real, actualiza la entrada; si no, la quita de las entradas y la
+    /// devuelve para que el análisis la deje en "Sin equivalente probable" con REQUIERE_REVISION.
+    /// </summary>
+    public async Task<List<MateriaSinCandidataDto>> ResolverSinEquivalenteAsync(
+        SolicitudCompletaDto info,
+        List<AsignaturaAnalisisDto> entradas,
+        CancellationToken ct = default)
+    {
+        var pendientes = entradas
+            .Where(e => string.Equals(
+                e.AsignaturaDestino?.Trim(),
+                SinEquivalenteEnMallaDestino,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (pendientes.Count == 0)
+            return new List<MateriaSinCandidataDto>();
+
+        List<MemoriaAsignaturaDto> destino;
+        try
+        {
+            destino = await _memoria.ObtenerAsignaturasAsync(info.CarreraDestinoId, null, ct);
+        }
+        catch (Exception ex) when (ex is MemoriaSinCargarException or MemoriaNoDisponibleException)
+        {
+            _logger.LogWarning(
+                "No se pudo resolver {Cantidad} asignaturas sin equivalencia contra la memoria: {Motivo}",
+                pendientes.Count, ex.Message);
+            destino = new List<MemoriaAsignaturaDto>();
+        }
+
+        var sinCandidata = new List<MateriaSinCandidataDto>();
+        foreach (var entrada in pendientes)
+        {
+            var nombreOrigen = (entrada.AsignaturaOrigen ?? string.Empty).Trim();
+            var candidata = destino.FirstOrDefault(d =>
+                                 string.Equals(d.Nombre.Trim(), nombreOrigen, StringComparison.OrdinalIgnoreCase))
+                             ?? PrimeraCandidata(info, nombreOrigen, destino);
+
+            if (candidata is null)
+            {
+                sinCandidata.Add(new MateriaSinCandidataDto
+                {
+                    MateriaOrigen = nombreOrigen,
+                    Motivo = $"No hay una asignatura candidata en la carrera de destino para {nombreOrigen}."
+                });
+                entradas.Remove(entrada);
+                continue;
+            }
+
+            entrada.AsignaturaDestino = candidata.Nombre;
+            entrada.AsignaturaDestinoId = candidata.AsignaturaId;
+            entrada.ContenidoDestino = candidata.ContenidosMinimos;
+            entrada.AreaDestino = candidata.Area;
+            entrada.NivelDestino = candidata.Nivel;
+        }
+
+        return sinCandidata;
+    }
+
+    private MemoriaAsignaturaDto? PrimeraCandidata(
+        SolicitudCompletaDto info, string nombre, List<MemoriaAsignaturaDto> destino)
+    {
+        var materia = new Models.MateriaAprobada { Nombre = nombre };
+        var preseleccion = Construir(info, new List<Models.MateriaAprobada> { materia }, destino);
+        var idCandidata = preseleccion.Pares
+            .FirstOrDefault(p => string.Equals(p.MateriaOrigen.Trim(), nombre, StringComparison.OrdinalIgnoreCase))
+            ?.CandidatasDestino.FirstOrDefault()?.AsignaturaId;
+
+        return idCandidata is null ? null : destino.FirstOrDefault(d => d.AsignaturaId == idCandidata.Value);
     }
 
     private PreseleccionDto Construir(

@@ -12,16 +12,15 @@ import {
   obtenerMateriasAprobadas,
 } from "../services/homologacionService";
 import { obtenerSolicitud } from "../services/solicitudesService";
+import { obtenerSolicitudesDocente } from "../services/docenteService";
 import ListaDocumentos from "../components/ListaDocumentos";
 import TablaMateriasAprobadas from "../components/TablaMateriasAprobadas";
 
 const MENSAJE_RECHAZO = "El archivo no es un PDF o excede el tamaño máximo permitido. No se guardó.";
 
-const TIPOS = [
-  { codigo: "MALLA", etiqueta: "Malla curricular" },
-  { codigo: "HISTORIAL", etiqueta: "Historial académico" },
-  { codigo: "SILABO", etiqueta: "Sílabo" },
-];
+// Solo se adjunta el récord académico. La malla, los sílabos y los planes ya están
+// cargados en el sistema para el agente interno; para el externo se referencia la URL.
+const TIPOS = [{ codigo: "HISTORIAL", etiqueta: "Récord académico" }];
 
 export default function AdjuntarDocumentos() {
   const { rol } = useAuth();
@@ -50,10 +49,21 @@ export default function AdjuntarDocumentos() {
   const [mensajeMaterias, setMensajeMaterias] = useState("");
 
   useEffect(() => {
-    obtenerMisSolicitudes()
-      .then((data) => setSolicitudes(Array.isArray(data) ? data : []))
+    const cargar = rol === "DOCENTE"
+      ? obtenerSolicitudesDocente().then((data) =>
+          (Array.isArray(data) ? data : []).map((s) => ({
+            id: s.solicitudId,
+            numeroProceso: s.numeroProceso,
+            carreraOrigen: s.carreraOrigen,
+            carreraDestino: s.carreraDestino,
+          }))
+        )
+      : obtenerMisSolicitudes();
+
+    cargar
+      .then((data) => setSolicitudes(Array.isArray(data) ? data : data?.data || []))
       .catch(() => setError("No se pudieron cargar sus solicitudes."));
-  }, []);
+  }, [rol]);
 
   const cargarSolicitud = useCallback(async (id) => {
     setDocumentos([]);
@@ -125,7 +135,7 @@ export default function AdjuntarDocumentos() {
         id: respuesta.documentoId,
         nombre: archivo.name,
         tipoDocumento: etiqueta,
-        tamano: `${(archivo.size / (1024 * 1024)).toFixed(1)} MB`,
+        tamanoBytes: archivo.size,
         estado: "PROCESADO",
       };
       setDocumentos((prev) => [...prev, nuevo]);
@@ -160,7 +170,14 @@ export default function AdjuntarDocumentos() {
             "El récord no se pudo leer con claridad. Revise y corrija las materias manualmente."
         );
       } else {
-        setMensajeMaterias("Materias extraídas del récord. Revise y corrija antes de guardar.");
+        const datosTitular = resultado?.nombreEstudiante || resultado?.cedulaEstudiante
+          ? ` Datos del titular actualizados: ${resultado?.nombreEstudiante || "-"} · C.I.: ${
+              resultado?.cedulaEstudiante || "-"
+            }.`
+          : "";
+        setMensajeMaterias(
+          `Materias extraídas del récord. Revise y corrija antes de guardar.${datosTitular}`
+        );
       }
     } catch (err) {
       setErrorMaterias(err.message || "No se pudo leer el récord académico.");
@@ -197,7 +214,7 @@ export default function AdjuntarDocumentos() {
             <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
               <h5 className="mb-0 fw-bold">ADJUNTAR DOCUMENTOS</h5>
               <span className="badge bg-light text-primary fs-6">
-                Rol: {rol === "ESTUDIANTE" ? "Estudiante" : rol}
+                Rol: {rol === "COMITE" ? "Comité" : rol}
               </span>
             </div>
 
@@ -240,6 +257,11 @@ export default function AdjuntarDocumentos() {
                         <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
                       ))}
                     </select>
+                    <div className="form-text">
+                      La malla, los sílabos y los planes de estudio ya están cargados en el
+                      sistema para el agente interno. Para el agente externo se referencia
+                      desde <strong>Ruta / URL externa</strong>.
+                    </div>
                   </div>
 
                   <div className="col-md-6 mb-3">
@@ -339,7 +361,8 @@ export default function AdjuntarDocumentos() {
               <div className="alert alert-secondary small mb-0">
                 El texto de cada PDF se extrae con PdfPig y el documento pasa a PROCESADO.
                 <br />
-                Solo ves los documentos de tus propias solicitudes.
+                Solo ves los documentos de tus solicitudes: las registradas por el Coordinador,
+                el Comité o las que te fueron delegadas como Docente.
               </div>
             </div>
 

@@ -1,7 +1,7 @@
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
 function getAuthHeaders() {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token");
   return { Authorization: `Bearer ${token}` };
 }
 

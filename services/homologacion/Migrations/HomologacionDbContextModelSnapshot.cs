@@ -102,6 +102,10 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CedulaEstudiante")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("CoordinadorCorreo")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -116,6 +120,21 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     b.Property<DateTime?>("FechaInforme")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("InformeFinalTexto")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NombreEstudiante")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NombreFirmante")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("NumeroMemorando")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int>("SolicitudId")
                         .HasColumnType("int");
@@ -155,6 +174,76 @@ namespace HomologaUTA.Homologacion.Migrations
                         .IsUnique();
 
                     b.ToTable("DecisionesResolucion");
+                });
+
+            modelBuilder.Entity("HomologaUTA.Homologacion.Models.DelegacionDocente", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CoordinadorCorreo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("DocenteCedula")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DocenteCorreo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("DocenteCorreoInforme")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("EvaluacionesJson")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaDelegacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaRevision")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaSugerencia")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InformeTexto")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NombreDocente")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("SolicitudId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SugerenciaJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocenteCorreo");
+
+                    b.HasIndex("SolicitudId", "DocenteCorreo")
+                        .IsUnique();
+
+                    b.ToTable("DelegacionesDocente");
                 });
 
             modelBuilder.Entity("HomologaUTA.Homologacion.Models.MateriaAprobada", b =>

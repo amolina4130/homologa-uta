@@ -17,19 +17,22 @@ public class DocumentosController : ControllerBase
     private readonly DocumentosDbContext _db;
     private readonly ExtractorPdfService _extractor;
     private readonly EventPublisherService _eventPublisher;
+    private readonly CarpetaService? _carpetaService;
 
     public DocumentosController(
         IConfiguration config, 
         IWebHostEnvironment env, 
         DocumentosDbContext db, 
         ExtractorPdfService extractor,
-        EventPublisherService eventPublisher)
+        EventPublisherService eventPublisher,
+        CarpetaService? carpetaService = null)
     {
         _config = config;
         _env = env;
         _db = db;
         _extractor = extractor;
         _eventPublisher = eventPublisher;
+        _carpetaService = carpetaService;
     }
 
     [HttpPost]
@@ -93,6 +96,55 @@ public class DocumentosController : ControllerBase
         });
     }
 
+    // Procesa todos los PDF de una carpeta en una sola petición (sin IFormFile).
+    [HttpPost("carpeta")]
+    public async Task<IActionResult> ProcesarCarpeta([FromBody] CarpetaRequest request, CancellationToken ct)
+    {
+        try
+        {
+            if (_carpetaService is null)
+                return StatusCode(500, new { error = "El servicio de procesamiento de carpetas no está disponible." });
+
+            var resultado = await _carpetaService.ProcesarAsync(request, ct);
+            return Ok(resultado);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Error inesperado al procesar la carpeta.", detalle = ex.Message });
+        }
+    }
+
+    // Registra la URL de la carpeta compartida por el titular (solo homologación externa).
+    [HttpPost("url-externa")]
+    public async Task<IActionResult> RegistrarUrlExterna([FromBody] UrlExternaRequest request, CancellationToken ct)
+    {
+        try
+        {
+            if (_carpetaService is null)
+                return StatusCode(500, new { error = "El servicio de documentos no está disponible." });
+
+            var documento = await _carpetaService.RegistrarUrlExternaAsync(request, ct);
+            return Ok(new
+            {
+                mensaje = "URL externa registrada para la solicitud.",
+                documentos = new[] { documento },
+                total = 1
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = "Error inesperado al registrar la URL externa.", detalle = ex.Message });
+        }
+    }
+
     [HttpGet("solicitud/{solicitudId}")]
     public async Task<IActionResult> ObtenerDocumentosPorSolicitud(int solicitudId)
     {
@@ -105,16 +157,28 @@ public class DocumentosController : ControllerBase
 
         var documentos = await _db.Documentos
             .Where(d => d.SolicitudId == solicitudId && d.EstudianteId == estudianteId)
-            .Select(d => new { 
-                d.Id, 
-                d.TipoDocumento, 
-                d.NombreArchivo, 
-                d.Estado, 
-                d.FechaSubida 
-            })
             .ToListAsync();
 
-        return Ok(documentos);
+        var carpetaPdfs = Path.Combine(_env.ContentRootPath, "pdfs");
+        var resultado = documentos.Select(d =>
+        {
+            var rutaCompleta = Path.Combine(carpetaPdfs, d.NombreArchivo);
+            long? tamanoBytes = System.IO.File.Exists(rutaCompleta)
+                ? new FileInfo(rutaCompleta).Length
+                : null;
+
+            return new
+            {
+                d.Id,
+                d.TipoDocumento,
+                d.NombreArchivo,
+                d.Estado,
+                d.FechaSubida,
+                TamanoBytes = tamanoBytes
+            };
+        }).ToList();
+
+        return Ok(resultado);
     }
 
     // --- ENDPOINT DEFINITIVO Y A PRUEBA DE BALAS ---

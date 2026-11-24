@@ -36,7 +36,7 @@ public class ResolucionController : ControllerBase
 
         if (!AutorizacionHomologacion.PuedeRegistrarResolucion(User))
             return StatusCode(StatusCodes.Status403Forbidden,
-                new { mensaje = "Solo el Consejo Directivo o el Coordinador pueden registrar la resolución." });
+                new { mensaje = "Solo el Coordinador puede registrar la resolución." });
 
         var usuario = AutorizacionHomologacion.Correo(User) ?? "consejo@homologauta";
 

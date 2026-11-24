@@ -17,11 +17,10 @@ public class AuthDbContext : DbContext
             e.Property(r => r.Nombre).IsRequired().HasMaxLength(50);
             e.HasIndex(r => r.Nombre).IsUnique();
             e.HasData(
-                new Rol { Id = 1, Nombre = "ESTUDIANTE" },
+                new Rol { Id = 1, Nombre = "COMITE" },
                 new Rol { Id = 2, Nombre = "COORDINADOR" },
-                new Rol { Id = 3, Nombre = "SECRETARIA" },
-                new Rol { Id = 4, Nombre = "CONSEJO" },
-                new Rol { Id = 5, Nombre = "ADMINISTRADOR" });
+                new Rol { Id = 3, Nombre = "DOCENTE" },
+                new Rol { Id = 4, Nombre = "ADMINISTRADOR" });
         });
 
         modelBuilder.Entity<Usuario>(e =>
@@ -30,6 +29,10 @@ public class AuthDbContext : DbContext
             e.Property(u => u.Correo).IsRequired().HasMaxLength(150);
             e.HasIndex(u => u.Correo).IsUnique();
             e.Property(u => u.PasswordHash).IsRequired();
+            e.Property(u => u.Tipo).HasMaxLength(80).HasDefaultValue("");
+            e.Property(u => u.Titulo).HasMaxLength(80).HasDefaultValue("");
+            e.Property(u => u.Cedula).HasMaxLength(50).HasDefaultValue("");
+            e.Property(u => u.Telefono).HasMaxLength(50).HasDefaultValue("");
             e.HasOne(u => u.Rol)
              .WithMany(r => r.Usuarios)
              .HasForeignKey(u => u.RolId);

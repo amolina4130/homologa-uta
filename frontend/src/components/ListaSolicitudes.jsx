@@ -27,7 +27,9 @@ export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
               <tr>
                 <th>N° de proceso</th>
                 <th>Fecha de registro</th>
-                <th>Estudiante</th>
+                <th>Titular (récord)</th>
+                <th>Registrado por</th>
+                <th>Modalidad</th>
                 <th>Tipo</th>
                 <th>Carreras</th>
                 <th className="text-center">Asignaturas</th>
@@ -38,9 +40,9 @@ export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
             </thead>
             <tbody>
               {cargando ? (
-                <tr><td colSpan="9" className="text-center py-4">Cargando solicitudes...</td></tr>
+                <tr><td colSpan="11" className="text-center py-4">Cargando solicitudes...</td></tr>
               ) : solicitudes.length === 0 ? (
-                <tr><td colSpan="9" className="text-center py-4">No hay solicitudes pendientes.</td></tr>
+                <tr><td colSpan="11" className="text-center py-4">No hay solicitudes pendientes.</td></tr>
               ) : (
                 solicitudes.map((sol) => {
                   const idSolicitud = sol.solicitudId;
@@ -53,7 +55,22 @@ export default function ListaSolicitudes({ solicitudes, cargando, onAbrir }) {
                     <tr key={idSolicitud}>
                       <td className="fw-bold">{numero}</td>
                       <td>{formatoFecha(sol.fecha)}</td>
-                      <td>{sol.estudiante}</td>
+                      <td>
+                        <span className="fw-semibold">{sol.estudiante || "-"}</span>
+                        <div className="small text-muted">
+                          C.I.: {sol.estudianteCedula || "-"}
+                        </div>
+                      </td>
+                      <td>{sol.comiteCorreo || "-"}</td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            sol.modulo === "EXTERNO" ? "bg-info text-dark" : "bg-primary"
+                          }`}
+                        >
+                          {sol.modulo || "INTERNO"}
+                        </span>
+                      </td>
                       <td>{sol.tipo}</td>
                       <td>{origen} → {destino}</td>
                       <td className="text-center">

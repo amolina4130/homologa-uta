@@ -8,11 +8,17 @@ using UglyToad.PdfPig;
 namespace HomologaUTA.Solicitudes.Services;
 
 /// <summary>
-/// Carga masiva de planes analíticos desde PDF (HU-13). El nombre del archivo (o el texto
-/// del PDF) debe contener el nombre de una asignatura del catálogo.
+/// Carga masiva de contenido académico desde PDF (planes analíticos y sílabos). El nombre
+/// del archivo (o el texto del PDF) debe contener el nombre de una asignatura del catálogo.
+/// Los planes de demostración se reemplazan automáticamente; los planes reales solo se
+/// sobrescriben cuando se envía <c>reemplazar=true</c>. Los sílabos se anexan al contenido
+/// de la asignatura para que el agente interno los vea junto al plan.
 /// </summary>
 public class CargaPlanesService
 {
+    private const int MaxContenido = 20000;
+    private const string PrefijoDemo = "Plan analítico de ";
+
     private readonly SolicitudesDbContext _db;
 
     public CargaPlanesService(SolicitudesDbContext db)
@@ -20,11 +26,20 @@ public class CargaPlanesService
         _db = db;
     }
 
-    public async Task<ResultadoCargaPlanes> CargarAsync(IEnumerable<IFormFile> archivos, CancellationToken ct = default)
+    public async Task<ResultadoCargaPlanes> CargarAsync(
+        IEnumerable<IFormFile> archivos,
+        bool reemplazar = false,
+        int? carreraId = null,
+        CancellationToken ct = default)
     {
         var resultado = new ResultadoCargaPlanes();
-        var asignaturas = await _db.Asignaturas.AsNoTracking().ToListAsync(ct);
-        var conPlan = (await _db.PlanesAnaliticos.Select(p => p.AsignaturaId).ToListAsync(ct)).ToHashSet();
+        var consulta = _db.Asignaturas.AsNoTracking();
+        if (carreraId is > 0)
+            consulta = consulta.Where(a => a.CarreraId == carreraId.Value);
+
+        var asignaturas = await consulta.ToListAsync(ct);
+        var planes = await _db.PlanesAnaliticos.ToDictionaryAsync(p => p.AsignaturaId, ct);
+        var pendientes = new Dictionary<int, Acumulado>();
 
         foreach (var archivo in archivos)
         {
@@ -71,23 +86,69 @@ public class CargaPlanesService
                 continue;
             }
 
-            if (conPlan.Contains(asignatura.Id))
+            var esSilabo = EsSilabo(archivo.FileName);
+            var existe = planes.TryGetValue(asignatura.Id, out var planExistente);
+            var reemplazaDemo = existe && EsDemo(planExistente!.Contenido);
+
+            if (existe && !reemplazaDemo && !reemplazar && !esSilabo)
             {
                 resultado.Omitidos.Add(new ArchivoOmitido(archivo.FileName,
-                    $"La asignatura '{asignatura.Nombre}' ya tiene un plan analítico vigente."));
+                    $"La asignatura '{asignatura.Nombre}' ya tiene un plan real. Envíe reemplazar=true para sobrescribirlo."));
                 continue;
             }
 
-            _db.PlanesAnaliticos.Add(new PlanAnalitico
+            if (!pendientes.TryGetValue(asignatura.Id, out var acumulado))
             {
-                AsignaturaId = asignatura.Id,
-                Contenido = Recortar(texto.Trim(), 20000),
-                ResultadosAprendizaje = ExtraerResultados(texto),
-                FechaCarga = DateTime.UtcNow
-            });
-            conPlan.Add(asignatura.Id);
-            resultado.Cargados++;
+                acumulado = new Acumulado
+                {
+                    Plan = existe ? planExistente : null,
+                    Contenido = existe && !reemplazaDemo && !reemplazar
+                        ? planExistente!.Contenido
+                        : string.Empty
+                };
+                pendientes[asignatura.Id] = acumulado;
+            }
+
+            var nombreArchivo = Path.GetFileName(archivo.FileName);
+            var bloque = esSilabo
+                ? $"--- SÍLABO ({nombreArchivo}) ---\n{Recortar(texto.Trim(), MaxContenido)}"
+                : $"--- PLAN ANALÍTICO ({nombreArchivo}) ---\n{Recortar(texto.Trim(), MaxContenido)}";
+
+            if (!acumulado.Contenido.Contains(bloque, StringComparison.Ordinal))
+                acumulado.Contenido = Recortar(
+                    acumulado.Contenido.Length == 0
+                        ? bloque
+                        : $"{acumulado.Contenido}\n\n{bloque}",
+                    MaxContenido);
+
+            if (esSilabo)
+                acumulado.Silabos++;
+            else
+                acumulado.Planes++;
+
+            if (reemplazaDemo || reemplazar)
+                acumulado.Reemplazado = true;
         }
+
+        foreach (var (asignaturaId, acumulado) in pendientes)
+        {
+            var plan = acumulado.Plan;
+            if (plan is null)
+            {
+                plan = new PlanAnalitico { AsignaturaId = asignaturaId };
+                _db.PlanesAnaliticos.Add(plan);
+            }
+
+            plan.Contenido = acumulado.Contenido.Trim();
+            plan.ResultadosAprendizaje = Recortar(ExtraerResultados(plan.Contenido), 4000);
+            plan.FechaCarga = DateTime.UtcNow;
+            planes[asignaturaId] = plan;
+        }
+
+        resultado.Cargados = pendientes.Count;
+        resultado.Planes = pendientes.Values.Sum(v => v.Planes);
+        resultado.Silabos = pendientes.Values.Sum(v => v.Silabos);
+        resultado.Reemplazados = pendientes.Values.Count(v => v.Reemplazado);
 
         if (resultado.Cargados > 0)
             await _db.SaveChangesAsync(ct);
@@ -117,6 +178,15 @@ public class CargaPlanesService
             .FirstOrDefault();
     }
 
+    private static bool EsSilabo(string nombreArchivo)
+    {
+        var nombre = Normalizar(Path.GetFileNameWithoutExtension(nombreArchivo));
+        return nombre.Contains("silabo") || nombre.Contains("syllabus");
+    }
+
+    private static bool EsDemo(string? contenido) =>
+        contenido?.StartsWith(PrefijoDemo, StringComparison.OrdinalIgnoreCase) == true;
+
     private static string ExtraerResultados(string texto)
     {
         var indice = texto.IndexOf("resultado", StringComparison.OrdinalIgnoreCase);
@@ -142,11 +212,23 @@ public class CargaPlanesService
 
     private static string Recortar(string texto, int max) =>
         texto.Length <= max ? texto : texto[..max];
+
+    private sealed class Acumulado
+    {
+        public PlanAnalitico? Plan { get; init; }
+        public string Contenido { get; set; } = string.Empty;
+        public int Planes { get; set; }
+        public int Silabos { get; set; }
+        public bool Reemplazado { get; set; }
+    }
 }
 
 public class ResultadoCargaPlanes
 {
     public int Cargados { get; set; }
+    public int Planes { get; set; }
+    public int Silabos { get; set; }
+    public int Reemplazados { get; set; }
     public List<ArchivoOmitido> Omitidos { get; set; } = new();
 }
 

@@ -2,10 +2,32 @@ import { useState, useEffect } from "react";
 
 const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
 
-const PENDIENTES = [
-  { nombre: "RabbitMQ", puerto: 5672, pendiente: true },
-  { nombre: "Ollama (agente)", puerto: 11434, pendiente: true },
-];
+async function obtenerJson(ruta) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${GATEWAY_URL}${ruta}`, { signal: controller.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function filaSalud(ruta, nombre, puerto) {
+  const inicio = performance.now();
+  const data = await obtenerJson(ruta);
+  if (!data) return { nombre, puerto, enLinea: false, ms: null };
+
+  return {
+    nombre,
+    puerto,
+    enLinea: Boolean(data.enLinea),
+    ms: typeof data.ms === "number" ? data.ms : Math.round(performance.now() - inicio),
+  };
+}
 
 export default function EstadoSistema() {
   const [filas, setFilas] = useState([]);
@@ -16,31 +38,24 @@ export default function EstadoSistema() {
     const frontend = { nombre: "Frontend (React)", puerto: 3000, enLinea: true, ms: 8 };
     const sqlServer = { nombre: "SQL Server", puerto: 1433, enLinea: true, ms: 9 };
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`${GATEWAY_URL}/health`, { signal: controller.signal });
-      clearTimeout(timeout);
-      const data = await res.json();
+    // Ollama y RabbitMQ se consultan en paralelo al Gateway (rutas /salud anónimas).
+    const [health, ollama, rabbitmq] = await Promise.all([
+      obtenerJson("/health"),
+      filaSalud("/salud/ollama", "Ollama (agente)", 11434),
+      filaSalud("/salud/rabbitmq", "RabbitMQ", 5672),
+    ]);
 
-      const servicios = (data.componentes ?? []).map((s) => ({
-        nombre: s.nombre,
-        puerto: s.puerto,
-        enLinea: s.estado === "EN_LINEA",
-        ms: s.estado === "EN_LINEA" ? s.respuestaMs : null,
-      }));
+    const servicios = health
+      ? (health.componentes ?? []).map((s) => ({
+          nombre: s.nombre,
+          puerto: s.puerto,
+          enLinea: s.estado === "EN_LINEA",
+          ms: s.estado === "EN_LINEA" ? s.respuestaMs : null,
+        }))
+      : [{ nombre: "API Gateway (YARP)", puerto: 8080, enLinea: false, ms: null }];
 
-      setFilas([frontend, ...servicios, sqlServer, ...PENDIENTES]);
-    } catch {
-      setFilas([
-        frontend,
-        { nombre: "API Gateway (YARP)", puerto: 8080, enLinea: false, ms: null },
-        sqlServer,
-        ...PENDIENTES,
-      ]);
-    } finally {
-      setCargando(false);
-    }
+    setFilas([frontend, ...servicios, sqlServer, ollama, rabbitmq]);
+    setCargando(false);
   }
 
   useEffect(() => {
@@ -50,7 +65,6 @@ export default function EstadoSistema() {
 
   // Función auxiliar para pintar el estado con los colores de Bootstrap
   const renderEstado = (f) => {
-    if (f.pendiente) return <span className="badge bg-secondary">⏳ Sprint 2</span>;
     if (f.enLinea) return <span className="badge bg-success">🟢 En línea</span>;
     return <span className="badge bg-danger">🔴 Sin respuesta</span>;
   };

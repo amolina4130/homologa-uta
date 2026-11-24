@@ -5,9 +5,12 @@ Propuesta para confirmar en la tarea TA-01.1. Todo pasa por el **API Gateway** (
 | Prefijo en el Gateway | Servicio |
 |---|---|
 | `/health` | Gateway (consulta a los demás) |
+| `/salud` | Homologación (estado real de Ollama y RabbitMQ, público) |
 | `/auth` | Autenticación |
 | `/carreras` | Solicitudes (catálogo) |
 | `/solicitudes` | Solicitudes |
+| `/documentos` | Documentos (carga de PDF y carpetas) |
+| `/planes-analiticos`, `/memoria` | Solicitudes (catálogo y memoria del agente) |
 | `/homologacion` | Homologación (validación de reglas) |
 
 ## Resumen
@@ -17,13 +20,33 @@ Propuesta para confirmar en la tarea TA-01.1. Todo pasa por el **API Gateway** (
 | `POST /auth/login` | Público | HU-02 | M-02 |
 | `GET /carreras` | Autenticado | HU-03 | M-03, M-04 |
 | `GET /carreras/{id}/asignaturas` | Autenticado | HU-03 | M-03, M-04 |
-| `POST /solicitudes` | ESTUDIANTE | HU-04 | M-04 |
-| `GET /solicitudes/mias` | ESTUDIANTE | HU-04 | Pestaña Mis solicitudes |
+| `POST /solicitudes` | COMITE, COORDINADOR o ADMINISTRADOR | HU-04 | M-04 |
+| `GET /solicitudes/mias` | COMITE, COORDINADOR o ADMINISTRADOR | HU-04 | Pestaña Mis solicitudes |
 
-Los endpoints de documentos (`POST` y `GET /solicitudes/{id}/documentos`) pasan al Sprint 2.
+Los endpoints de documentos (`POST` y `GET /solicitudes/{id}/documentos`) están disponibles bajo la política `gestor`; la descarga de PDFs permanece pública.
+
+Carga por carpeta y catálogo del agente interno:
+
+| Método y ruta | Acceso | Descripción |
+|---|---|---|
+| `POST /documentos/carpeta` | `gestor` | Procesa todos los PDF de una carpeta. Acepta rutas relativas a `./documentos` o la ruta real de `Descargas` (`C:/Users/Usuario/Downloads/...`), montada en solo lectura. |
+| `POST /planes-analiticos/carga` | `ADMINISTRADOR` | Carga planes analíticos PDF y los asocia por nombre a las asignaturas del catálogo. |
+| `POST /memoria/carga` | `ADMINISTRADOR` | Reconstruye la memoria del agente interno con el catálogo vigente. |
+| `GET /memoria/estado` | `ADMINISTRADOR` | Huella y fecha de la última carga de memoria. |
 
 ## Autenticación
 Cabecera `Authorization: Bearer <token>` en todo lo que no sea público. El JWT lleva `sub` (id), `email` y `rol`.
+
+Roles vigentes (ya no existen ESTUDIANTE, SECRETARIA ni CONSEJO):
+
+| Id | Rol | Uso en el Gateway |
+|---|---|---|
+| 1 | `COMITE` | Política `comite` y parte de `gestor` |
+| 2 | `COORDINADOR` | Política `coordinador` y parte de `gestor` |
+| 3 | `DOCENTE` | Política `docente` |
+| 4 | `ADMINISTRADOR` | Política `administrador` y parte de `gestor` |
+
+Usuarios semilla (contraseña `Demo123!`): `comite@uta.edu.ec`, `coordinador@uta.edu.ec`, `docente@uta.edu.ec`, `docente2@uta.edu.ec` y `admin@uta.edu.ec`.
 
 | Código | Cuándo |
 |---|---|
@@ -41,16 +64,30 @@ Respuesta `200`:
   ]
 }
 ```
-`estado`: `EN_LINEA` o `SIN_RESPUESTA`. RabbitMQ y Ollama no se consultan; la pantalla los muestra fijos como "Sprint 2".
+`estado`: `EN_LINEA` o `SIN_RESPUESTA`.
+
+Ollama y RabbitMQ **sí se consultan** en tiempo real desde el panel de estado; el Gateway enruta estas dos rutas de forma anónima al servicio de Homologación.
+
+### GET /salud/ollama
+`200` (también cuando Ollama está caído; en ese caso `enLinea` es `false`):
+```json
+{ "nombre": "Ollama (agente)", "enLinea": true, "modelo": "llama3", "detalle": "Ollama responde correctamente." }
+```
+
+### GET /salud/rabbitmq
+`200` (también cuando el puerto AMQP no responde):
+```json
+{ "nombre": "RabbitMQ", "enLinea": true, "puerto": 5672 }
+```
 
 ## POST /auth/login
 Petición:
 ```json
-{ "correo": "estudiante@uta.edu.ec", "contrasena": "..." }
+{ "correo": "comite@uta.edu.ec", "contrasena": "Demo123!" }
 ```
 `200`:
 ```json
-{ "token": "eyJ...", "correo": "estudiante@uta.edu.ec", "rol": "ESTUDIANTE" }
+{ "token": "eyJ...", "correo": "comite@uta.edu.ec", "rol": "COMITE" }
 ```
 `401` (mismo mensaje para cualquier credencial incorrecta):
 ```json
@@ -90,15 +127,15 @@ Petición:
 ```json
 { "errores": { "tipo": "Seleccione un tipo de solicitud", "carreraDestinoId": "El destino debe ser distinto del origen" } }
 ```
-Reglas: todos los campos son obligatorios, al menos una asignatura, origen distinto de destino. El estudiante se toma del JWT.
+Reglas: todos los campos son obligatorios, al menos una asignatura, origen distinto de destino. El usuario se toma del JWT.
 
 ## GET /solicitudes/mias
-`200`, solo las solicitudes del estudiante autenticado:
+`200`, solo las solicitudes del usuario autenticado:
 ```json
 [ { "id": 3, "numero": "0003", "fecha": "2026-10-20", "tipo": "CAMBIO_CARRERA", "origen": "Software", "destino": "Industrial", "estado": "REGISTRADA" } ]
 ```
 
-## Endpoints del Sprint 2 (Coordinador)
+## Endpoints de Coordinación (HU-10)
 
 | Método y ruta | Acceso | Historia | Pantalla |
 |---|---|---|---|
@@ -152,7 +189,7 @@ Solicitudes en `PENDIENTE_REVISION`, las más antiguas primero.
   {
     "solicitudId": 2,
     "fecha": "2026-11-02T10:15:00",
-    "estudiante": "estudiante@uta.edu.ec",
+    "estudiante": "docente@uta.edu.ec",
     "tipo": "Homologación",
     "carreraOrigen": "Ingeniería en Software",
     "carreraDestino": "Ingeniería Industrial",
@@ -172,7 +209,7 @@ Detalle de la solicitud con la propuesta del agente por asignatura. El `id` de c
   "solicitudId": 2,
   "estado": "PENDIENTE_REVISION",
   "fecha": "2026-11-02T10:15:00",
-  "estudiante": "estudiante@uta.edu.ec",
+  "estudiante": "docente@uta.edu.ec",
   "tipo": "Homologación",
   "carreraOrigen": "Ingeniería en Software",
   "carreraDestino": "Ingeniería Industrial",
@@ -246,7 +283,7 @@ Devuelve el historial de cambios de estado de una solicitud, ordenado por fecha.
     "id": 1,
     "estadoAnterior": null,
     "estadoNuevo": "REGISTRADA",
-    "usuario": "estudiante@uta.edu.ec",
+    "usuario": "docente@uta.edu.ec",
     "fecha": "2026-11-03T19:55:00Z"
   }
 ]
@@ -256,3 +293,55 @@ Devuelve el historial de cambios de estado de una solicitud, ordenado por fecha.
 ```json
 { "error": "Solicitud no encontrada." }
 ```
+
+## Flujo del Docente (M-09)
+
+El Coordinador delega hasta dos Docentes por solicitud. Cada Docente genera un borrador de
+sugerencia con IA, lo revisa y lo envía manualmente; el primero que envía deja la delegación en
+`REVISADO` y habilita el informe final del Coordinador para el Consejo Directivo.
+
+| Método y ruta | Acceso | Descripción |
+|---|---|---|
+| `POST /homologacion/recomendacion-carrera` | Gestor | Ayuda del agente interno al elegir carrera, sin solicitud ni delegación |
+| `POST /homologacion/docente/{id}/sugerencia` | DOCENTE | Genera/guarda el borrador; **no envía** nada |
+| `GET /homologacion/docente/{id}/recomendacion` | DOCENTE | Recomendación IA solo para solicitudes `INTERNO` |
+| `POST /homologacion/docente/{id}/evaluar` | DOCENTE | Envía manualmente el informe al Coordinador |
+| `GET /homologacion/docente/{id}/informe` | DOCENTE | PDF del informe sugerido guardado |
+
+Los cuerpos de `sugerencia` y `evaluar` aceptan estos datos editables del firmante, que se
+imprimen en el informe y en el PDF:
+
+```json
+{
+  "nombreDocente": "Ing. María Pérez",
+  "docenteCedula": "1800000001",
+  "docenteCorreoInforme": "docente@uta.edu.ec",
+  "informeTexto": "Texto del informe corregido a mano (opcional)",
+  "observacionGeneral": "Observación del Docente",
+  "asignaturas": [
+    { "asignaturaId": 1, "homologable": true, "justificacion": "Coincidencia de contenidos" }
+  ]
+}
+```
+
+`informeTexto` sustituye al texto de plantilla cuando se envía; si no se envía, se usa el texto
+generado en `sugerencia`. El estado de la delegación sigue siendo `PENDIENTE` mientras no se
+llame a `evaluar`.
+
+### POST /homologacion/recomendacion-carrera
+
+Petición:
+```json
+{
+  "carreraOrigenId": 3,
+  "carreraDestinoId": 2,
+  "asignaturasOrigenIds": [87, 88]
+}
+```
+
+`asignaturasOrigenIds` es opcional: si se omite se recomienda sobre todo el catálogo de la
+carrera origen. La respuesta incluye `disponible`, `huellaMemoria`, `motivo` y `recomendaciones`
+con `asignaturaOrigen`, `asignaturaDestino`, `homologable`, `porcentajeContenido`, créditos y
+horas. Usa mallas y planes analíticos reales cargados en memoria: sin `asignaturasOrigenIds`
+responde de inmediato con el catálogo; con asignaturas marcadas consulta a Ollama y aplica un
+fallback determinista si el modelo no responde.

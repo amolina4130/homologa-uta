@@ -95,6 +95,7 @@ builder.Services.AddScoped<AnalisisExternoService>();
 // Endpoints del Coordinador (TA-10.2): consulta a Solicitudes y su servicio
 builder.Services.AddHttpClient<SolicitudesClient>();
 builder.Services.AddScoped<CoordinadorService>();
+builder.Services.AddScoped<DocenteService>();
 
 // 8. Sprint 3: memoria del agente, preselección, récord, materias aprobadas,
 // resolución del Consejo e informe PDF (HU-17 a HU-22).

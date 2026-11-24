@@ -77,8 +77,8 @@ export default function EditarSolicitud() {
   // Asignaturas de la carrera de origen.
   useEffect(() => {
     if (!origen) {
-      setAsignaturasDisponibles([]);
-      return;
+      const timer = setTimeout(() => setAsignaturasDisponibles([]), 0);
+      return () => clearTimeout(timer);
     }
 
     let activo = true;
@@ -171,6 +171,7 @@ export default function EditarSolicitud() {
         <div className="card shadow-sm border-0">
           <div className="card-header bg-secondary text-white">
             <h4 className="mb-0 fw-bold">Editar solicitud {numero}</h4>
+            <small className="d-block fw-normal">Solicitud registrada desde el sistema</small>
           </div>
           <div className="card-body">
             <div className="alert alert-warning mb-3">
@@ -193,22 +194,32 @@ export default function EditarSolicitud() {
           <div className="card shadow-sm border-0">
             <div className="card-header bg-primary text-white">
               <h4 className="mb-0 fw-bold">Editar solicitud {numero}</h4>
+              <small className="d-block fw-normal">Solicitud registrada desde el sistema</small>
             </div>
             <div className="card-body p-4">
               <form onSubmit={guardar} noValidate>
                 <div className="mb-4">
-                  <label htmlFor="modulo" className="form-label fw-bold">
-                    Módulo de análisis
-                  </label>
-                  <select
-                    id="modulo"
-                    className="form-select"
-                    value={modulo}
-                    onChange={(e) => setModulo(e.target.value)}
-                  >
-                    <option value="INTERNO">Agente interno (UTA)</option>
-                    <option value="EXTERNO">Agente externo (otra universidad)</option>
-                  </select>
+                  <label className="form-label fw-bold">Modalidad de homologación</label>
+                  <div className="btn-group w-100" role="group" aria-label="Modalidad de homologación">
+                    <button
+                      type="button"
+                      className={`btn btn-outline-primary ${modulo === "INTERNO" ? "active" : ""}`}
+                      onClick={() => setModulo("INTERNO")}
+                    >
+                      INTERNO · Agente UTA
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-outline-primary ${modulo === "EXTERNO" ? "active" : ""}`}
+                      onClick={() => setModulo("EXTERNO")}
+                    >
+                      EXTERNO · Otra universidad
+                    </button>
+                  </div>
+                  <div className="form-text">
+                    El récord académico se entrega en ambas modalidades y es la fuente de los datos
+                    del titular.
+                  </div>
                 </div>
 
                 {modulo === "EXTERNO" && (

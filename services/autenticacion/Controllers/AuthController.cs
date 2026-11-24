@@ -2,9 +2,11 @@ using HomologaUTA.Autenticacion.Data;
 using HomologaUTA.Autenticacion.DTOs;
 using HomologaUTA.Autenticacion.Models;
 using HomologaUTA.Autenticacion.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace HomologaUTA.Autenticacion.Controllers;
 
@@ -49,12 +51,75 @@ public class AuthController : ControllerBase
                 ? usuario.Correo.Split('@')[0]
                 : usuario.Nombre,
             Correo = usuario.Correo,
-            Rol = usuario.Rol.Nombre
+            Rol = usuario.Rol.Nombre,
+            Tipo = usuario.Tipo,
+            Titulo = usuario.Titulo,
+            Cedula = usuario.Cedula,
+            Telefono = usuario.Telefono
+        });
+    }
+
+    /// <summary>Guarda el perfil editable del usuario en sesión. No cambia correo, rol ni contraseña.</summary>
+    [Authorize]
+    [HttpPut("perfil")]
+    [ProducesResponseType(typeof(PerfilResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ActualizarPerfil([FromBody] PerfilRequest? request)
+    {
+        var correo = User.FindFirstValue("email")
+                     ?? User.FindFirstValue(ClaimTypes.Email)
+                     ?? User.FindFirstValue("sub");
+
+        if (string.IsNullOrWhiteSpace(correo))
+            return Unauthorized(new { mensaje = "No se pudo identificar al usuario." });
+
+        var usuario = await _db.Usuarios
+            .Include(u => u.Rol)
+            .FirstOrDefaultAsync(u => u.Correo == correo);
+
+        if (usuario is null)
+            return NotFound(new { mensaje = "Usuario no encontrado." });
+
+        var nombre = request?.Nombre?.Trim();
+        if (!string.IsNullOrWhiteSpace(nombre))
+        {
+            if (nombre.Length > 200)
+                return BadRequest(new { mensaje = "El nombre no puede superar los 200 caracteres." });
+            usuario.Nombre = nombre;
+        }
+
+        var campos = new (string? Valor, int Maximo, Action<Usuario, string> Asignar)[]
+        {
+            (request?.Tipo, 80, (u, v) => u.Tipo = v),
+            (request?.Titulo, 80, (u, v) => u.Titulo = v),
+            (request?.Cedula, 50, (u, v) => u.Cedula = v),
+            (request?.Telefono, 50, (u, v) => u.Telefono = v)
+        };
+
+        foreach (var (valor, maximo, asignar) in campos)
+        {
+            var texto = valor?.Trim() ?? string.Empty;
+            if (texto.Length > maximo)
+                return BadRequest(new { mensaje = $"El campo no puede superar los {maximo} caracteres." });
+            asignar(usuario, texto);
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new PerfilResponse
+        {
+            Id = usuario.Id,
+            Nombre = usuario.Nombre,
+            Correo = usuario.Correo,
+            Rol = usuario.Rol.Nombre,
+            Tipo = usuario.Tipo,
+            Titulo = usuario.Titulo,
+            Cedula = usuario.Cedula,
+            Telefono = usuario.Telefono
         });
     }
 
     /// <summary>
-    /// Registra una cuenta nueva. El rol siempre es Estudiante, el correo debe ser único y la
+    /// Registra una cuenta nueva de Comité o Docente. El correo debe ser único y la
     /// contraseña se guarda con hash (HU-12).
     /// </summary>
     [HttpPost("registro")]
@@ -86,12 +151,19 @@ public class AuthController : ControllerBase
         if (await _db.Usuarios.AnyAsync(u => u.Correo == correo))
             return Conflict(new { mensaje = "El correo ya está registrado. Inicie sesión o use otro correo." });
 
+        var rolSolicitado = (request?.Rol ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(rolSolicitado))
+            rolSolicitado = "COMITE";
+
+        if (rolSolicitado != "COMITE" && rolSolicitado != "DOCENTE")
+            return BadRequest(new { mensaje = "El rol debe ser COMITE o DOCENTE." });
+
         var rol = await _db.Roles.FirstOrDefaultAsync(r =>
-            r.Nombre == "ESTUDIANTE" || r.Nombre == "Estudiante");
+            r.Nombre.ToUpper() == rolSolicitado);
 
         if (rol is null)
             return StatusCode(StatusCodes.Status500InternalServerError,
-                new { mensaje = "El rol Estudiante no está configurado en el sistema." });
+                new { mensaje = $"El rol {rolSolicitado} no está configurado en el sistema." });
 
         var usuario = new Usuario
         {
@@ -109,7 +181,7 @@ public class AuthController : ControllerBase
             Id = usuario.Id,
             Nombre = usuario.Nombre,
             Correo = usuario.Correo,
-            Rol = "Estudiante"
+            Rol = rolSolicitado
         });
     }
 }
