@@ -29,6 +29,26 @@ public class ResultadoAgente
     /// Si el agente no las devuelve se usa la materia de origen de la entrada.
     /// </summary>
     public List<string>? MateriasOrigen { get; set; }
+
+    /// <summary>Temas coincidentes entre los sílabos (no lo llena el modelo: sale del cálculo).</summary>
+    [JsonIgnore]
+    public List<string> Coincidencias { get; set; } = new();
+
+    /// <summary>Temas del destino que no están en el origen.</summary>
+    [JsonIgnore]
+    public List<string> Diferencias { get; set; } = new();
+
+    /// <summary>Datos que no estaban disponibles para comparar (no se inventan).</summary>
+    [JsonIgnore]
+    public List<string> DatosFaltantes { get; set; } = new();
+
+    /// <summary>true cuando no se conocían las horas de alguna de las dos asignaturas.</summary>
+    [JsonIgnore]
+    public bool SinDatoHoras { get; set; }
+
+    /// <summary>Regla institucional que decidió la fila antes de cualquier porcentaje (si aplica).</summary>
+    [JsonIgnore]
+    public string? ReglaExclusion { get; set; }
 }
 
 public class AgenteInterno
@@ -181,8 +201,47 @@ public class AgenteInterno
     }
 
     /// <summary>
-    /// Comparación determinista con la memoria del agente. Se usa siempre en el análisis del
-    /// registro y como respaldo cuando el modelo no responde a tiempo.
+    /// Comparación con las mallas y los sílabos registrados (método de cálculo definido en
+    /// <see cref="ComparadorSilabos"/>). Es la que usa el análisis de la solicitud: determinista,
+    /// inmediata y con coincidencias y diferencias explícitas para el docente.
+    /// </summary>
+    public static ResultadoAgente CompararSilabos(
+        string asignaturaOrigen, string? contenidoOrigen, string? resultadosOrigen, int? horasOrigen,
+        string asignaturaDestino, string? contenidoDestino, string? resultadosDestino, int? horasDestino)
+    {
+        var c = ComparadorSilabos.Comparar(
+            contenidoOrigen, resultadosOrigen, horasOrigen,
+            contenidoDestino, resultadosDestino, horasDestino);
+
+        var partes = new List<string>
+        {
+            $"El sílabo de {asignaturaOrigen.Trim()} cubre el {c.Contenido}% de los temas de {asignaturaDestino.Trim()}",
+            $"el {c.Profundidad}% de sus resultados de aprendizaje"
+        };
+        partes.Add(c.Horas.HasValue
+            ? $"y el {c.Horas}% de su carga horaria ({horasOrigen} h de {horasDestino} h)"
+            : "y no se dispone de las horas de ambas asignaturas para comparar la carga horaria");
+
+        return new ResultadoAgente
+        {
+            Contenido = c.Contenido,
+            Profundidad = c.Profundidad,
+            Horas = c.Horas ?? 0,
+            SinDatoHoras = !c.Horas.HasValue,
+            Justificacion = string.Join(", ", partes) + ".",
+            RequiereRevision = false,
+            MateriasOrigen = asignaturaOrigen
+                .Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList(),
+            Coincidencias = c.Coincidencias,
+            Diferencias = c.Diferencias,
+            DatosFaltantes = c.DatosFaltantes
+        };
+    }
+
+    /// <summary>
+    /// Comparación determinista con la memoria del agente. Se usa como respaldo cuando el
+    /// modelo no responde a tiempo.
     /// </summary>
     private static ResultadoAgente CalcularConMemoria(
         string asignaturaOrigen, string contenidoOrigen,

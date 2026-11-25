@@ -34,15 +34,16 @@ const RUTAS = {
   reglas: "/reglas",
   equivalencias: "/equivalencias",
   memoria: "/memoria",
+  planes: "/planes-analiticos",
 };
 
 // `desc` aparece debajo del nombre en los menús desplegables; `paso` numera las
 // etapas del proceso de revisión en el orden en que se hacen.
 const ITEMS = {
   inicio: { etiqueta: "Inicio", ruta: RUTAS.inicio },
-  nueva: { etiqueta: "Nueva solicitud", desc: "Datos, récord y envío a revisión, paso a paso", ruta: RUTAS.nueva },
+  nueva: { etiqueta: "Nueva solicitud", desc: "Documentos, datos del estudiante y asignación al docente", ruta: RUTAS.nueva },
   mis: { etiqueta: "Mis solicitudes", desc: "Ver el avance de las solicitudes registradas", ruta: RUTAS.mis },
-  evaluar: { etiqueta: "Revisión por el Docente", ruta: RUTAS.evaluar },
+  evaluar: { etiqueta: "Solicitudes asignadas", ruta: RUTAS.evaluar },
   delegar: { etiqueta: "Delegar a docentes", desc: "Asignar las solicitudes pendientes de revisión", ruta: RUTAS.delegar, paso: 1 },
   sugeridos: { etiqueta: "Sugerencias de docentes", desc: "Revisar lo que propusieron los docentes", ruta: RUTAS.sugeridos, paso: 2 },
   final: { etiqueta: "Informe final", desc: "Emitirlo y enviarlo al Comité (cierra el trámite)", ruta: RUTAS.final, paso: 3 },
@@ -50,6 +51,7 @@ const ITEMS = {
   estado: { etiqueta: "Estado del sistema", desc: "Disponibilidad de los servicios", ruta: RUTAS.estado },
   reglas: { etiqueta: "Reglas", desc: "Reglas de negocio de la homologación", ruta: RUTAS.reglas },
   equivalencias: { etiqueta: "Equivalencias", desc: "Asignaturas equivalentes entre carreras", ruta: RUTAS.equivalencias },
+  planes: { etiqueta: "Planes analíticos", desc: "Cargar el plan analítico (PDF) de una asignatura", ruta: RUTAS.planes },
   memoria: { etiqueta: "Memoria del agente", desc: "Estado del conocimiento del agente de IA", ruta: RUTAS.memoria },
 };
 
@@ -81,7 +83,7 @@ const MENUS = {
     {
       tipo: "grupo",
       etiqueta: "Gestión",
-      claves: ["estado", "reglas", "equivalencias", "memoria"],
+      claves: ["estado", "reglas", "equivalencias", "planes", "memoria"],
     },
     { tipo: "link", clave: "carreras" },
   ],

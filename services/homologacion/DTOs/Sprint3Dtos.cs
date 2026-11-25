@@ -26,6 +26,9 @@ public class MemoriaAsignaturaDto
     public int Creditos { get; set; }
     public int Horas { get; set; }
     public string ContenidosMinimos { get; set; } = string.Empty;
+
+    /// <summary>Resultados de aprendizaje del plan analítico; miden la profundidad.</summary>
+    public string ResultadosAprendizaje { get; set; } = string.Empty;
 }
 
 // ------------------------------------------------------------------
@@ -112,6 +115,9 @@ public class CandidataDestinoDto
     public string Nivel { get; set; } = string.Empty;
     public int NivelNumerico { get; set; }
     public string ContenidosMinimos { get; set; } = string.Empty;
+    public string ResultadosAprendizaje { get; set; } = string.Empty;
+    public int Horas { get; set; }
+    public int Creditos { get; set; }
 }
 
 public class MateriaSinCandidataDto

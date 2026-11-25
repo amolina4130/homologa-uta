@@ -79,8 +79,15 @@ public class ExtractorRecordService
             };
         }
 
-        ResultadoRecordAgente extraido;
-        try
+        // Récord en formato de tabla (UTA): se lee directo del texto, sin esperar al modelo.
+        // Ollama en CPU tarda varios minutos con un récord de 20+ materias.
+        ResultadoRecordAgente extraido = LectorRecordTabla.Leer(texto);
+        if (extraido.Materias.Count >= LectorRecordTabla.MinimoMaterias)
+        {
+            _logger.LogInformation(
+                "Récord {SolicitudId} leído por formato de tabla: {Total} materias", solicitudId, extraido.Materias.Count);
+        }
+        else try
         {
             extraido = await _agente.ExtraerAsync(texto, ct);
         }
@@ -108,6 +115,13 @@ public class ExtractorRecordService
         // en EXTERNO. Se guardan en Solicitudes para que el informe no use el correo del Comité.
         string? nombreTitular = null;
         string? cedulaTitular = null;
+        // Si el coordinador ya ingresó (y verificó) los datos del estudiante, se respetan: el récord
+        // solo completa lo que falte.
+        var sinNombre = string.IsNullOrWhiteSpace(info.EstudianteNombre) ||
+                        info.EstudianteNombre.Contains("sin identificar", StringComparison.OrdinalIgnoreCase);
+        var sinCedula = string.IsNullOrWhiteSpace(info.EstudianteCedula) || !info.EstudianteCedula.All(char.IsDigit);
+        if (!sinNombre) extraido.Nombre = null;
+        if (!sinCedula) extraido.Cedula = null;
         if (!string.IsNullOrWhiteSpace(extraido.Nombre) || !string.IsNullOrWhiteSpace(extraido.Cedula))
         {
             try

@@ -160,6 +160,9 @@ export default function InformeFinal() {
   const sugerenciaDocente = Object.fromEntries(
     (consolidado?.evaluacionesConsolidadas || []).map((e) => [e.asignaturaId, e.homologable])
   );
+  const justificacionDocente = Object.fromEntries(
+    (consolidado?.evaluacionesConsolidadas || []).map((e) => [e.asignaturaId, (e.justificacion || "").trim()])
+  );
   const contenidoDe = Object.fromEntries(
     (consolidado?.informeSugeridoAsignaturas || []).map((f) => [f.asignaturaId, f.contenido])
   );
@@ -181,6 +184,15 @@ export default function InformeFinal() {
       (a) => ![HOMOLOGABLE, NO_HOMOLOGABLE].includes(decisiones[a.id]?.decision) || !decisiones[a.id]?.observacion?.trim()
     ).length;
     if (faltan > 0) return `Falta la decisión o la observación de ${faltan} asignatura${faltan === 1 ? "" : "s"}.`;
+    // Trazabilidad: si cambia la decisión del docente, la justificación debe ser la suya propia.
+    const sinJustificarCambio = asignaturas.filter(
+      (a) =>
+        a.id in sugerenciaDocente &&
+        (decisiones[a.id]?.decision === HOMOLOGABLE) !== sugerenciaDocente[a.id] &&
+        (decisiones[a.id]?.observacion || "").trim().toLowerCase() === (justificacionDocente[a.id] || "").toLowerCase()
+    );
+    if (sinJustificarCambio.length > 0)
+      return `Cambió la decisión del docente en ${sinJustificarCambio.map((a) => a.asignaturaDestino).join(", ")}: escriba su propia justificación del cambio.`;
     return "";
   };
 
@@ -426,6 +438,7 @@ export default function InformeFinal() {
                             <thead>
                               <tr>
                                 <th>Asignatura</th>
+                                <th className="text-center">IA</th>
                                 <th className="text-center">Docente</th>
                                 <th className="text-center">Decisión final</th>
                                 <th>Observación *</th>
@@ -444,6 +457,28 @@ export default function InformeFinal() {
                                         → {a.asignaturaDestino}
                                         {contenidoDe[a.id] ? ` · ${contenidoDe[a.id]}` : ""}
                                       </div>
+                                    </td>
+                                    <td className="text-center">
+                                      <span
+                                        className={`badge rounded-pill ${
+                                          a.propuestaPor === "DOCENTE"
+                                            ? "bg-secondary-subtle text-secondary-emphasis"
+                                            : a.propuesta?.decision === "HOMOLOGABLE"
+                                              ? "bg-success-subtle text-success-emphasis"
+                                              : a.propuesta?.decision === "REQUIERE_REVISION"
+                                                ? "bg-warning-subtle text-warning-emphasis"
+                                                : "bg-danger-subtle text-danger-emphasis"
+                                        }`}
+                                        title={a.reglaAplicada || ""}
+                                      >
+                                        {a.propuestaPor === "DOCENTE"
+                                          ? "Docente"
+                                          : a.propuesta?.decision === "HOMOLOGABLE"
+                                            ? "Sí"
+                                            : a.propuesta?.decision === "REQUIERE_REVISION"
+                                              ? "Revisar"
+                                              : "No"}
+                                      </span>
                                     </td>
                                     <td className="text-center">
                                       {sug === undefined ? (
@@ -492,7 +527,9 @@ export default function InformeFinal() {
                           </table>
                         </div>
                         <p className="small text-muted mt-2 mb-0">
-                          Se precargó lo que sugirió el docente. Las filas en amarillo difieren de su sugerencia.
+                          Se precargó lo que decidió el docente. Las filas en amarillo difieren de su decisión: justifique el
+                          cambio con sus propias palabras (queda registrado). El informe final incluye solo las asignaturas
+                          que recomienda homologar.
                         </p>
                       </Paso>
 

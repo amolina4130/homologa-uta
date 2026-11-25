@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HomologaUTA.Homologacion.Clients;
+using HomologaUTA.Homologacion.Connectors;
 using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Models;
@@ -22,6 +23,7 @@ public class DocenteService
     private readonly SolicitudesClient _solicitudes;
     private readonly CoordinadorService _coordinador;
     private readonly OllamaClient _ollama;
+    private readonly IMemoriaClient _memoria;
     private readonly ILogger<DocenteService> _logger;
 
     public DocenteService(
@@ -29,13 +31,163 @@ public class DocenteService
         SolicitudesClient solicitudes,
         CoordinadorService coordinador,
         OllamaClient ollama,
-        ILogger<DocenteService> logger)
+        IMemoriaClient memoria,
+        ILogger<DocenteService> logger,
+        AnalisisService analisis,
+        AnalisisExternoService analisisExterno)
     {
         _db = db;
         _solicitudes = solicitudes;
         _coordinador = coordinador;
         _ollama = ollama;
+        _memoria = memoria;
         _logger = logger;
+        _analisis = analisis;
+        _analisisExterno = analisisExterno;
+    }
+
+    private readonly AnalisisService _analisis;
+    private readonly AnalisisExternoService _analisisExterno;
+
+    /// <summary>
+    /// El docente asignado genera con la IA el análisis de las materias aprobadas del récord
+    /// (agente interno o externo según la solicitud). Puede repetirlo mientras no envíe su informe.
+    /// </summary>
+    public async Task<DetalleDocenteDto> AnalizarAsync(int solicitudId, string? correo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(correo))
+            throw new InformeException(400, "No se pudo identificar al docente.");
+
+        var delegacion = await ObtenerDelegacionAsync(solicitudId, correo, ct)
+                         ?? throw new InformeException(404, "Usted no tiene una delegación en esta solicitud.");
+        await ValidarPuedeRevisarAsync(delegacion, solicitudId, correo, ct);
+
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
+                   ?? throw new InformeException(404, "Solicitud no encontrada.");
+        try
+        {
+            if (string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase))
+                await _analisisExterno.AnalizarSolicitudAsync(solicitudId, null, ct);
+            else
+                await _analisis.AnalizarSolicitudAsync(solicitudId, null, ct);
+        }
+        catch (AnalisisSolicitudException ex)
+        {
+            throw new InformeException(ex.StatusCode, ex.Message);
+        }
+        catch (Exception ex) when (ex is AgenteExternoTimeoutException or AgenteExternoException
+                                       or DocumentosNoDisponibleException)
+        {
+            throw new InformeException(502, $"No se pudo completar el análisis con la IA: {ex.Message}");
+        }
+
+        return await ObtenerDetalleAsync(solicitudId, correo, ct);
+    }
+
+    /// <summary>
+    /// El docente pide documentación adicional al Coordinador (p. ej. el sílabo de una materia
+    /// que no está en la malla). No envía la revisión: queda registrado en su delegación y el
+    /// Coordinador lo ve en la revisión de la solicitud.
+    /// </summary>
+    public async Task<DelegacionDto> SolicitarDocumentacionAsync(
+        int solicitudId, string? correo, SolicitarDocumentacionRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(correo))
+            throw new InformeException(400, "No se pudo identificar al docente.");
+        if (string.IsNullOrWhiteSpace(request?.Detalle))
+            throw new InformeException(400, "Indique qué documentación necesita.");
+
+        var delegacion = await ObtenerDelegacionAsync(solicitudId, correo, ct)
+                         ?? throw new InformeException(404, "Usted no tiene una delegación en esta solicitud.");
+        await ValidarPuedeRevisarAsync(delegacion, solicitudId, correo, ct);
+
+        delegacion.DocumentacionSolicitada = request.Detalle.Trim();
+        delegacion.FechaSolicitudDocumentacion = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return CoordinadorService.ConstruirDelegacionDto(delegacion);
+    }
+
+    /// <summary>
+    /// Agrega al análisis las propuestas del docente (PropuestaPor = DOCENTE). Las filas de la IA
+    /// no se tocan. Solo se aceptan materias aprobadas del récord y asignaturas de la malla destino.
+    /// Devuelve la evaluación de cada fila nueva para incluirla en el informe del docente.
+    /// </summary>
+    private async Task<List<EvaluacionAsignaturaDto>> AgregarPropuestasDocenteAsync(
+        int solicitudId, List<NuevaPropuestaDocenteDto> propuestas, CancellationToken ct)
+    {
+        if (propuestas.Count == 0) return new List<EvaluacionAsignaturaDto>();
+
+        var aprobadas = await _db.MateriasAprobadas.AsNoTracking()
+            .Where(m => m.SolicitudId == solicitudId)
+            .ToListAsync(ct);
+        aprobadas = aprobadas.Where(m => ReglasHomologacion.EstaAprobada(m.EstadoSegunDocumento)).ToList();
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
+                   ?? throw new InformeException(404, "Solicitud no encontrada.");
+        List<MemoriaAsignaturaDto> malla;
+        try
+        {
+            malla = await _memoria.ObtenerAsignaturasAsync(info.CarreraDestinoId, null, ct);
+        }
+        catch (MemoriaNoDisponibleException ex)
+        {
+            throw new InformeException(502, ex.Message);
+        }
+
+        var analisis = await _db.AnalisisSolicitudes
+            .Include(a => a.Asignaturas)
+            .FirstAsync(a => a.SolicitudId == solicitudId, ct);
+
+        var filas = new List<(AnalisisAsignatura Fila, NuevaPropuestaDocenteDto Propuesta)>();
+        foreach (var p in propuestas)
+        {
+            var origen = (p.AsignaturaOrigen ?? string.Empty).Trim();
+            var aprobada = aprobadas.FirstOrDefault(m =>
+                string.Equals(m.Nombre.Trim(), origen, StringComparison.OrdinalIgnoreCase));
+            if (aprobada is null)
+                throw new InformeException(400,
+                    $"\"{origen}\" no está entre las materias aprobadas del récord: solo se pueden proponer materias aprobadas.");
+
+            var destino = malla.FirstOrDefault(d => d.AsignaturaId == p.AsignaturaDestinoId)
+                          ?? throw new InformeException(400,
+                              $"La asignatura de destino {p.AsignaturaDestinoId} no está en la malla de {info.CarreraDestino}.");
+
+            if (string.IsNullOrWhiteSpace(p.Justificacion))
+                throw new InformeException(400,
+                    $"Justifique la propuesta {origen} → {destino.Nombre}.");
+
+            var motivo = ReglasHomologacion.MotivoSiNoHomologable(origen, destino.Nombre);
+            var homologable = motivo is null && p.Homologable;
+            var fila = new AnalisisAsignatura
+            {
+                AsignaturaOrigen = origen.Length > 200 ? origen[..200] : origen,
+                AsignaturaDestino = destino.Nombre,
+                AsignaturaDestinoId = destino.AsignaturaId,
+                AreaDestino = destino.Area,
+                NivelDestino = destino.Nivel,
+                HorasDestino = destino.Horas > 0 ? destino.Horas : null,
+                CreditosDestino = destino.Creditos > 0 ? destino.Creditos : null,
+                Decision = homologable ? DecisionAnalisis.HOMOLOGABLE : DecisionAnalisis.NO_HOMOLOGABLE,
+                Justificacion = motivo ?? $"Propuesta del docente: {p.Justificacion.Trim()}",
+                ReglaAplicada = motivo ?? "Propuesta agregada por el docente (la IA no la identificó).",
+                PropuestaPor = OrigenPropuesta.DOCENTE,
+                MateriasOrigen = new List<MateriaOrigenResultado>
+                {
+                    new() { Nombre = aprobada.Nombre, Nota = aprobada.Nota }
+                }
+            };
+            analisis.Asignaturas.Add(fila);
+            filas.Add((fila, p));
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return filas.Select(f => new EvaluacionAsignaturaDto
+        {
+            AsignaturaId = f.Fila.Id,
+            Homologable = f.Fila.Decision == DecisionAnalisis.HOMOLOGABLE,
+            Justificacion = f.Fila.Decision == DecisionAnalisis.HOMOLOGABLE
+                ? f.Propuesta.Justificacion.Trim()
+                : f.Fila.Justificacion
+        }).ToList();
     }
 
     /// <summary>
@@ -205,10 +357,50 @@ public class DocenteService
         if (revisadaPorOtro is not null && delegacion.Estado != EstadoDelegacionDocente.REVISADO)
             delegacionDto.Estado = "YA_REVISADO";
 
+        // El docente recibe el récord y la malla de destino para revisar, modificar o agregar propuestas.
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
+        var materias = await _db.MateriasAprobadas.AsNoTracking()
+            .Where(m => m.SolicitudId == solicitudId)
+            .OrderBy(m => m.Id)
+            .Select(m => new MateriaAprobadaDocenteDto
+            {
+                Nombre = m.Nombre,
+                Nota = m.Nota,
+                Periodo = m.Periodo,
+                EstadoSegunDocumento = m.EstadoSegunDocumento
+            })
+            .ToListAsync(ct);
+        var malla = new List<AsignaturaMallaDocenteDto>();
+        if (info is not null)
+        {
+            try
+            {
+                malla = (await _memoria.ObtenerAsignaturasAsync(info.CarreraDestinoId, null, ct))
+                    .Select(a => new AsignaturaMallaDocenteDto
+                    {
+                        AsignaturaId = a.AsignaturaId,
+                        Nombre = a.Nombre,
+                        Nivel = a.Nivel,
+                        Horas = a.Horas,
+                        Creditos = a.Creditos
+                    })
+                    .ToList();
+            }
+            catch (MemoriaNoDisponibleException ex)
+            {
+                _logger.LogWarning(ex, "No se pudo leer la malla de destino de {SolicitudId}", solicitudId);
+            }
+        }
+
         return new DetalleDocenteDto
         {
             Detalle = detalle,
+            RequiereAnalisis = detalle.Asignaturas.Count == 0,
             Delegacion = delegacionDto,
+            MateriasAprobadas = materias,
+            MallaDestino = malla,
+            CarreraOrigenId = info?.CarreraOrigenId ?? 0,
+            CarreraDestinoId = info?.CarreraDestinoId ?? 0,
             InformeSugeridoTexto = texto,
             PuedeEvaluar = puedeEvaluar,
             Sugerencia = sugerencia,
@@ -284,6 +476,8 @@ public class DocenteService
             CedulaEstudiante = CoordinadorService.CedulaEstudiante(info),
             CarreraOrigen = info.CarreraOrigen,
             CarreraDestino = info.CarreraDestino,
+            UniversidadOrigen = info.UniversidadOrigen,
+            UniversidadDestino = info.UniversidadDestino,
             Asignaturas = filas,
             ObservacionGeneral = observacion,
             Docente = delegacion.NombreDocente ?? correo,
@@ -371,7 +565,30 @@ public class DocenteService
 
         var evaluaciones = request?.Asignaturas ?? new List<EvaluacionAsignaturaDto>();
         AplicarReglasNoHomologables(analisis, evaluaciones);
-        ValidarEvaluaciones(analisis, evaluaciones);
+        // Al enviar, cada decisión (homologue o no) debe quedar justificada.
+        ValidarEvaluaciones(analisis, evaluaciones, exigirJustificacion: true);
+
+        // Cada sugerencia de la IA debe quedar aceptada o rechazada por el docente.
+        var evaluadas = evaluaciones.Select(e => e.AsignaturaId).ToHashSet();
+        var sinDecision = analisis.Asignaturas
+            .Where(a => a.PropuestaPor != OrigenPropuesta.DOCENTE && !evaluadas.Contains(a.Id))
+            .Select(a => $"{a.AsignaturaOrigen} → {a.AsignaturaDestino}")
+            .ToList();
+        if (sinDecision.Count > 0)
+            throw new InformeException(400,
+                "Debe decidir (homologar o no, con justificación) todas las sugerencias de la IA antes de enviar. " +
+                $"Faltan: {string.Join("; ", sinDecision)}.");
+
+        var nuevas = request?.NuevasPropuestas ?? new List<NuevaPropuestaDocenteDto>();
+        if (nuevas.Count > 0)
+        {
+            evaluaciones.AddRange(await AgregarPropuestasDocenteAsync(solicitudId, nuevas, ct));
+            analisis = await _db.AnalisisSolicitudes
+                .AsNoTracking()
+                .Include(a => a.Asignaturas)
+                    .ThenInclude(a => a.MateriasOrigen)
+                .FirstAsync(a => a.SolicitudId == solicitudId, ct);
+        }
 
         var porId = analisis.Asignaturas.ToDictionary(a => a.Id);
         var filas = evaluaciones
@@ -388,7 +605,13 @@ public class DocenteService
                     AsignaturaDestino = asignatura.AsignaturaDestino,
                     Justificacion = justificacion,
                     Contenido = $"{asignatura.PorcentajeContenido}% · {justificacion}",
-                    SeHomologa = e.Homologable ? "SÍ" : "NO"
+                    SeHomologa = e.Homologable ? "SÍ" : "NO",
+                    NivelOrigen = asignatura.NivelOrigen,
+                    NivelDestino = asignatura.NivelDestino,
+                    PorcentajeContenido = asignatura.PorcentajeContenido,
+                    PorcentajeProfundidad = asignatura.PorcentajeProfundidad,
+                    PorcentajeHoras = asignatura.PorcentajeHoras,
+                    JustificacionIA = asignatura.Justificacion
                 };
             })
             .ToList();
@@ -428,6 +651,8 @@ public class DocenteService
             CedulaEstudiante = CoordinadorService.CedulaEstudiante(info),
             CarreraOrigen = info.CarreraOrigen,
             CarreraDestino = info.CarreraDestino,
+            UniversidadOrigen = info.UniversidadOrigen,
+            UniversidadDestino = info.UniversidadDestino,
             Asignaturas = filas,
             ObservacionGeneral = request?.ObservacionGeneral,
             Docente = delegacion.NombreDocente ?? correo,
@@ -564,7 +789,13 @@ public class DocenteService
                     AsignaturaDestino = a.AsignaturaDestino,
                     Justificacion = e.Justificacion,
                     Contenido = $"{a.PorcentajeContenido}% · {e.Justificacion}",
-                    SeHomologa = e.Homologable ? "SÍ" : "NO"
+                    SeHomologa = e.Homologable ? "SÍ" : "NO",
+                    NivelOrigen = a.NivelOrigen,
+                    NivelDestino = a.NivelDestino,
+                    PorcentajeContenido = a.PorcentajeContenido,
+                    PorcentajeProfundidad = a.PorcentajeProfundidad,
+                    PorcentajeHoras = a.PorcentajeHoras,
+                    JustificacionIA = a.Justificacion
                 };
             })
             .ToList();
@@ -581,6 +812,8 @@ public class DocenteService
             CedulaEstudiante = CoordinadorService.CedulaEstudiante(info),
             CarreraOrigen = info.CarreraOrigen,
             CarreraDestino = info.CarreraDestino,
+            UniversidadOrigen = info.UniversidadOrigen,
+            UniversidadDestino = info.UniversidadDestino,
             Asignaturas = filas,
             Docente = delegacion.NombreDocente ?? delegacion.DocenteCorreo,
             CedulaFirmante = delegacion.DocenteCedula ?? "-",
@@ -1180,7 +1413,7 @@ public class DocenteService
     }
 
     private static void ValidarEvaluaciones(
-        AnalisisSolicitud analisis, List<EvaluacionAsignaturaDto> evaluaciones)
+        AnalisisSolicitud analisis, List<EvaluacionAsignaturaDto> evaluaciones, bool exigirJustificacion = false)
     {
         var ids = analisis.Asignaturas.Select(a => a.Id).ToHashSet();
         var vistos = new HashSet<int>();
@@ -1195,7 +1428,7 @@ public class DocenteService
                 throw new InformeException(400,
                     $"La asignatura {evaluacion.AsignaturaId} está repetida en la evaluación.");
 
-            if (evaluacion.Homologable && string.IsNullOrWhiteSpace(evaluacion.Justificacion))
+            if ((evaluacion.Homologable || exigirJustificacion) && string.IsNullOrWhiteSpace(evaluacion.Justificacion))
                 throw new InformeException(400,
                     $"La justificación de la asignatura {evaluacion.AsignaturaId} es obligatoria.");
 

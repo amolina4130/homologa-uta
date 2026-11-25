@@ -1,0 +1,111 @@
+/*
+ * Color institucional de la interfaz: #2881CA (rgb 40, 129, 202).
+ * Bootstrap se carga por CDN; aquí se reemplaza su color "primary" y sus tonos derivados
+ * (hover, activo, fondos suaves y bordes) para que toda la aplicación use el mismo azul.
+ */
+:root,
+[data-bs-theme="light"] {
+  --bs-primary: #2881ca;
+  --bs-primary-rgb: 40, 129, 202;
+  --bs-primary-text-emphasis: #103451;
+  --bs-primary-bg-subtle: #d4e6f4;
+  --bs-primary-border-subtle: #a9cdea;
+  --bs-link-color: #2881ca;
+  --bs-link-color-rgb: 40, 129, 202;
+  --bs-link-hover-color: #2067a2;
+  --bs-link-hover-color-rgb: 32, 103, 162;
+  --bs-focus-ring-color: rgba(40, 129, 202, 0.25);
+}
+
+.btn-primary {
+  --bs-btn-bg: #2881ca;
+  --bs-btn-border-color: #2881ca;
+  --bs-btn-hover-bg: #226eac;
+  --bs-btn-hover-border-color: #2067a2;
+  --bs-btn-focus-shadow-rgb: 72, 148, 210;
+  --bs-btn-active-bg: #2067a2;
+  --bs-btn-active-border-color: #1e6198;
+  --bs-btn-disabled-bg: #2881ca;
+  --bs-btn-disabled-border-color: #2881ca;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #2881ca;
+  --bs-btn-border-color: #2881ca;
+  --bs-btn-hover-bg: #2881ca;
+  --bs-btn-hover-border-color: #2881ca;
+  --bs-btn-focus-shadow-rgb: 40, 129, 202;
+  --bs-btn-active-bg: #2881ca;
+  --bs-btn-active-border-color: #2881ca;
+  --bs-btn-disabled-color: #2881ca;
+  --bs-btn-disabled-border-color: #2881ca;
+}
+
+.btn-link {
+  --bs-btn-color: #2881ca;
+  --bs-btn-hover-color: #2067a2;
+  --bs-btn-active-color: #2067a2;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #94c0e5;
+  box-shadow: 0 0 0 0.25rem rgba(40, 129, 202, 0.25);
+}
+
+.form-check-input:focus {
+  border-color: #94c0e5;
+  box-shadow: 0 0 0 0.25rem rgba(40, 129, 202, 0.25);
+}
+
+.form-check-input:checked {
+  background-color: #2881ca;
+  border-color: #2881ca;
+}
+
+.form-switch .form-check-input:focus:not(:checked) {
+  --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%2394c0e5'/%3e%3c/svg%3e");
+}
+
+.list-group {
+  --bs-list-group-active-bg: #2881ca;
+  --bs-list-group-active-border-color: #2881ca;
+}
+
+.nav-pills {
+  --bs-nav-pills-link-active-bg: #2881ca;
+}
+
+.nav {
+  --bs-nav-link-color: #2881ca;
+  --bs-nav-link-hover-color: #2067a2;
+}
+
+.pagination {
+  --bs-pagination-color: #2881ca;
+  --bs-pagination-hover-color: #2067a2;
+  --bs-pagination-focus-color: #2067a2;
+  --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(40, 129, 202, 0.25);
+  --bs-pagination-active-bg: #2881ca;
+  --bs-pagination-active-border-color: #2881ca;
+}
+
+.dropdown-menu {
+  --bs-dropdown-link-active-bg: #2881ca;
+}
+
+.progress,
+.progress-stacked {
+  --bs-progress-bar-bg: #2881ca;
+}
+
+.accordion {
+  --bs-accordion-active-color: #103451;
+  --bs-accordion-active-bg: #d4e6f4;
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 0.25rem rgba(40, 129, 202, 0.25);
+}
+
+.spinner-border.text-primary,
+.text-primary {
+  color: #2881ca !important;
+}

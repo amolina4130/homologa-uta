@@ -12,6 +12,8 @@ RUN dotnet publish -c Release -o /app/publish
 
 # Imagen final para ejecutar
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+# pdftotext (poppler) conserva las columnas de los planes analíticos al leerlos.
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish .
 

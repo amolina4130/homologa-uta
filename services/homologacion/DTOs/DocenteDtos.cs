@@ -38,6 +38,10 @@ public class DelegacionDto
 
     /// <summary>Texto del informe sugerido emitido por el docente que revisó primero.</summary>
     public string? InformeSugeridoTexto { get; set; }
+
+    /// <summary>Documentación adicional que pidió el docente (null si no pidió).</summary>
+    public string? DocumentacionSolicitada { get; set; }
+    public DateTime? FechaSolicitudDocumentacion { get; set; }
 }
 
 /// <summary>Fila de la lista de solicitudes asignadas a un docente.</summary>
@@ -102,6 +106,9 @@ public class DetalleDocenteDto
     /// <summary>False cuando este docente u otro ya emitió la revisión.</summary>
     public bool PuedeEvaluar { get; set; }
 
+    /// <summary>true mientras el docente no haya generado el análisis con la IA.</summary>
+    public bool RequiereAnalisis { get; set; }
+
     /// <summary>
     /// Sugerencia generada por IA, en curso o ya enviada. Es la misma para los dos docentes
     /// asignados: si otro la generó primero, este docente también la ve.
@@ -110,6 +117,15 @@ public class DetalleDocenteDto
 
     /// <summary>Indica que la sugerencia visible fue generada por otro docente asignado.</summary>
     public bool SugerenciaEsDeOtroDocente { get; set; }
+
+    /// <summary>Récord académico: materias aprobadas del estudiante (base de toda propuesta).</summary>
+    public List<MateriaAprobadaDocenteDto> MateriasAprobadas { get; set; } = new();
+
+    /// <summary>Malla de la carrera de destino, para modificar o agregar equivalencias.</summary>
+    public List<AsignaturaMallaDocenteDto> MallaDestino { get; set; } = new();
+
+    public int CarreraOrigenId { get; set; }
+    public int CarreraDestinoId { get; set; }
 
     /// <summary>Datos del firmante que el Docente puede editar en esta pantalla.</summary>
     public string NombreDocente { get; set; } = string.Empty;
@@ -206,6 +222,54 @@ public class EvaluarDocenteRequest : DatosFirmaDocenteRequest
     /// no cambia este estado: solo el envío manual lo registra.
     /// </summary>
     public string EstadoRevision { get; set; } = "PENDIENTE";
+
+    /// <summary>
+    /// Equivalencias que la IA no identificó y el docente agrega. También sirve para MODIFICAR
+    /// una sugerencia: el docente rechaza la fila de la IA y propone el destino correcto aquí.
+    /// La fila original de la IA se conserva sin cambios.
+    /// </summary>
+    public List<NuevaPropuestaDocenteDto> NuevasPropuestas { get; set; } = new();
+}
+
+public class MateriaAprobadaDocenteDto
+{
+    public string Nombre { get; set; } = string.Empty;
+    public decimal? Nota { get; set; }
+    public string? Periodo { get; set; }
+    public string EstadoSegunDocumento { get; set; } = string.Empty;
+}
+
+public class AsignaturaMallaDocenteDto
+{
+    public int AsignaturaId { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public string Nivel { get; set; } = string.Empty;
+    public int Horas { get; set; }
+    public int Creditos { get; set; }
+}
+
+/// <summary>Propuesta de homologación agregada por el docente.</summary>
+public class NuevaPropuestaDocenteDto
+{
+    /// <summary>Materia aprobada del récord (debe estar en las materias aprobadas).</summary>
+    [Required, MaxLength(200)]
+    public string AsignaturaOrigen { get; set; } = string.Empty;
+
+    /// <summary>Asignatura de la malla de destino.</summary>
+    public int AsignaturaDestinoId { get; set; }
+
+    public bool Homologable { get; set; } = true;
+
+    [Required, MaxLength(2000)]
+    public string Justificacion { get; set; } = string.Empty;
+}
+
+/// <summary>El docente pide al Coordinador documentación adicional.</summary>
+public class SolicitarDocumentacionRequest
+{
+    [Required(ErrorMessage = "Indique qué documentación necesita.")]
+    [MaxLength(1000, ErrorMessage = "El pedido no puede pasar de 1000 caracteres.")]
+    public string Detalle { get; set; } = string.Empty;
 }
 
 public class ResultadoEvaluacionDto

@@ -45,6 +45,27 @@ public class AsignaturaAnalisisDto
 
     /// <summary>Regla de equivalencia activa que se aplicó a esta asignatura (HU-14).</summary>
     public string? EquivalenciaAplicada { get; set; }
+
+    // Datos de las mallas (no se deducen del último semestre cursado): horas, créditos y
+    // resultados de aprendizaje de origen y destino. null cuando el documento no los trae.
+    public int? HorasOrigen { get; set; }
+    public int? HorasDestino { get; set; }
+    public int? CreditosOrigen { get; set; }
+    public int? CreditosDestino { get; set; }
+    public string? ResultadosOrigen { get; set; }
+    public string? ResultadosDestino { get; set; }
+
+    /// <summary>Periodo de aprobación según el récord (para la regla de los 10 años).</summary>
+    public string? PeriodoAprobacion { get; set; }
+
+    /// <summary>Estado de la materia según el récord (para detectar tercera matrícula).</summary>
+    public string? EstadoSegunRecord { get; set; }
+
+    /// <summary>true si el contenido de origen salió del sílabo registrado en el sistema.</summary>
+    public bool ContenidoOrigenDeSilabo { get; set; }
+
+    /// <summary>true si dos materias aprobadas cubren juntas el destino (alternativa, HU-22).</summary>
+    public bool EsCombinacion { get; set; }
 }
 
 /// <summary>Resultado del análisis de una solicitud.</summary>
@@ -140,4 +161,15 @@ public class AsignaturaResultadoSolicitudDto
     /// <summary>Decisión final del Coordinador, si ya emitió el informe.</summary>
     public string? DecisionCoordinador { get; set; }
     public string? ObservacionCoordinador { get; set; }
+
+    public string? NivelOrigen { get; set; }
+    public string? NivelDestino { get; set; }
+    public int? HorasOrigen { get; set; }
+    public int? HorasDestino { get; set; }
+    public int? CreditosOrigen { get; set; }
+    public int? CreditosDestino { get; set; }
+    public string? ContenidosCoincidentes { get; set; }
+    public string? Diferencias { get; set; }
+    public string? ReglaAplicada { get; set; }
+    public string PropuestaPor { get; set; } = "IA";
 }

@@ -211,9 +211,16 @@ export default function InformesSugeridos() {
                       </p>
                       <ul className="list-unstyled mb-0">
                         {delegaciones.map((d) => (
-                          <li key={d.id ?? d.docenteCorreo} className="d-flex justify-content-between align-items-center py-1">
-                            <span className="fw-semibold">{nombreDocente(d.docenteCorreo)}</span>
-                            <span className="small text-muted">Delegada {fechaCorta(d.fechaDelegacion)}</span>
+                          <li key={d.id ?? d.docenteCorreo} className="py-1">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <span className="fw-semibold">{nombreDocente(d.docenteCorreo)}</span>
+                              <span className="small text-muted">Delegada {fechaCorta(d.fechaDelegacion)}</span>
+                            </div>
+                            {d.documentacionSolicitada && (
+                              <div className="alert alert-warning py-1 px-2 small mt-1 mb-0">
+                                <strong>Solicita documentación:</strong> {d.documentacionSolicitada}
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ul>

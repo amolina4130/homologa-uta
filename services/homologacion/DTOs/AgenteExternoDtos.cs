@@ -59,6 +59,10 @@ public class MateriaDestinoAgenteExternoDto
     public string? Nivel { get; set; }
     public string Contenido { get; set; } = string.Empty;
 
+    /// <summary>Resultados de aprendizaje y horas de la asignatura de FISEI (para profundidad y carga horaria).</summary>
+    public string? ResultadosAprendizaje { get; set; }
+    public int? Horas { get; set; }
+
     /// <summary>Materias aprobadas que la preselección considera candidatas para este destino.</summary>
     public List<string> MateriasOrigenPermitidas { get; set; } = new();
 

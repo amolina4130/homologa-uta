@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "../services/config";
 
 async function obtenerJson(ruta) {
   const controller = new AbortController();

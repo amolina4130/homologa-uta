@@ -51,4 +51,9 @@ public class DelegacionDocente
 
     /// <summary>Correo del docente para el informe; puede diferir del correo de acceso.</summary>
     public string? DocenteCorreoInforme { get; set; }
+
+    /// <summary>Documentación adicional que el docente pidió al Coordinador (null si no pidió).</summary>
+    public string? DocumentacionSolicitada { get; set; }
+
+    public DateTime? FechaSolicitudDocumentacion { get; set; }
 }

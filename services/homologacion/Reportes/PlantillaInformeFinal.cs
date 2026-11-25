@@ -5,7 +5,7 @@ using QuestPDF.Infrastructure;
 
 namespace HomologaUTA.Homologacion.Reportes;
 
-/// <summary>Datos del informe final que el Coordinador dirige al Consejo Directivo.</summary>
+/// <summary>Datos del informe final que el Coordinador envía al Comité.</summary>
 public class DatosInformeFinal : DatosInformeBase
 {
     /// <summary>Nombre de quien firma; debajo se imprime "Coordinador de Homologación".</summary>
@@ -15,8 +15,9 @@ public class DatosInformeFinal : DatosInformeBase
 }
 
 /// <summary>
-/// Plantilla del informe final: afirma la homologación, va "Para: Consejo Directivo" y
-/// firma como Coordinador de Homologación. Afirma la decisión en lugar de sugerirla.
+/// Plantilla del informe final: va al Comité, lista solo las asignaturas que se homologan y
+/// recomienda su homologación (el envío al Comité no es la aprobación oficial). Firma el
+/// Coordinador de Homologación.
 /// </summary>
 public static class PlantillaInformeFinal
 {
@@ -26,11 +27,12 @@ public static class PlantillaInformeFinal
     }
 
     public const string SinHomologables =
-        "No se homologa ninguna asignatura; en consecuencia, " +
-        "el estudiante debe iniciar su plan de estudios desde cero.";
+        "no se recomienda homologar ninguna asignatura; en consecuencia, " +
+        "el estudiante debe iniciar su plan de estudios desde el primer nivel.";
 
-    public const string Destinatario = "Consejo Directivo";
+    public const string Destinatario = "Comité de Homologación";
     public const string CargoFirmante = "Coordinador de Homologación";
+    private const string Introduccion = "se recomienda la homologación de las siguientes asignaturas:";
 
     public static string GenerarTexto(DatosInformeFinal datos) => GenerarTextoDeDatos(datos);
 
@@ -61,20 +63,20 @@ public static class PlantillaInformeFinal
         });
     }
 
-    private static string GenerarTextoDeDatos(DatosInformeFinal datos)
-    {
-        var homologables = datos.Asignaturas
-            .Select(AfirmarFila)
+    private static List<FilaInformeAsignatura> Homologables(DatosInformeFinal datos) =>
+        datos.Asignaturas
             .Where(a => !string.IsNullOrWhiteSpace(a.AsignaturaDestino) ||
                         !string.IsNullOrWhiteSpace(a.AsignaturaOrigen))
             .ToList();
+
+    private static string GenerarTextoDeDatos(DatosInformeFinal datos)
+    {
+        var homologables = Homologables(datos);
         var observacion = ContenidoInforme.Observacion(datos.ObservacionGeneral);
 
         var partes = new List<string>
         {
-            $"Para: {Destinatario}",
-            EncabezadoFinal(datos) +
-            (homologables.Count > 0 ? "se resuelve homologar lo siguiente:" : SinHomologables)
+            EncabezadoFinal(datos) + (homologables.Count > 0 ? Introduccion : SinHomologables)
         };
 
         var tabla = ContenidoInforme.FormarTabla(datos, homologables, afirmar: true);
@@ -82,14 +84,12 @@ public static class PlantillaInformeFinal
             partes.Add(tabla);
 
         if (observacion is not null)
-        {
             partes.Add($"Observación general: {ContenidoInforme.Afirmar(observacion)}");
-        }
 
         partes.Add($"Atentamente,{Environment.NewLine}{ContenidoInforme.Afirmar(datos.Firmante)}{Environment.NewLine}" +
                    $"{CargoFirmante}{Environment.NewLine}C.I.: {ContenidoInforme.Valor(datos.CedulaFirmante)}");
 
-        return AsegurarAfirmacion(string.Join(Environment.NewLine + Environment.NewLine, partes));
+        return AsegurarRecomendacion(string.Join(Environment.NewLine + Environment.NewLine, partes));
     }
 
     private static string EncabezadoFinal(DatosInformeFinal datos) =>
@@ -98,20 +98,14 @@ public static class PlantillaInformeFinal
         $"el/la estudiante {ContenidoInforme.Afirmar(datos.NombreEstudiante)} con cédula " +
         $"{ContenidoInforme.Afirmar(datos.CedulaEstudiante)} solicita la homologación del cambio " +
         $"de la carrera {ContenidoInforme.Afirmar(datos.CarreraOrigen)} a la carrera " +
-        $"{ContenidoInforme.Afirmar(datos.CarreraDestino)}. Revisada la documentación, ";
+        $"{ContenidoInforme.Afirmar(datos.CarreraDestino)}. Revisado el informe técnico del docente asignado " +
+        "y la documentación presentada, ";
 
-    private static FilaInformeAsignatura AfirmarFila(FilaInformeAsignatura fila) => new()
-    {
-        AsignaturaOrigen = ContenidoInforme.Afirmar(fila.AsignaturaOrigen),
-        AsignaturaDestino = ContenidoInforme.Afirmar(fila.AsignaturaDestino),
-        Justificacion = ContenidoInforme.Afirmar(fila.Justificacion)
-    };
+    /// <summary>Red de seguridad: el informe final recomienda; no sugiere ni resuelve.</summary>
+    private static string AsegurarRecomendacion(string texto) =>
+        Regex.Replace(texto, @"se\s+(sugiere|resuelve)", "se recomienda", RegexOptions.IgnoreCase);
 
-    /// <summary>Red de seguridad: ningún texto del informe final puede sugerir en vez de afirmar.</summary>
-    private static string AsegurarAfirmacion(string texto) =>
-        Regex.Replace(texto, @"se\s+sugiere", "se resuelve", RegexOptions.IgnoreCase);
-
-    public static byte[] GenerarPdf(DatosInformeFinal datos) => GenerarPdfDeDatos(datos);
+    public static byte[] GenerarPdf(DatosInformeFinal datos) => GenerarPdfDeDatos(datos, null);
 
     public static byte[] GenerarPdf(
         string numeroProceso,
@@ -137,119 +131,91 @@ public static class PlantillaInformeFinal
             ObservacionGeneral = observacionGeneral,
             Firmante = firmante ?? string.Empty,
             Fecha = fecha ?? DateTime.UtcNow
-        });
+        }, null);
     }
 
-    private static byte[] GenerarPdfDeDatos(DatosInformeFinal datos)
+    /// <summary>
+    /// PDF con el texto que editó el Coordinador. La tabla y la firma se dibujan siempre con los
+    /// datos reales (no como texto), así el informe conserva su formato aunque se haya editado.
+    /// </summary>
+    public static byte[] GenerarPdfDesdeTexto(string texto, DatosInformeFinal datos) =>
+        GenerarPdfDeDatos(datos, texto);
+
+    private static byte[] GenerarPdfDeDatos(DatosInformeFinal datos, string? textoEditado)
     {
-        var homologables = datos.Asignaturas
-            .Select(AfirmarFila)
-            .Where(a => !string.IsNullOrWhiteSpace(a.AsignaturaDestino) ||
-                        !string.IsNullOrWhiteSpace(a.AsignaturaOrigen))
-            .ToList();
+        var homologables = Homologables(datos);
         var observacion = ContenidoInforme.Observacion(datos.ObservacionGeneral);
 
-        var datosPdf = new DatosInformeBase
-        {
-            NumeroProceso = datos.NumeroProceso,
-            NumeroMemorando = datos.NumeroMemorando,
-            NombreEstudiante = datos.NombreEstudiante,
-            CedulaEstudiante = datos.CedulaEstudiante,
-            CarreraOrigen = datos.CarreraOrigen,
-            CarreraDestino = datos.CarreraDestino,
-            CedulaFirmante = datos.CedulaFirmante,
-            Fecha = datos.Fecha
-        };
+        // Del texto editado se conserva la redacción: sin tabla, sin firma y sin la línea "Para:".
+        var narrativo = string.Join(Environment.NewLine,
+                ContenidoInforme.QuitarCola(ContenidoInforme.QuitarTabla(textoEditado))
+                    .Replace("\r\n", "\n").Split('\n')
+                    .Where(l => !l.TrimStart().StartsWith("Para:", StringComparison.OrdinalIgnoreCase)))
+            .Trim();
+        narrativo = AsegurarRecomendacion(narrativo);
 
         return Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(1.5f, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(9).FontColor(Colors.Grey.Darken4));
+                page.Margin(1.6f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(9).FontColor(Colors.Grey.Darken4).LineHeight(1.25f));
 
-                page.Header().Element(header =>
-                    ContenidoInforme.EncabezadoPdf(
-                        header,
-                        datosPdf,
-                        "INFORME FINAL DE HOMOLOGACIÓN",
-                        Destinatario,
-                        "Coordinación de Homologación",
-                        "Homologación de asignaturas"));
+                page.Header().Element(h => ContenidoInforme.MembretePdf(h, "INFORME FINAL DE HOMOLOGACIÓN"));
 
                 page.Content().Element(content => content.Column(column =>
                 {
-                    column.Item().Text(text =>
+                    column.Item().Element(c => ContenidoInforme.BloqueMemorandoPdf(c, datos,
+                        Destinatario, "Coordinación de Homologación", "Informe final de homologación de asignaturas"));
+                    column.Item().PaddingTop(8).Element(c => ContenidoInforme.DatosSolicitudPdf(c, datos));
+
+                    column.Item().PaddingTop(10).Element(c =>
                     {
-                        text.Span(EncabezadoFinal(datos));
-                        text.Span(homologables.Count > 0
-                            ? "se resuelve homologar lo siguiente:"
-                            : SinHomologables).Bold();
+                        if (narrativo.Length > 0)
+                        {
+                            c.Text(narrativo).FontSize(9).Justify();
+                            return;
+                        }
+                        c.Text(text =>
+                        {
+                            text.Span(EncabezadoFinal(datos));
+                            text.Span(homologables.Count > 0 ? Introduccion : SinHomologables).Bold();
+                        });
                     });
 
                     if (homologables.Count > 0)
                     {
-                        column.Item().PaddingTop(8).Table(table =>
-                            ContenidoInforme.TablaPdf(table, datos, homologables, afirmar: true));
+                        column.Item().PaddingTop(10).Element(c =>
+                            ContenidoInforme.ResumenPdf(c, homologables.Count, homologables.Count, soloHomologadas: true));
+                        column.Item().PaddingTop(10).Table(table =>
+                            ContenidoInforme.TablaPdf(table, datos, homologables, afirmar: true, conDecision: false));
+                        column.Item().PaddingTop(3).Element(ContenidoInforme.LeyendaPorcentajesPdf);
                     }
 
-                    if (observacion is not null)
+                    if (narrativo.Length == 0 && observacion is not null)
+                        column.Item().PaddingTop(10).Text(t =>
+                        {
+                            t.Span("Observación general: ").Bold();
+                            t.Span(ContenidoInforme.Afirmar(observacion));
+                        });
+
+                    // La nota y la firma van juntas: la firma nunca queda sola en otra página.
+                    column.Item().PaddingTop(10).ShowEntire().Column(cierre =>
                     {
-                        column.Item().PaddingTop(8).Text(
-                            $"Observación general: {ContenidoInforme.Afirmar(observacion)}");
-                    }
-
-                    column.Item().PaddingTop(16).Element(firma =>
-                        ContenidoInforme.FirmaPdf(
-                            firma,
-                            ContenidoInforme.Afirmar(datos.Firmante),
-                            CargoFirmante,
-                            datos.CedulaFirmante));
-
-                    if (!string.IsNullOrWhiteSpace(datos.CoordinadorCorreo))
-                        column.Item().PaddingTop(4).Text(datos.CoordinadorCorreo).FontSize(8);
+                        cierre.Item().Text(
+                                "Este informe se pone en conocimiento del Comité de Homologación para su trámite; " +
+                                "no constituye por sí mismo la aprobación oficial de la homologación.")
+                            .FontSize(7.5f).Italic().FontColor(Colors.Grey.Darken1);
+                        cierre.Item().PaddingTop(14).Element(firma =>
+                            ContenidoInforme.FirmaPdf(
+                                firma,
+                                ContenidoInforme.Valor(datos.Firmante),
+                                CargoFirmante,
+                                datos.CedulaFirmante,
+                                datos.CoordinadorCorreo));
+                    });
                 }));
-
-                page.Footer().Element(ContenidoInforme.PiePdf);
-            });
-        }).GeneratePdf();
-    }
-
-    /// <summary>Genera un PDF simple a partir del texto final (usado cuando el Coordinador editó el informe).</summary>
-    public static byte[] GenerarPdfDesdeTexto(string texto, DatosInformeFinal datos)
-    {
-        var textoSeguro = string.IsNullOrWhiteSpace(texto) ? string.Empty : texto.Trim();
-        var datosPdf = new DatosInformeBase
-        {
-            NumeroProceso = datos.NumeroProceso,
-            NumeroMemorando = datos.NumeroMemorando,
-            NombreEstudiante = datos.NombreEstudiante,
-            CedulaEstudiante = datos.CedulaEstudiante,
-            CarreraOrigen = datos.CarreraOrigen,
-            CarreraDestino = datos.CarreraDestino,
-            CedulaFirmante = datos.CedulaFirmante,
-            Fecha = datos.Fecha
-        };
-
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A4);
-                page.Margin(1.5f, Unit.Centimetre);
-                page.DefaultTextStyle(x => x.FontSize(9).FontColor(Colors.Grey.Darken4));
-
-                page.Header().Element(header =>
-                    ContenidoInforme.EncabezadoPdf(
-                        header,
-                        datosPdf,
-                        "INFORME FINAL DE HOMOLOGACIÓN",
-                        Destinatario,
-                        "Coordinación de Homologación",
-                        "Homologación de asignaturas"));
-
-                page.Content().PaddingVertical(10).Text(textoSeguro).LineHeight(1.4f);
 
                 page.Footer().Element(ContenidoInforme.PiePdf);
             });

@@ -138,6 +138,51 @@ public class DocenteController : ControllerBase
         }
     }
 
+    /// <summary>El Docente genera (o repite) con la IA el análisis de las materias aprobadas.</summary>
+    [HttpPost("{id:int}/analizar")]
+    public async Task<ActionResult<DetalleDocenteDto>> Analizar(int id, CancellationToken ct)
+    {
+        if (id <= 0)
+            return BadRequest(new { error = "El id de la solicitud debe ser mayor que cero." });
+
+        if (!AutorizacionHomologacion.EsRol(User, "DOCENTE", "ADMINISTRADOR"))
+            return Forbid();
+
+        try
+        {
+            return Ok(await _servicio.AnalizarAsync(id, CorreoDocente(), ct));
+        }
+        catch (InformeException ex)
+        {
+            return StatusCode(ex.StatusCode, new { error = ex.Message });
+        }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>El Docente pide documentación adicional al Coordinador antes de decidir.</summary>
+    [HttpPost("{id:int}/solicitar-documentacion")]
+    public async Task<ActionResult<DelegacionDto>> SolicitarDocumentacion(
+        int id, [FromBody] SolicitarDocumentacionRequest request, CancellationToken ct)
+    {
+        if (id <= 0)
+            return BadRequest(new { error = "El id de la solicitud debe ser mayor que cero." });
+
+        if (!AutorizacionHomologacion.EsRol(User, "DOCENTE", "ADMINISTRADOR"))
+            return Forbid();
+
+        try
+        {
+            return Ok(await _servicio.SolicitarDocumentacionAsync(id, CorreoDocente(), request, ct));
+        }
+        catch (InformeException ex)
+        {
+            return StatusCode(ex.StatusCode, new { error = ex.Message });
+        }
+    }
+
     /// <summary>PDF del informe del docente asignado.</summary>
     [HttpGet("{id:int}/informe")]
     [Produces("application/pdf")]

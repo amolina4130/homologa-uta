@@ -1,4 +1,4 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "./config";
 
 const getAuthHeaders = () => {
   const token = sessionStorage.getItem("token");
@@ -43,5 +43,25 @@ export async function cargarMemoria() {
     headers: getAuthHeaders(),
   });
   if (!res.ok) await lanzarError(res, "Error al actualizar la memoria del agente");
+  return await res.json();
+}
+
+// Asignaturas de una carrera con su plan analítico (lo mismo que lee la IA).
+export async function obtenerAsignaturasMemoria(carreraId) {
+  const res = await fetch(`${GATEWAY_URL}/memoria/carreras/${carreraId}/asignaturas`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo cargar la malla de la carrera");
+  return await res.json();
+}
+
+// Solo Administrador: guarda (o reemplaza) el plan analítico de una asignatura.
+export async function guardarPlanAnalitico(asignaturaId, contenido, resultadosAprendizaje) {
+  const res = await fetch(`${GATEWAY_URL}/memoria/asignaturas/${asignaturaId}/plan`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ contenido, resultadosAprendizaje }),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo guardar el plan analítico");
   return await res.json();
 }

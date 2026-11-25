@@ -1,31 +1,77 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import FiltroNivel from "../components/FiltroNivel";
 import ListaDocumentos from "../components/ListaDocumentos";
 import TablaMateriasAprobadas from "../components/TablaMateriasAprobadas";
-import { recomendarPorCarrera } from "../services/docenteService";
 import {
   actualizarSolicitud,
   crearSolicitud,
-  obtenerAsignaturas,
   obtenerCarreras,
   obtenerSolicitud,
 } from "../services/solicitudesService";
-import { obtenerDocumentosSolicitud, subirDocumento } from "../services/documentosService";
+import { leerTextoPdf, obtenerDocumentosSolicitud, subirDocumento } from "../services/documentosService";
 import { procesarCarpeta, registrarUrlExterna } from "../services/rutaCarpetaService";
 import {
   actualizarMateriasAprobadas,
-  analizarSolicitud,
-  analizarSolicitudExterna,
   extraerRecord,
   obtenerMateriasAprobadas,
 } from "../services/homologacionService";
+import { delegarDocentes, obtenerDocentes } from "../services/coordinadorService";
 import "./NuevaSolicitud.css";
 
-const PASOS = ["Datos", "Documentos", "Materias aprobadas", "Enviar a revisión"];
+// Primero los documentos que entrega el estudiante (solicitud y récord). Con ellos se prellenan
+// sus datos, que el coordinador revisa antes de iniciar el proceso. Las asignaturas candidatas salen
+// de las materias APROBADAS del récord; luego la IA compara con las mallas y sílabos y sugiere.
+const PASOS = ["Documentos", "Datos del estudiante", "Asignar docente"];
 const TAMANO_MAXIMO = 10 * 1024 * 1024;
 const NOMBRE_SIN_IDENTIFICAR = "Estudiante sin identificar";
+const UTA = "Universidad Técnica de Ambato";
+
+const sinTildes = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const tipoTitulo = (s) =>
+  (s || "").toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, esp, letra) => esp + letra.toUpperCase()).replace(/\s(De|Del|La|Las|Los|Y)\s/g, (m) => m.toLowerCase());
+
+/** Carrera nombrada como "Carrera de X" (o "CarreraX") en el texto, a partir de una posición. */
+function carreraEn(texto, carreras, desde = 0, excluir = "") {
+  const t = sinTildes(texto).slice(desde);
+  const ordenadas = [...carreras].sort((a, b) => b.nombre.length - a.nombre.length);
+  let mejor = null;
+  for (const c of ordenadas) {
+    if (String(c.id) === String(excluir)) continue;
+    const m = new RegExp(`carrera\\s*(de\\s*)?${sinTildes(c.nombre).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).exec(t);
+    if (m && (!mejor || m.index < mejor.indice)) mejor = { id: String(c.id), indice: m.index };
+  }
+  return mejor?.id || "";
+}
+
+/**
+ * Datos del estudiante leídos del récord y de su solicitud. Solo se prellena lo que aparece en el
+ * texto; el coordinador los verifica antes de iniciar el proceso.
+ */
+function detectarDatos(textoRecord, textoCarta, carreras) {
+  const nombre =
+    textoRecord.match(/Estudiante\s*:?\s*([A-Za-zÁÉÍÓÚÑáéíóúñ ]{5,120}?)\s*C[ée]dula/i)?.[1] ||
+    textoCarta.match(/Yo,?\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{4,120}?)\s*,/)?.[1] ||
+    "";
+  const cedula =
+    textoRecord.match(/C[ée]dula[^\d]{0,30}(\d{10})(?!\d)/i)?.[1] ||
+    textoCarta.match(/(?:C\.?\s?I\.?|C[ée]dula)\s*:?\s*(\d{10})(?!\d)/i)?.[1] ||
+    "";
+  const universidad = textoRecord.match(/UNIVERSIDAD(?:\s+[A-ZÁÉÍÓÚÑ]+)+(?![a-záéíóúñ])/)?.[0] || "";
+  const esUta = !universidad || sinTildes(universidad).includes("ambato");
+  const origen = carreraEn(textoRecord, carreras) || carreraEn(textoCarta, carreras);
+  const posHomologar = sinTildes(textoCarta).indexOf("homologaci");
+  const destino = posHomologar >= 0 ? carreraEn(textoCarta, carreras, posHomologar, origen) : "";
+  return {
+    estudianteNombre: nombre.trim() === nombre.trim().toUpperCase() ? tipoTitulo(nombre.trim()) : nombre.trim(),
+    estudianteCedula: cedula,
+    modulo: esUta ? "INTERNO" : "EXTERNO",
+    universidadOrigen: esUta ? "" : tipoTitulo(universidad),
+    universidadDestino: esUta ? "" : UTA,
+    origen,
+    destino,
+  };
+}
 
 const esRecord = (d) => /RECORD|RÉCORD|HISTORIAL/i.test(d?.tipoDocumento || d?.TipoDocumento || "");
 const esUrlExterna = (d) => /URL_EXTERNA/i.test(d?.tipoDocumento || d?.TipoDocumento || "");
@@ -53,40 +99,55 @@ export default function NuevaSolicitud() {
   const [solicitud, setSolicitud] = useState(null);
   const [aviso, setAviso] = useState(null);
 
-  // Paso 1: datos
+  // Paso 2: datos del estudiante
   const [carreras, setCarreras] = useState([]);
-  const [asignaturas, setAsignaturas] = useState([]);
   const [datos, setDatos] = useState(DATOS_VACIOS);
-  const [nivel, setNivel] = useState("Todos");
   const [guardandoDatos, setGuardandoDatos] = useState(false);
-  const [recomendacion, setRecomendacion] = useState(null);
-  const [recomendando, setRecomendando] = useState(false);
+  const [leyendo, setLeyendo] = useState(false);
+  const [leidos, setLeidos] = useState(null); // campos que se prellenaron desde los documentos
 
-  // Paso 2: documentos
+  // Paso 1: documentos
   const [documentos, setDocumentos] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [claveArchivo, setClaveArchivo] = useState(0);
   const [subiendo, setSubiendo] = useState(false);
+  const [carta, setCarta] = useState(null);
+  const [claveCarta, setClaveCarta] = useState(0);
   const [url, setUrl] = useState("");
   const [ruta, setRuta] = useState("");
-  const [registrandoRuta, setRegistrandoRuta] = useState(false);
+  const [silabos, setSilabos] = useState([]);
+  const [claveSilabos, setClaveSilabos] = useState(0);
 
   // Paso 3: materias
   const [materias, setMaterias] = useState([]);
-  const [materiasGuardadas, setMateriasGuardadas] = useState(false);
+  const [, setMateriasGuardadas] = useState(false);
   const [extrayendo, setExtrayendo] = useState(false);
   const [guardandoMaterias, setGuardandoMaterias] = useState(false);
   const [revisionMaterias, setRevisionMaterias] = useState("");
 
-  // Paso 4
+  // Paso 3: asignar docente
+  const [docentes, setDocentes] = useState([]);
+  const [elegidos, setElegidos] = useState([]);
   const [enviando, setEnviando] = useState(false);
   const [enviada, setEnviada] = useState(false);
 
   const externo = datos.modulo === "EXTERNO";
   const tieneRecord = documentos.some(esRecord);
+  const tieneCarta = documentos.some((d) => /^SOLICITUD$/i.test(d?.tipoDocumento || d?.TipoDocumento || ""));
   const tieneUrl = documentos.some(esUrlExterna);
-  const documentosListos = tieneRecord && (!externo || tieneUrl);
-  const materiasListas = materiasGuardadas && materias.length > 0;
+  const silabosGuardados = documentos.filter((d) => /SILABO|PLAN_ANALITICO/i.test(d?.tipoDocumento || d?.TipoDocumento || "")).length;
+
+  const elegirSilabos = (ev) => {
+    const lista = [...(ev.target.files || [])];
+    setAviso(null);
+    if (lista.some((f) => f.type !== "application/pdf" || f.size > TAMANO_MAXIMO)) {
+      setAviso({ tipo: "danger", texto: "Cada sílabo debe ser un PDF de hasta 10 MB." });
+      setSilabos([]);
+      setClaveSilabos((n) => n + 1);
+      return;
+    }
+    setSilabos(lista);
+  };
   const editable = !solicitud || (solicitud.estado || "REGISTRADA") === "REGISTRADA";
 
   const irA = (n) => {
@@ -97,16 +158,6 @@ export default function NuevaSolicitud() {
   };
 
   const cambiarDato = (campo, valor) => setDatos((d) => ({ ...d, [campo]: valor }));
-
-  const cargarAsignaturas = useCallback((carreraId) => {
-    if (!carreraId) {
-      setAsignaturas([]);
-      return Promise.resolve();
-    }
-    return obtenerAsignaturas(carreraId)
-      .then((lista) => setAsignaturas(Array.isArray(lista) ? lista : []))
-      .catch(() => setAsignaturas([]));
-  }, []);
 
   const recargarDocumentos = useCallback(
     (id) =>
@@ -122,6 +173,9 @@ export default function NuevaSolicitud() {
 
   // Al entrar: carreras y, si se retoma una solicitud, todo lo que ya tiene.
   useEffect(() => {
+    obtenerDocentes()
+      .then((lista) => setDocentes(Array.isArray(lista) ? lista : []))
+      .catch(() => setDocentes([]));
     obtenerCarreras()
       .then((lista) => setCarreras(Array.isArray(lista) ? lista : []))
       .catch(() => setCarreras([]));
@@ -145,14 +199,12 @@ export default function NuevaSolicitud() {
           destino: String(s.carreraDestinoId || ""),
           seleccionadas: (s.asignaturas || []).map((a) => a.asignaturaId),
         });
-        await cargarAsignaturas(s.carreraOrigenId);
         const lista = Array.isArray(mats) ? mats : [];
         setMaterias(lista);
         setMateriasGuardadas(lista.length > 0);
         // Se retoma en el primer paso que falte.
         const ext = s.modulo === "EXTERNO";
-        const docsOk = docs.some(esRecord) && (!ext || docs.some(esUrlExterna));
-        const siguiente = !docsOk ? 2 : lista.length === 0 ? 3 : 4;
+        const siguiente = !docs.some(esRecord) ? 1 : ext && !docs.some(esUrlExterna) ? 2 : 3;
         setPaso(siguiente);
         setAlcanzado(siguiente);
       })
@@ -162,50 +214,57 @@ export default function NuevaSolicitud() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---------- Paso 1 ---------- */
+  /* ---------- Paso 1: documentos ---------- */
 
-  const elegirOrigen = (valor) => {
-    setDatos((d) => ({ ...d, origen: valor, destino: valor === d.destino ? "" : d.destino, seleccionadas: [] }));
-    setNivel("Todos");
-    setRecomendacion(null);
-    cargarAsignaturas(valor);
-  };
-
-  const alternarAsignatura = (id) =>
-    setDatos((d) => ({
-      ...d,
-      seleccionadas: d.seleccionadas.includes(id) ? d.seleccionadas.filter((x) => x !== id) : [...d.seleccionadas, id],
-    }));
-
-  const pedirRecomendacion = async () => {
-    setRecomendando(true);
-    setRecomendacion(null);
+  // Lee la solicitud y el récord (sin guardarlos todavía) y prellena los datos del estudiante.
+  const leerDocumentos = async () => {
+    if (!carta || !archivo) {
+      setAviso({ tipo: "danger", texto: "Seleccione la solicitud del estudiante y el récord académico (PDF)." });
+      return;
+    }
+    setLeyendo(true);
+    setAviso(null);
     try {
-      const r = await recomendarPorCarrera({
-        carreraOrigenId: Number(datos.origen),
-        carreraDestinoId: Number(datos.destino),
-        asignaturasOrigenIds: datos.seleccionadas,
+      const [textoCarta, textoRecord] = await Promise.all([leerTextoPdf(carta), leerTextoPdf(archivo)]);
+      if (textoRecord.trim().length < 20)
+        setAviso({
+          tipo: "warning",
+          texto: "El récord no tiene texto legible (puede ser un PDF escaneado). Ingrese los datos a mano.",
+        });
+      const detectados = detectarDatos(textoRecord, textoCarta, carreras);
+      setDatos((d) => {
+        const nuevo = { ...d };
+        for (const [campo, valor] of Object.entries(detectados)) if (valor) nuevo[campo] = valor;
+        return nuevo;
       });
-      setRecomendacion((r?.recomendaciones || []).filter((x) => x.homologable));
+      setLeidos(Object.fromEntries(Object.entries(detectados).filter(([, v]) => v).map(([k]) => [k, true])));
+      irA(2);
     } catch (e) {
-      setAviso({ tipo: "danger", texto: e.message || "No se pudo obtener la recomendación." });
+      setAviso({ tipo: "danger", texto: e.message || "No se pudieron leer los documentos." });
     } finally {
-      setRecomendando(false);
+      setLeyendo(false);
     }
   };
 
+  /* ---------- Paso 2: datos del estudiante ---------- */
+
+  const elegirOrigen = (valor) =>
+    setDatos((d) => ({ ...d, origen: valor, destino: valor === d.destino ? "" : d.destino }));
+
   const errorDatos = () => {
+    if (!datos.estudianteNombre.trim()) return "Ingrese el nombre del estudiante.";
+    if (!/^\d{10}$/.test(datos.estudianteCedula)) return "La cédula del estudiante debe tener 10 dígitos.";
     if (!datos.origen || !datos.destino) return "Elija la carrera de origen y la de destino.";
     if (datos.origen === datos.destino) return "La carrera de origen y la de destino deben ser distintas.";
     if (externo && (!datos.universidadOrigen.trim() || !datos.universidadDestino.trim()))
       return "Indique la universidad de origen y la de destino.";
-    if (datos.estudianteCedula && !/^\d{10}$/.test(datos.estudianteCedula))
-      return "La cédula debe tener 10 dígitos (o déjela vacía).";
-    if (datos.seleccionadas.length === 0) return "Seleccione al menos una asignatura a homologar.";
+    if (externo && silabos.length === 0 && silabosGuardados === 0 && !ruta.trim())
+      return "Agregue los sílabos de la universidad de origen: súbalos en PDF o indique la carpeta del equipo donde están.";
     return "";
   };
 
-  const guardarDatos = async (ev) => {
+  // Crea la solicitud con los datos revisados, guarda los documentos y lee las materias del récord.
+  const iniciarProceso = async (ev) => {
     ev.preventDefault();
     const error = errorDatos();
     if (error) {
@@ -224,8 +283,8 @@ export default function NuevaSolicitud() {
     };
     setGuardandoDatos(true);
     setAviso(null);
+    let id = solicitudId;
     try {
-      let id = solicitudId;
       if (id) {
         await actualizarSolicitud(id, cuerpo);
       } else {
@@ -235,17 +294,37 @@ export default function NuevaSolicitud() {
         setSolicitudId(id);
         setSearchParams({ solicitudId: id }, { replace: true });
       }
+      // Documentos elegidos en el paso 1 que aún no se guardaron.
+      if (carta) await subirDocumento(id, "SOLICITUD", carta);
+      if (archivo) await subirDocumento(id, "HISTORIAL", archivo);
+      setCarta(null);
+      setArchivo(null);
+      const datosRuta = { solicitudId: Number(id), usuario: usuario?.correo || "" };
+      if (externo && url.trim()) await registrarUrlExterna({ ...datosRuta, url: url.trim() });
+      if (externo) for (const f of silabos) await subirDocumento(id, "SILABO", f);
+      setSilabos([]);
+      setClaveSilabos((n) => n + 1);
+      if (ruta.trim()) await procesarCarpeta({ ...datosRuta, ruta: ruta.trim() });
+      setUrl("");
+      setRuta("");
       setSolicitud(await obtenerSolicitud(id));
-      await recargarDocumentos(id);
-      irA(2);
+      const docs = await recargarDocumentos(id);
+      if (!docs.some(esRecord)) {
+        irA(1);
+        setAviso({ tipo: "warning", texto: "Solicitud guardada. Falta subir el récord académico." });
+        return;
+      }
+      irA(3);
+      if (materias.length === 0) extraer(id);
     } catch (e) {
-      setAviso({ tipo: "danger", texto: e.message || "No se pudo guardar la solicitud." });
+      setAviso({ tipo: "danger", texto: e.message || "No se pudo iniciar el proceso." });
+      if (id) recargarDocumentos(id);
     } finally {
       setGuardandoDatos(false);
     }
   };
 
-  /* ---------- Paso 2 ---------- */
+  /* ---------- Paso 1 (solicitud retomada): subir documentos directamente ---------- */
 
   const elegirArchivo = (ev) => {
     const f = ev.target.files?.[0];
@@ -257,6 +336,35 @@ export default function NuevaSolicitud() {
       return;
     }
     setArchivo(f || null);
+  };
+
+  const elegirCarta = (ev) => {
+    const f = ev.target.files?.[0];
+    setAviso(null);
+    if (f && (f.type !== "application/pdf" || f.size > TAMANO_MAXIMO)) {
+      setAviso({ tipo: "danger", texto: "El archivo debe ser un PDF de hasta 10 MB." });
+      setCarta(null);
+      setClaveCarta((n) => n + 1);
+      return;
+    }
+    setCarta(f || null);
+  };
+
+  const subirCarta = async () => {
+    if (!carta) return;
+    setSubiendo(true);
+    setAviso(null);
+    try {
+      await subirDocumento(solicitudId, "SOLICITUD", carta);
+      await recargarDocumentos(solicitudId);
+      setCarta(null);
+      setClaveCarta((n) => n + 1);
+      setAviso({ tipo: "success", texto: "Solicitud del estudiante subida." });
+    } catch (e) {
+      setAviso({ tipo: "danger", texto: e.message || "No se pudo subir el archivo." });
+    } finally {
+      setSubiendo(false);
+    }
   };
 
   const subirRecord = async () => {
@@ -276,39 +384,18 @@ export default function NuevaSolicitud() {
     }
   };
 
-  const registrarRuta = async (tipo) => {
-    const valor = (tipo === "URL" ? url : ruta).trim();
-    if (!valor) return;
-    setRegistrandoRuta(true);
-    setAviso(null);
-    try {
-      const datosRuta = { solicitudId: Number(solicitudId), usuario: usuario?.correo || "" };
-      if (tipo === "URL") await registrarUrlExterna({ ...datosRuta, url: valor });
-      else await procesarCarpeta({ ...datosRuta, ruta: valor });
-      await recargarDocumentos(solicitudId);
-      if (tipo === "URL") setUrl("");
-      else setRuta("");
-      setAviso({ tipo: "success", texto: tipo === "URL" ? "URL de la carpeta registrada." : "Carpeta procesada." });
-    } catch (e) {
-      setAviso({ tipo: "danger", texto: e.message || "No se pudo registrar la ruta." });
-    } finally {
-      setRegistrandoRuta(false);
-    }
-  };
-
   /* ---------- Paso 3 ---------- */
 
-  const extraer = async () => {
+  const extraer = async (id = solicitudId) => {
     setExtrayendo(true);
-    setAviso(null);
     setRevisionMaterias("");
     try {
-      const r = await extraerRecord(solicitudId);
+      const r = await extraerRecord(id);
       setMaterias(r?.materias ?? []);
       setMateriasGuardadas(false);
       if (r?.requiereRevision)
         setRevisionMaterias(r?.motivo || "El récord no se leyó con claridad. Revise y corrija las materias.");
-      if (r?.nombreEstudiante || r?.cedulaEstudiante) setSolicitud(await obtenerSolicitud(solicitudId));
+      if (r?.nombreEstudiante || r?.cedulaEstudiante) setSolicitud(await obtenerSolicitud(id));
     } catch (e) {
       setAviso({ tipo: "danger", texto: e.message || "No se pudo leer el récord académico." });
     } finally {
@@ -331,17 +418,17 @@ export default function NuevaSolicitud() {
     }
   };
 
-  /* ---------- Paso 4 ---------- */
+  /* ---------- Paso 3: asignar docente ---------- */
 
-  const enviar = async () => {
+  const asignar = async () => {
     setEnviando(true);
     setAviso(null);
     try {
-      if (externo) await analizarSolicitudExterna(solicitudId);
-      else await analizarSolicitud(solicitudId);
+      await delegarDocentes(solicitudId, elegidos);
+      setSolicitud(await obtenerSolicitud(solicitudId).catch(() => solicitud));
       setEnviada(true);
     } catch (e) {
-      setAviso({ tipo: "danger", texto: e.message || "No se pudo enviar la solicitud a revisión." });
+      setAviso({ tipo: "danger", texto: e.message || "No se pudo asignar el docente." });
     } finally {
       setEnviando(false);
     }
@@ -350,7 +437,6 @@ export default function NuevaSolicitud() {
   /* ---------- Vista ---------- */
 
   const carreraNombre = (id) => carreras.find((c) => String(c.id) === String(id))?.nombre || "—";
-  const asignaturasVisibles = asignaturas.filter((a) => nivel === "Todos" || a.nivel === nivel);
   const volverA = rol === "COORDINADOR" ? "/inicio" : "/mis-solicitudes";
 
   if (cargandoInicial) {
@@ -362,31 +448,29 @@ export default function NuevaSolicitud() {
     );
   }
 
-  // Ya enviada (en esta visita o antes): no se puede seguir editando.
+  // Ya asignada (en esta visita o antes): la revisión está en manos del docente.
   if (enviada || !editable) {
+    const nombres = elegidos
+      .map((c) => docentes.find((d) => d.correo === c)?.nombre || c)
+      .join(" y ");
     return (
       <div className="container pb-5">
         <div className="card border-0 shadow-sm ns-final mx-auto">
           <div className="card-body text-center p-5">
             <div className="ns-final-icono mx-auto mb-3" aria-hidden="true">✓</div>
             <h1 className="h4 fw-bold">
-              {enviada ? `${numeroDe(solicitud)} enviada a revisión` : `${numeroDe(solicitud)} ya está en revisión`}
+              {enviada ? `${numeroDe(solicitud)} enviada al docente` : `${numeroDe(solicitud)} ya está en revisión`}
             </h1>
             <p className="text-muted mb-4">
-              {rol === "COORDINADOR"
-                ? "Ya puede delegarla a los docentes para que la revisen."
-                : "El Coordinador la delegará a los docentes. Podrá seguir su avance desde sus solicitudes."}
+              {enviada && nombres ? `${nombres} recibió la solicitud. ` : ""}
+              El docente genera el análisis con la IA, decide qué se homologa y le envía su informe técnico. Cuando
+              llegue, la solicitud aparecerá en su inicio para emitir el informe final al Comité.
             </p>
             <div className="d-flex flex-wrap justify-content-center gap-2">
-              {rol === "COORDINADOR" && (
-                <Link to={`/delegar-docentes?solicitudId=${solicitudId}`} className="btn btn-primary fw-semibold">
-                  Delegar a docentes →
-                </Link>
-              )}
-              <Link to={volverA} className="btn btn-outline-secondary">
+              <Link to={volverA} className="btn btn-primary fw-semibold">
                 {rol === "COORDINADOR" ? "Volver al inicio" : "Ver mis solicitudes"}
               </Link>
-              <a href="/nueva-solicitud" className="btn btn-link">
+              <a href="/nueva-solicitud" className="btn btn-outline-secondary">
                 Registrar otra solicitud
               </a>
             </div>
@@ -406,7 +490,7 @@ export default function NuevaSolicitud() {
           </p>
           <h1 className="h3 fw-bold mb-1">Solicitud de homologación</h1>
           <p className="text-muted mb-0">
-            Complete los cuatro pasos. Puede salir y continuar después desde el inicio.
+            Documentos del estudiante → datos del estudiante → asignar docente. El docente hace el análisis con la IA.
           </p>
         </div>
         <Link to={volverA} className="btn btn-link text-decoration-none">
@@ -420,7 +504,7 @@ export default function NuevaSolicitud() {
           const n = i + 1;
           // Completado: un paso ya superado (aunque se haya vuelto atrás para revisarlo).
           const hecho = n !== paso && n < alcanzado;
-          const disponible = n <= alcanzado && (n === 1 || solicitudId);
+          const disponible = n <= alcanzado && (n <= 2 || solicitudId);
           return (
             <li key={nombre} className={`${n === paso ? "actual" : ""} ${hecho ? "hecho" : ""}`}>
               <button
@@ -442,12 +526,133 @@ export default function NuevaSolicitud() {
         <div className="card-body p-4">
           {aviso && <div className={`alert alert-${aviso.tipo} py-2`}>{aviso.texto}</div>}
 
-          {/* ---------- PASO 1 ---------- */}
+          {/* ---------- PASO 1: DOCUMENTOS ---------- */}
           {paso === 1 && (
-            <form onSubmit={guardarDatos}>
+            <>
+              <h2 className="h5 fw-bold mb-1">Documentos que entrega el estudiante</h2>
+              <p className="text-muted">
+                Suba la solicitud de homologación y el récord académico. Con ellos se completan los datos del
+                estudiante en el siguiente paso; la malla y los sílabos de la UTA ya están en el sistema.
+              </p>
+
+              <div className={`ns-requisito ${tieneCarta || carta ? "listo" : ""}`}>
+                <h3 className="h6 fw-bold mb-2">{tieneCarta || carta ? "✓ " : ""}Solicitud de homologación (PDF) *</h3>
+                <div className="d-flex flex-wrap gap-2">
+                  <input
+                    key={claveCarta}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="form-control ns-archivo"
+                    onChange={elegirCarta}
+                    aria-label="Archivo PDF de la solicitud del estudiante"
+                  />
+                  {solicitudId && (
+                    <button type="button" className="btn btn-primary" onClick={subirCarta} disabled={!carta || subiendo}>
+                      {subiendo ? "Subiendo…" : tieneCarta ? "Subir otra" : "Subir"}
+                    </button>
+                  )}
+                </div>
+                <div className="form-text">Carta firmada por el estudiante pidiendo la homologación.</div>
+              </div>
+
+              <div className={`ns-requisito ${tieneRecord || archivo ? "listo" : ""}`}>
+                <h3 className="h6 fw-bold mb-2">{tieneRecord || archivo ? "✓ " : ""}Récord académico (PDF) *</h3>
+                <div className="d-flex flex-wrap gap-2">
+                  <input
+                    key={claveArchivo}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="form-control ns-archivo"
+                    onChange={elegirArchivo}
+                    aria-label="Archivo PDF del récord académico"
+                  />
+                  {solicitudId && (
+                    <button type="button" className="btn btn-primary" onClick={subirRecord} disabled={!archivo || subiendo}>
+                      {subiendo ? "Subiendo…" : tieneRecord ? "Subir otro" : "Subir"}
+                    </button>
+                  )}
+                </div>
+                <div className="form-text">PDF de hasta 10 MB. De aquí salen las materias aprobadas que se analizan.</div>
+              </div>
+
+              {documentos.length > 0 && (
+                <>
+                  <h3 className="h6 fw-bold">Documentos de la solicitud</h3>
+                  <ListaDocumentos documentos={documentos} />
+                </>
+              )}
+
+              <div className="ns-acciones">
+                <span />
+                {solicitudId ? (
+                  <button type="button" className="btn btn-primary fw-semibold px-4" onClick={() => irA(2)} disabled={!tieneRecord}>
+                    Continuar →
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary fw-semibold px-4"
+                    onClick={leerDocumentos}
+                    disabled={!carta || !archivo || leyendo}
+                  >
+                    {leyendo ? "Leyendo documentos…" : "Leer documentos y continuar →"}
+                  </button>
+                )}
+              </div>
+              {!solicitudId && (!carta || !archivo) && (
+                <p className="small text-muted text-end mb-0 mt-2">
+                  {!carta && !archivo
+                    ? "Seleccione la solicitud y el récord académico."
+                    : !carta
+                    ? "Falta la solicitud de homologación."
+                    : "Falta el récord académico."}
+                </p>
+              )}
+              {solicitudId && !tieneRecord && (
+                <p className="small text-muted text-end mb-0 mt-2">Falta subir el récord académico.</p>
+              )}
+            </>
+          )}
+
+          {/* ---------- PASO 2: DATOS DEL ESTUDIANTE ---------- */}
+          {paso === 2 && (
+            <form onSubmit={iniciarProceso}>
+              {leidos && Object.keys(leidos).length > 0 && (
+                <div className="alert alert-info py-2 small">
+                  Se completaron con los documentos los campos marcados como <span className="badge text-bg-info">leído</span>.
+                  Verifíquelos y corrija lo necesario antes de iniciar el proceso.
+                </div>
+              )}
               <div className="row g-4">
-                <div className="col-lg-5">
-                  <h2 className="h6 fw-bold mb-3">¿De dónde viene el estudiante?</h2>
+                <div className="col-lg-6">
+                  <h2 className="h6 fw-bold mb-2">Estudiante</h2>
+                  <div className="mb-2">
+                    <label htmlFor="nsNombre" className="form-label small mb-1">
+                      Nombre completo * {leidos?.estudianteNombre && <span className="badge text-bg-info ms-1">leído</span>}
+                    </label>
+                    <input
+                      id="nsNombre"
+                      className="form-control"
+                      maxLength={200}
+                      value={datos.estudianteNombre}
+                      onChange={(e) => cambiarDato("estudianteNombre", e.target.value)}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="nsCedula" className="form-label small mb-1">
+                      Cédula * {leidos?.estudianteCedula && <span className="badge text-bg-info ms-1">leído</span>}
+                    </label>
+                    <input
+                      id="nsCedula"
+                      className="form-control"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={datos.estudianteCedula}
+                      onChange={(e) => cambiarDato("estudianteCedula", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    />
+                  </div>
+
+                  <h2 className="h6 fw-bold mb-2">¿De dónde viene el estudiante?</h2>
                   <div className="btn-group w-100 mb-3" role="group" aria-label="Modalidad">
                     {[
                       { valor: "INTERNO", texto: "De la UTA", ayuda: "Cambio de carrera" },
@@ -468,7 +673,9 @@ export default function NuevaSolicitud() {
                   {externo && (
                     <div className="row g-2 mb-3">
                       <div className="col-sm-6">
-                        <label htmlFor="nsUniOrigen" className="form-label small mb-1">Universidad de origen *</label>
+                        <label htmlFor="nsUniOrigen" className="form-label small mb-1">
+                          Universidad de origen * {leidos?.universidadOrigen && <span className="badge text-bg-info ms-1">leído</span>}
+                        </label>
                         <input
                           id="nsUniOrigen"
                           className="form-control"
@@ -483,7 +690,7 @@ export default function NuevaSolicitud() {
                           id="nsUniDestino"
                           className="form-control"
                           maxLength={150}
-                          placeholder="Universidad Técnica de Ambato"
+                          placeholder={UTA}
                           value={datos.universidadDestino}
                           onChange={(e) => cambiarDato("universidadDestino", e.target.value)}
                         />
@@ -491,8 +698,10 @@ export default function NuevaSolicitud() {
                     </div>
                   )}
 
-                  <div className="mb-3">
-                    <label htmlFor="nsOrigen" className="form-label small mb-1">Carrera de origen *</label>
+                  <div className="mb-2">
+                    <label htmlFor="nsOrigen" className="form-label small mb-1">
+                      Carrera de origen * {leidos?.origen && <span className="badge text-bg-info ms-1">leído</span>}
+                    </label>
                     <select id="nsOrigen" className="form-select" value={datos.origen} onChange={(e) => elegirOrigen(e.target.value)}>
                       <option value="">Elija una carrera…</option>
                       {carreras.map((c) => (
@@ -500,8 +709,10 @@ export default function NuevaSolicitud() {
                       ))}
                     </select>
                   </div>
-                  <div className="mb-4">
-                    <label htmlFor="nsDestino" className="form-label small mb-1">Carrera de destino *</label>
+                  <div className="mb-3">
+                    <label htmlFor="nsDestino" className="form-label small mb-1">
+                      Carrera de destino * {leidos?.destino && <span className="badge text-bg-info ms-1">leído</span>}
+                    </label>
                     <select
                       id="nsDestino"
                       className="form-select"
@@ -517,305 +728,197 @@ export default function NuevaSolicitud() {
                     </select>
                   </div>
 
-                  <h2 className="h6 fw-bold mb-1">Titular <span className="text-muted fw-normal small">(opcional)</span></h2>
-                  <p className="small text-muted mb-2">Si no los conoce, se toman del récord académico en el paso 3.</p>
-                  <div className="row g-2">
-                    <div className="col-sm-7">
-                      <label htmlFor="nsNombre" className="visually-hidden">Nombre del estudiante</label>
+                  {externo && (
+                    <div className="mb-3">
+                      <label htmlFor="nsSilabos" className="form-label small mb-1">
+                        Sílabos de la universidad de origen (PDF) *{" "}
+                        {silabosGuardados > 0 && <span className="badge text-bg-success ms-1">{silabosGuardados} guardados</span>}
+                      </label>
                       <input
-                        id="nsNombre"
+                        id="nsSilabos"
+                        key={claveSilabos}
+                        type="file"
+                        multiple
+                        accept=".pdf,application/pdf"
                         className="form-control"
-                        placeholder="Nombre completo"
-                        value={datos.estudianteNombre}
-                        onChange={(e) => cambiarDato("estudianteNombre", e.target.value)}
+                        onChange={elegirSilabos}
                       />
+                      <div className="form-text">
+                        Un PDF por asignatura aprobada, con el nombre de la asignatura en el archivo (p. ej. «Cálculo I.pdf»).
+                        La IA compara estos sílabos con la malla de la UTA.
+                        {silabos.length > 0 && <strong> {silabos.length} seleccionados.</strong>}
+                      </div>
                     </div>
-                    <div className="col-sm-5">
-                      <label htmlFor="nsCedula" className="visually-hidden">Cédula del estudiante</label>
+                  )}
+
+                  {externo && (
+                    <div className="mb-3">
+                      <label htmlFor="nsUrl" className="form-label small mb-1">
+                        Enlace a la carpeta de la otra universidad{" "}
+                        {tieneUrl && <span className="badge text-bg-success ms-1">registrado</span>}
+                      </label>
                       <input
-                        id="nsCedula"
+                        id="nsUrl"
+                        type="url"
                         className="form-control"
-                        inputMode="numeric"
-                        maxLength={10}
-                        placeholder="Cédula"
-                        value={datos.estudianteCedula}
-                        onChange={(e) => cambiarDato("estudianteCedula", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        placeholder={tieneUrl ? "Ya registrado (puede registrar otro)" : "https://drive.google.com/…"}
+                        value={url}
+                        onChange={(e) => setUrl(e.target.value)}
                       />
+                      <div className="form-text">
+                        Se guarda como referencia en el expediente. La IA no puede abrir enlaces (Drive, OneDrive): suba
+                        los sílabos en PDF o indique la carpeta del equipo para que los pueda leer.
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  <details className="ns-alternativa mb-2">
+                    <summary>¿Hay más documentos en una carpeta del equipo?</summary>
+                    <input
+                      className="form-control mt-2"
+                      placeholder="C:/Users/Usuario/Downloads/CARPETA_ESTUDIANTE"
+                      value={ruta}
+                      onChange={(e) => setRuta(e.target.value)}
+                      aria-label="Ruta de la carpeta local"
+                    />
+                    <div className="form-text">Al iniciar el proceso se leen sus PDF (solo lectura) y se clasifican.</div>
+                  </details>
                 </div>
 
-                <div className="col-lg-7">
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                    <h2 className="h6 fw-bold mb-0">
-                      Asignaturas a homologar *{" "}
-                      {datos.seleccionadas.length > 0 && (
-                        <span className="badge rounded-pill bg-primary ms-1">{datos.seleccionadas.length}</span>
-                      )}
-                    </h2>
-                    {!externo && datos.origen && datos.destino && (
-                      <button type="button" className="btn btn-sm btn-link px-0" onClick={pedirRecomendacion} disabled={recomendando}>
-                        {recomendando ? "Consultando…" : "✨ Sugerir con el agente"}
-                      </button>
-                    )}
+                <div className="col-lg-6">
+                  <h2 className="h6 fw-bold mb-2">¿Qué pasa al iniciar el proceso?</h2>
+                  <div className="ns-vacio text-start">
+                    <ol className="small mb-2 ps-3">
+                      <li>Se registra la solicitud y se guardan la carta y el récord en el expediente.</li>
+                      <li>Se leen las materias del récord; usted las revisa y confirma (solo cuentan las <strong>aprobadas</strong>).</li>
+                      <li>
+                        {externo
+                          ? "La IA compara con los sílabos de la universidad de origen (carpeta registrada) usando criterios generales."
+                          : "La IA toma el sílabo y el semestre de cada materia de la malla de origen y aplica las reglas de FISEI: 80 % de contenido, profundidad y carga horaria; máximo 10 años desde la aprobación."}
+                      </li>
+                      <li>La IA sugiere; el docente asignado decide y el coordinador emite el informe final.</li>
+                    </ol>
+                    <p className="small text-muted mb-0">
+                      Desarrollo de Proyectos, Titulación y Prácticas Laborales no se homologan por regla institucional.
+                    </p>
                   </div>
-
-                  {recomendacion && (
-                    <div className="alert alert-info py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2">
-                      <span>
-                        {recomendacion.length === 0
-                          ? "El agente no encontró materias homologables."
-                          : `El agente sugiere ${recomendacion.length} materia(s): ${recomendacion.map((r) => r.asignaturaOrigen).join(", ")}.`}
-                      </span>
-                      {recomendacion.length > 0 && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => {
-                            const ids = recomendacion
-                              .map((r) => Number(r.asignaturaId))
-                              .filter((id) => asignaturas.some((a) => Number(a.id) === id));
-                            setDatos((d) => ({ ...d, seleccionadas: Array.from(new Set([...d.seleccionadas, ...ids])) }));
-                            setRecomendacion(null);
-                          }}
-                        >
-                          Marcarlas
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {!datos.origen ? (
-                    <div className="ns-vacio">Elija la carrera de origen para ver sus asignaturas.</div>
-                  ) : (
-                    <>
-                      <FiltroNivel nivelSeleccionado={nivel} onChange={setNivel} />
-                      <div className="ns-asignaturas">
-                        {asignaturasVisibles.length === 0 ? (
-                          <p className="text-muted small mb-0">No hay asignaturas en este nivel.</p>
-                        ) : (
-                          asignaturasVisibles.map((a) => (
-                            <label key={a.id} className={`ns-asignatura ${datos.seleccionadas.includes(a.id) ? "marcada" : ""}`}>
-                              <input
-                                type="checkbox"
-                                className="form-check-input mt-0"
-                                checked={datos.seleccionadas.includes(a.id)}
-                                onChange={() => alternarAsignatura(a.id)}
-                              />
-                              <span className="flex-grow-1">{a.nombre}</span>
-                              <span className="small text-muted text-nowrap">{a.nivel}</span>
-                            </label>
-                          ))
-                        )}
-                      </div>
-                    </>
-                  )}
-                  <p className="small text-muted mt-2 mb-0">
-                    Desarrollo de Proyectos, Titulación y Prácticas Laborales no se homologan por regla institucional.
-                  </p>
                 </div>
               </div>
 
               <div className="ns-acciones">
-                <span />
+                <button type="button" className="btn btn-outline-secondary" onClick={() => irA(1)}>← Documentos</button>
                 <button type="submit" className="btn btn-primary fw-semibold px-4" disabled={guardandoDatos}>
-                  {guardandoDatos ? "Guardando…" : solicitudId ? "Guardar y continuar →" : "Crear solicitud y continuar →"}
+                  {guardandoDatos ? "Iniciando…" : solicitudId ? "Guardar y continuar →" : "Iniciar proceso →"}
                 </button>
               </div>
             </form>
           )}
 
-          {/* ---------- PASO 2 ---------- */}
-          {paso === 2 && (
-            <>
-              <h2 className="h5 fw-bold mb-1">Documentos</h2>
-              <p className="text-muted">
-                Suba el récord académico del estudiante. La malla y los sílabos de la UTA ya están en el sistema
-                {externo ? "; para la otra universidad, registre el enlace a la carpeta con sus documentos." : "."}
-              </p>
-
-              <div className={`ns-requisito ${tieneRecord ? "listo" : ""}`}>
-                <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
-                  <h3 className="h6 fw-bold mb-0">{tieneRecord ? "✓ " : ""}Récord académico (PDF) *</h3>
-                </div>
-                <div className="d-flex flex-wrap gap-2">
-                  <input
-                    key={claveArchivo}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    className="form-control ns-archivo"
-                    onChange={elegirArchivo}
-                    aria-label="Archivo PDF del récord académico"
-                  />
-                  <button type="button" className="btn btn-primary" onClick={subirRecord} disabled={!archivo || subiendo}>
-                    {subiendo ? "Subiendo…" : tieneRecord ? "Subir otro" : "Subir"}
-                  </button>
-                </div>
-                <div className="form-text">PDF de hasta 10 MB.</div>
-              </div>
-
-              {externo && (
-                <div className={`ns-requisito ${tieneUrl ? "listo" : ""}`}>
-                  <h3 className="h6 fw-bold mb-2">{tieneUrl ? "✓ " : ""}Enlace a la carpeta de la otra universidad *</h3>
-                  <div className="d-flex flex-wrap gap-2">
-                    <input
-                      type="url"
-                      className="form-control ns-archivo"
-                      placeholder="https://drive.google.com/…"
-                      value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      aria-label="URL de la carpeta compartida"
-                    />
-                    <button type="button" className="btn btn-primary" onClick={() => registrarRuta("URL")} disabled={!url.trim() || registrandoRuta}>
-                      Registrar
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <details className="ns-alternativa mb-3">
-                <summary>¿Los documentos están en una carpeta del equipo?</summary>
-                <div className="d-flex flex-wrap gap-2 mt-2">
-                  <input
-                    className="form-control ns-archivo"
-                    placeholder="C:/Users/Usuario/Downloads/CARPETA_ESTUDIANTE"
-                    value={ruta}
-                    onChange={(e) => setRuta(e.target.value)}
-                    aria-label="Ruta de la carpeta local"
-                  />
-                  <button type="button" className="btn btn-outline-primary" onClick={() => registrarRuta("LOCAL")} disabled={!ruta.trim() || registrandoRuta}>
-                    Procesar carpeta
-                  </button>
-                </div>
-                <div className="form-text">Se leen los PDF de la carpeta (en solo lectura) y se clasifican automáticamente.</div>
-              </details>
-
-              {documentos.length > 0 && (
-                <>
-                  <h3 className="h6 fw-bold">Documentos de la solicitud</h3>
-                  <ListaDocumentos documentos={documentos} />
-                </>
-              )}
-
-              <div className="ns-acciones">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => irA(1)}>← Datos</button>
-                <button type="button" className="btn btn-primary fw-semibold px-4" onClick={() => irA(3)} disabled={!documentosListos}>
-                  Continuar →
-                </button>
-              </div>
-              {!documentosListos && (
-                <p className="small text-muted text-end mb-0 mt-2">
-                  {!tieneRecord ? "Falta subir el récord académico." : "Falta registrar el enlace a la carpeta."}
-                </p>
-              )}
-            </>
-          )}
-
-          {/* ---------- PASO 3 ---------- */}
+          {/* ---------- PASO 3: ASIGNAR DOCENTE ---------- */}
           {paso === 3 && (
             <>
-              <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-                <div>
-                  <h2 className="h5 fw-bold mb-1">Materias aprobadas</h2>
-                  <p className="text-muted mb-0">
-                    El agente lee el récord y lista las materias aprobadas. Revíselas, corrija lo necesario y guárdelas.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className={`btn ${materias.length === 0 ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={extraer}
-                  disabled={extrayendo}
-                >
-                  {extrayendo ? "Leyendo el récord…" : materias.length === 0 ? "Extraer del récord" : "Volver a extraer"}
-                </button>
-              </div>
-
-              {extrayendo && (
-                <div className="alert alert-info py-2 small d-flex align-items-center gap-2">
-                  <span className="spinner-border spinner-border-sm" role="status" />
-                  El agente está leyendo el récord. Puede tardar unos minutos; también puede agregar las materias a mano.
-                </div>
-              )}
-              {revisionMaterias && <div className="alert alert-warning py-2 small">{revisionMaterias}</div>}
-              {materias.length > 0 && !materiasGuardadas && (
-                <div className="alert alert-info py-2 small">Revise la lista y pulse <strong>Guardar</strong> para continuar.</div>
-              )}
-
-              <TablaMateriasAprobadas
-                materias={materias}
-                onGuardar={guardarMaterias}
-                guardando={guardandoMaterias}
-                soloLectura={false}
-              />
-
-              <div className="ns-acciones">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => irA(2)}>← Documentos</button>
-                <button type="button" className="btn btn-primary fw-semibold px-4" onClick={() => irA(4)} disabled={!materiasListas}>
-                  Continuar →
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* ---------- PASO 4 ---------- */}
-          {paso === 4 && (
-            <>
-              <h2 className="h5 fw-bold mb-1">Revisar y enviar</h2>
+              <h2 className="h5 fw-bold mb-1">Asignar el docente responsable</h2>
               <p className="text-muted">
-                Al enviarla, el sistema analiza las asignaturas y la solicitud pasa al Coordinador para delegarla a los
-                docentes. Después ya no podrá modificar los datos ni las materias.
+                El docente recibirá los datos del estudiante, la solicitud y el récord. Él genera el análisis con la IA,
+                decide qué se homologa y le envía su informe técnico; usted emite después el informe final al Comité.
               </p>
 
-              <div className="row g-3 mb-2">
-                <div className="col-md-4">
-                  <div className="ns-resumen">
+              <div className="row g-3 mb-3">
+                <div className="col-md-6">
+                  <div className="ns-resumen h-100">
                     <div className="d-flex justify-content-between">
-                      <span className="ns-resumen-titulo">Datos</span>
-                      <button type="button" className="btn btn-link btn-sm p-0" onClick={() => irA(1)}>Editar</button>
-                    </div>
-                    <div className="fw-semibold">{carreraNombre(datos.origen)} → {carreraNombre(datos.destino)}</div>
-                    <div className="small text-muted">
-                      {externo ? `${datos.universidadOrigen} → ${datos.universidadDestino}` : "Cambio de carrera (UTA)"}
-                    </div>
-                    <div className="small">{datos.seleccionadas.length} asignatura(s) a homologar</div>
-                    <div className="small text-muted">
-                      {solicitud?.estudianteNombre && solicitud.estudianteNombre !== NOMBRE_SIN_IDENTIFICAR
-                        ? `${solicitud.estudianteNombre}${solicitud.estudianteCedula && solicitud.estudianteCedula !== "-" ? ` · C.I. ${solicitud.estudianteCedula}` : ""}`
-                        : "Titular: se toma del récord"}
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="ns-resumen">
-                    <div className="d-flex justify-content-between">
-                      <span className="ns-resumen-titulo">Documentos</span>
+                      <span className="ns-resumen-titulo">Estudiante</span>
                       <button type="button" className="btn btn-link btn-sm p-0" onClick={() => irA(2)}>Editar</button>
                     </div>
-                    <div className="fw-semibold">{documentos.length} documento(s)</div>
-                    <div className="small text-success">✓ Récord académico</div>
-                    {externo && <div className="small text-success">✓ Enlace a la carpeta</div>}
+                    <div className="fw-semibold">{datos.estudianteNombre || "—"}</div>
+                    <div className="small text-muted">C.I. {datos.estudianteCedula || "—"}</div>
+                    <div className="small">{carreraNombre(datos.origen)} → {carreraNombre(datos.destino)}</div>
+                    {externo && <div className="small text-muted">{datos.universidadOrigen} → {datos.universidadDestino}</div>}
                   </div>
                 </div>
-                <div className="col-md-4">
-                  <div className="ns-resumen">
+                <div className="col-md-6">
+                  <div className="ns-resumen h-100">
                     <div className="d-flex justify-content-between">
-                      <span className="ns-resumen-titulo">Materias aprobadas</span>
-                      <button type="button" className="btn btn-link btn-sm p-0" onClick={() => irA(3)}>Editar</button>
+                      <span className="ns-resumen-titulo">Documentos</span>
+                      <button type="button" className="btn btn-link btn-sm p-0" onClick={() => irA(1)}>Editar</button>
                     </div>
-                    <div className="fw-semibold">{materias.length} materia(s)</div>
-                    <div className="small text-muted text-truncate">
-                      {materias.slice(0, 3).map((m) => m.nombre || m.materia).filter(Boolean).join(", ")}
-                      {materias.length > 3 ? "…" : ""}
+                    {tieneCarta && <div className="small text-success">✓ Solicitud del estudiante</div>}
+                    <div className={`small ${tieneRecord ? "text-success" : "text-danger"}`}>
+                      {tieneRecord ? "✓" : "✗"} Récord académico
+                    </div>
+                    {externo && (
+                      <div className={`small ${silabosGuardados > 0 ? "text-success" : "text-danger"}`}>
+                        {silabosGuardados > 0 ? `✓ ${silabosGuardados} sílabos de la universidad de origen` : "✗ Sin sílabos de la universidad de origen"}
+                      </div>
+                    )}
+                    {externo && tieneUrl && <div className="small text-success">✓ Enlace a la carpeta (referencia)</div>}
+                    <div className="small mt-1">
+                      {extrayendo ? (
+                        <span className="text-muted"><span className="spinner-border spinner-border-sm me-1" role="status" />Leyendo el récord…</span>
+                      ) : (
+                        <span className={materias.length > 0 ? "text-success" : "text-danger"}>
+                          {materias.length > 0 ? `✓ ${materias.length} materias leídas del récord` : "✗ No se leyeron materias del récord"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
+              {revisionMaterias && <div className="alert alert-warning py-2 small">{revisionMaterias}</div>}
+              <details className="ns-alternativa mb-3" open={!extrayendo && materias.length === 0}>
+                <summary>Ver o corregir las materias leídas del récord</summary>
+                <div className="d-flex justify-content-end my-2">
+                  <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => extraer()} disabled={extrayendo}>
+                    {extrayendo ? "Leyendo…" : "Volver a leer el récord"}
+                  </button>
+                </div>
+                <TablaMateriasAprobadas
+                  materias={materias}
+                  onGuardar={guardarMaterias}
+                  guardando={guardandoMaterias}
+                  soloLectura={false}
+                />
+              </details>
+
+              <h3 className="h6 fw-bold mb-2">Docente responsable *</h3>
+              {docentes.length === 0 ? (
+                <p className="small text-muted">No hay docentes registrados.</p>
+              ) : (
+                <div className="list-group mb-1" style={{ maxWidth: 560 }}>
+                  {docentes.map((d) => {
+                    const marcado = elegidos.includes(d.correo);
+                    return (
+                      <label key={d.correo} className={`list-group-item d-flex align-items-center gap-2 ${marcado ? "active" : ""}`}>
+                        <input
+                          type="checkbox"
+                          className="form-check-input m-0"
+                          checked={marcado}
+                          disabled={!marcado && elegidos.length >= 2}
+                          onChange={() =>
+                            setElegidos((l) => (marcado ? l.filter((c) => c !== d.correo) : [...l, d.correo]))
+                          }
+                        />
+                        <span>
+                          <span className="fw-semibold">{d.nombre || d.correo}</span>
+                          {d.nombre && <span className="small d-block opacity-75">{d.correo}</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="form-text mb-2">Puede asignar uno o dos docentes; el primero que envíe su informe cierra la revisión.</div>
+
               <div className="ns-acciones">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => irA(3)}>← Materias</button>
-                <button type="button" className="btn btn-success fw-semibold px-4" onClick={enviar} disabled={enviando}>
-                  {enviando ? "Analizando y enviando…" : "Enviar a revisión"}
+                <button type="button" className="btn btn-outline-secondary" onClick={() => irA(2)}>← Datos</button>
+                <button
+                  type="button"
+                  className="btn btn-success fw-semibold px-4"
+                  onClick={asignar}
+                  disabled={enviando || extrayendo || elegidos.length === 0 || materias.length === 0}
+                >
+                  {enviando ? "Asignando…" : "Asignar y enviar al docente →"}
                 </button>
               </div>
             </>

@@ -24,6 +24,7 @@ import InformeFinal from "./pages/InformeFinal";
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
 import Equivalencias from "./pages/Equivalencias";
 import EstadoMemoria from "./pages/EstadoMemoria";
+import PlanesAnaliticos from "./pages/PlanesAnaliticos";
 
 export default function App() {
   return (
@@ -80,6 +81,7 @@ export default function App() {
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
             <Route path="/equivalencias" element={<><Menu /><Equivalencias /></>} />
             <Route path="/memoria" element={<><Menu /><EstadoMemoria /></>} />
+            <Route path="/planes-analiticos" element={<><Menu /><PlanesAnaliticos /></>} />
           </Route>
 
           {/* Redirección por defecto */}
