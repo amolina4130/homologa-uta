@@ -266,6 +266,8 @@ public class InformeFinalRequest
     public string? CedulaEstudiante { get; set; }
     public string? NumeroMemorando { get; set; }
     public string? NombreFirmante { get; set; }
+    /// <summary>Texto del informe final editado por el Coordinador. Si se envía, se usa tal cual al emitir.</summary>
+    public string? InformeFinalTexto { get; set; }
 }
 
 /// <summary>Cuerpo del endpoint de delegación: { "correos": [...] }.</summary>

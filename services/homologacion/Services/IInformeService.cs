@@ -2,6 +2,6 @@ namespace HomologaUTA.Homologacion.Services;
 
 public interface IInformeService
 {
-    // Devuelve los bytes del PDF
-    Task<byte[]> GenerarPdfAsync(int solicitudId);
+    /// <summary>Devuelve los bytes del PDF de la solicitud.</summary>
+    Task<byte[]> GenerarPdfAsync(int solicitudId, CancellationToken ct = default);
 }

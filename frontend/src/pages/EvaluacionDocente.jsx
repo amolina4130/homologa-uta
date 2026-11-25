@@ -178,7 +178,7 @@ export default function EvaluacionDocente() {
       aplicarSugerencia(resultado);
       setEstado("Sugerencia generada. Revísela, agregue observaciones y envíela cuando esté lista.");
     } catch (e) {
-      setError(e.message || "No se pudo generar la sugerencia con IA.");
+      setError(e.message || "No se pudo generar la sugerencia.");
     } finally {
       setGenerando(false);
     }
@@ -226,7 +226,7 @@ export default function EvaluacionDocente() {
     setEstado("");
 
     if (!sugerencia) {
-      setError("Primero genere la sugerencia con IA.");
+      setError("Primero genere la sugerencia.");
       return;
     }
 
@@ -324,7 +324,7 @@ export default function EvaluacionDocente() {
         <div className="card-body p-4">
           <div className="alert alert-info">
             <strong>Revisión en tres pasos:</strong> (0) confirme su nombre, cédula y correo en
-            <em> Datos del docente</em>; (1) pulse <em>Generar sugerencia con IA</em> para que el
+            <em> Datos del docente</em>; (1) pulse <em>Generar sugerencia</em> para que el
             agente proponga un informe con esos datos; (2) agregue observaciones y marque{" "}
             <strong>Homologo</strong> o <strong>No homologo</strong> en cada materia; (3) envíe
             manualmente el informe sugerido al Coordinador. La URL y los documentos ya los registró
@@ -493,7 +493,7 @@ export default function EvaluacionDocente() {
               </div>
               <div className="form-text mt-2">
                 Estos datos se imprimen en el informe sugerido y en el PDF. Si los cambia después
-                de generar, pulse <em>Regenerar sugerencia con IA</em> o edite directamente el
+                de generar, pulse <em>Regenerar sugerencia</em> o edite directamente el
                 texto del informe.
               </div>
             </div>
@@ -693,10 +693,10 @@ export default function EvaluacionDocente() {
               disabled={generando || cargando || bloqueado}
             >
               {generando
-                ? "Generando sugerencia con IA..."
+                ? "Generando sugerencia..."
                 : sugerencia
-                  ? "Regenerar sugerencia con IA"
-                  : "Generar sugerencia con IA"}
+                  ? "Regenerar sugerencia"
+                  : "Generar sugerencia"}
             </button>
             <button
               type="button"

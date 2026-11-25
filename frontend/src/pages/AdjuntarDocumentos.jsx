@@ -246,20 +246,11 @@ export default function AdjuntarDocumentos() {
 
                 <div className="row">
                   <div className="col-md-6 mb-3">
-                    <label htmlFor="tipo" className="form-label fw-bold">Tipo de documento</label>
-                    <select
-                      id="tipo"
-                      className="form-select"
-                      value={tipoCodigo}
-                      onChange={(e) => setTipoCodigo(e.target.value)}
-                    >
-                      {TIPOS.map((t) => (
-                        <option key={t.codigo} value={t.codigo}>{t.etiqueta}</option>
-                      ))}
-                    </select>
+                    <label className="form-label fw-bold">Tipo de documento</label>
+                    <div className="form-control bg-light">Récord académico</div>
                     <div className="form-text">
-                      La malla, los sílabos y los planes de estudio ya están cargados en el
-                      sistema para el agente interno. Para el agente externo se referencia
+                      Solo se adjunta el récord académico. La malla, los sílabos y los planes de estudio
+                      ya están cargados en el sistema; para el agente externo la carpeta se referencia
                       desde <strong>Ruta / URL externa</strong>.
                     </div>
                   </div>
@@ -354,6 +345,21 @@ export default function AdjuntarDocumentos() {
                     onClick={() => navigate(`/resultado/${solicitudId}`)}
                   >
                     Continuar al resultado
+                  </button>
+                </div>
+              )}
+
+              {solicitudId && (rol === "COORDINADOR" || rol === "COMITE") && (
+                <div className="alert alert-success d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                  <span>
+                    Cuando el récord esté cargado, puede continuar con la delegación al Docente.
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-success fw-bold"
+                    onClick={() => navigate(`/delegar-docentes?solicitudId=${solicitudId}`)}
+                  >
+                    Ir a delegar a docentes
                   </button>
                 </div>
               )}

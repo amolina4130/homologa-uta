@@ -1,6 +1,18 @@
+namespace HomologaUTA.Homologacion.Models;
+
+public class ResultadoAsignatura
+{
     public const int MaxMateriasOrigen = 2;
 
+    public int Id { get; set; }
+    public int SolicitudId { get; set; }
+    public int AsignaturaDestinoId { get; set; }
     public bool Combinada { get; private set; }
+    public decimal PorcentajeContenido { get; set; }
+    public decimal PorcentajeProfundidad { get; set; }
+    public decimal PorcentajeCargaHoraria { get; set; }
+    public string Decision { get; set; } = string.Empty;
+    public string Justificacion { get; set; } = string.Empty;
 
     public List<MateriaOrigenResultado> MateriasOrigen { get; set; } = new();
 
@@ -17,3 +29,4 @@
         MateriasOrigen = lista;
         Combinada = lista.Count == 2;
     }
+}

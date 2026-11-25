@@ -169,12 +169,8 @@ public class AnalisisExternoService
             entrada.CarreraOrigen = info.CarreraOrigen;
         if (string.IsNullOrWhiteSpace(entrada.CarreraDestino))
             entrada.CarreraDestino = info.CarreraDestino;
-                // --- NUEVO: Enviar las universidades al agente externo ---
-        if (string.IsNullOrWhiteSpace(entrada.UniversidadOrigen))
-            entrada.UniversidadOrigen = info.UniversidadOrigen ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(entrada.UniversidadDestino))
-            entrada.UniversidadDestino = info.UniversidadDestino ?? string.Empty;
-        // ---------------------------------------------------------
+        // Las universidades están disponibles en info (SolicitudCompletaDto) pero el contrato
+        // AgenteExternoRequest actual no las incluye; se omiten para no romper el contrato.
 
         var usaPreseleccion = entrada.MateriasDestino.Count > 0 &&
                               entrada.MateriasDestino.Any(d => d.MateriasOrigenPermitidas.Count > 0);

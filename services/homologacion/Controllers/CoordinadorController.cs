@@ -231,6 +231,33 @@ public class CoordinadorController : ControllerBase
         }
     }
 
+    /// <summary>Genera una vista previa editable del informe final sin emitirlo.</summary>
+    [HttpPost("coordinador/{id:int}/informe-final/vista-previa")]
+    public async Task<ActionResult<object>> VistaPreviaInformeFinal(
+        int id, [FromBody] InformeFinalRequest request, CancellationToken ct)
+    {
+        if (id <= 0)
+            return BadRequest(new { error = "El id de la solicitud debe ser mayor que cero." });
+
+        if (!AutorizacionHomologacion.EsCoordinadorOAdministrador(User))
+            return Forbid();
+
+        try
+        {
+            var correo = CorreoCoordinador();
+            var texto = await _servicio.GenerarVistaPreviaInformeFinalAsync(id, request, correo, ct);
+            return Ok(new { texto });
+        }
+        catch (InformeException ex)
+        {
+            return StatusCode(ex.StatusCode, new { error = ex.Message });
+        }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
+    }
+
     /// <summary>PDF del informe final con la plantilla del Coordinador.</summary>
     [HttpGet("coordinador/{id:int}/informe-final/pdf")]
     [Produces("application/pdf")]
