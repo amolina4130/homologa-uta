@@ -73,19 +73,19 @@ namespace HomologaUTA.Autenticacion.Tests
         // ==============================================================
 
         [Fact]
-        public async Task Registro_DatosValidos_CreaCuentaEstudiante()
+        public async Task Registro_DatosValidos_CreaCuentaComite()
         {
             var context = GetInMemoryDbContext();
             var hasher = new PasswordHasher<Usuario>();
             var tokenService = GetTokenService();
-            context.Roles.Add(new Rol { Id = 1, Nombre = "ESTUDIANTE" });
+            context.Roles.Add(new Rol { Id = 1, Nombre = "COMITE" });
             await context.SaveChangesAsync();
 
             var controller = new AuthController(context, hasher, tokenService);
             var request = new RegistroRequest
             {
-                Nombre = "Ana Estudiante",
-                Correo = "Ana.Estudiante@UTA.edu.ec",
+                Nombre = "Ana Comite",
+                Correo = "Ana.Comite@UTA.edu.ec",
                 Contrasena = "Demo123!"
             };
 
@@ -94,14 +94,14 @@ namespace HomologaUTA.Autenticacion.Tests
             var objectResult = Assert.IsType<CreatedResult>(result);
             Assert.Equal(201, objectResult.StatusCode);
             var respuesta = Assert.IsType<RegistroResponse>(objectResult.Value);
-            Assert.Equal("Ana Estudiante", respuesta.Nombre);
-            Assert.Equal("ana.estudiante@uta.edu.ec", respuesta.Correo);
-            Assert.Equal("Estudiante", respuesta.Rol);
+            Assert.Equal("Ana Comite", respuesta.Nombre);
+            Assert.Equal("ana.comite@uta.edu.ec", respuesta.Correo);
+            Assert.Equal("COMITE", respuesta.Rol);
 
             var guardado = await context.Usuarios.Include(u => u.Rol)
-                .SingleAsync(u => u.Correo == "ana.estudiante@uta.edu.ec");
-            Assert.Equal("ESTUDIANTE", guardado.Rol.Nombre);
-            Assert.Equal("Ana Estudiante", guardado.Nombre);
+                .SingleAsync(u => u.Correo == "ana.comite@uta.edu.ec");
+            Assert.Equal("COMITE", guardado.Rol.Nombre);
+            Assert.Equal("Ana Comite", guardado.Nombre);
             Assert.NotEqual("Demo123!", guardado.PasswordHash);
             Assert.Equal(
                 PasswordVerificationResult.Success,
@@ -114,13 +114,13 @@ namespace HomologaUTA.Autenticacion.Tests
             var context = GetInMemoryDbContext();
             var hasher = new PasswordHasher<Usuario>();
             var tokenService = GetTokenService();
-            context.Roles.Add(new Rol { Id = 1, Nombre = "ESTUDIANTE" });
+            context.Roles.Add(new Rol { Id = 1, Nombre = "COMITE" });
             await context.SaveChangesAsync();
 
             var controller = new AuthController(context, hasher, tokenService);
             var registro = await controller.Registro(new RegistroRequest
             {
-                Nombre = "Ana Estudiante",
+                Nombre = "Ana Comite",
                 Correo = "ana@uta.edu.ec",
                 Contrasena = "Demo123!"
             });
@@ -135,8 +135,8 @@ namespace HomologaUTA.Autenticacion.Tests
             var okResult = Assert.IsType<OkObjectResult>(login);
             var respuesta = Assert.IsType<LoginResponse>(okResult.Value);
             Assert.False(string.IsNullOrWhiteSpace(respuesta.Token));
-            Assert.Equal("Ana Estudiante", respuesta.Nombre);
-            Assert.Equal("ESTUDIANTE", respuesta.Rol);
+            Assert.Equal("Ana Comite", respuesta.Nombre);
+            Assert.Equal("COMITE", respuesta.Rol);
         }
 
         [Fact]
