@@ -96,9 +96,9 @@ public class AgenteExternoSimuladoController : ControllerBase
 
             var origenes = new List<string> { conSilabo[0].Materia };
             var mejor = conSilabo[0].Comparacion;
-            // Solo se combina con una materia relacionada por nombre con el destino.
+            // Solo se combina si la segunda materia aporta por sí misma una parte del destino.
             if (mejor.Contenido < UmbralGeneral && conSilabo.Count >= 2 &&
-                Services.PreseleccionService.SimilitudNombre(conSilabo[1].Materia, destino.Nombre) >= 0.3)
+                conSilabo[1].Comparacion.Contenido >= Services.AnalisisService.AporteMinimoCombinacion)
             {
                 var combinada = ComparadorSilabos.Comparar(
                     $"{SilaboDe(request, conSilabo[0].Materia)}\n{SilaboDe(request, conSilabo[1].Materia)}",

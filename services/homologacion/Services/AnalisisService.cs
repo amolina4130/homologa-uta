@@ -617,12 +617,35 @@ public class AnalisisService
             .Select(f => f.AsignaturaOrigen)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var conservadas = filas
-            .Where(f => !f.Combinada ||
-                        (f.Decision == DecisionAnalisis.HOMOLOGABLE &&
-                         !destinosCubiertos.Contains(f.AsignaturaDestino) &&
-                         !f.MateriasOrigen.Any(m => origenesUsados.Contains(m.Nombre))))
+        // Cada materia de la combinación debe aportar por sí misma: al menos AporteMinimoCombinacion %
+        // del destino (si no, se estaría juntando una materia sin relación solo para sumar temas).
+        bool CadaUnaAporta(AnalisisAsignatura c) => c.MateriasOrigen.All(m => filas.Any(f =>
+            !f.Combinada &&
+            string.Equals(f.AsignaturaOrigen, m.Nombre, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(f.AsignaturaDestino, c.AsignaturaDestino, StringComparison.OrdinalIgnoreCase) &&
+            f.PorcentajeContenido >= AporteMinimoCombinacion));
+
+        var combinacionesValidas = filas
+            .Where(f => f.Combinada &&
+                        f.Decision == DecisionAnalisis.HOMOLOGABLE &&
+                        !destinosCubiertos.Contains(f.AsignaturaDestino) &&
+                        !f.MateriasOrigen.Any(m => origenesUsados.Contains(m.Nombre)) &&
+                        CadaUnaAporta(f))
+            // Una sola combinación por destino (la de mayor cobertura) y sin repetir materias.
+            .OrderByDescending(f => f.PorcentajeContenido + f.PorcentajeProfundidad + f.PorcentajeHoras)
             .ToList();
+        var elegidas = new List<AnalisisAsignatura>();
+        var usadasEnCombinacion = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in combinacionesValidas)
+        {
+            if (elegidas.Any(e => string.Equals(e.AsignaturaDestino, c.AsignaturaDestino, StringComparison.OrdinalIgnoreCase)) ||
+                c.MateriasOrigen.Any(m => usadasEnCombinacion.Contains(m.Nombre)))
+                continue;
+            elegidas.Add(c);
+            foreach (var m in c.MateriasOrigen) usadasEnCombinacion.Add(m.Nombre);
+        }
+
+        var conservadas = filas.Where(f => !f.Combinada || elegidas.Contains(f)).ToList();
 
         // Si la combinación cubre el destino, la fila individual de una de sus materias hacia ese
         // mismo destino sobra: la materia ya cuenta dentro de la combinación.
@@ -643,6 +666,9 @@ public class AnalisisService
         var comunes = ta.Count(tb.Contains);
         return (double)comunes / ta.Union(tb).Count() >= 0.75;
     }
+
+    /// <summary>Cobertura mínima que cada materia debe aportar sola para formar parte de una combinación.</summary>
+    public const int AporteMinimoCombinacion = 25;
 
     /// <summary>Contenido desde el cual una comparación que no llega al 80 % se envía a revisión.</summary>
     internal const int UmbralCercano = 65;

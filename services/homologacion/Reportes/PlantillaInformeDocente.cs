@@ -359,7 +359,7 @@ internal static class ContenidoInforme
     }
 
     private static string Porcentajes(FilaInformeAsignatura f) =>
-        f.PorcentajeContenido is null && f.PorcentajeProfundidad is null && f.PorcentajeHoras is null
+        (f.PorcentajeContenido ?? 0) == 0 && (f.PorcentajeProfundidad ?? 0) == 0 && (f.PorcentajeHoras ?? 0) == 0
             ? "-"
             : $"C {Pct(f.PorcentajeContenido)}\nP {Pct(f.PorcentajeProfundidad)}\nH {Pct(f.PorcentajeHoras)}";
 

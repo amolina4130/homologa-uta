@@ -129,7 +129,48 @@ function Fila({ a, d, onCambiar, bloqueado, onModificarDestino }) {
   );
 }
 
-export default function DecisionesDocente({ filas, decisiones, onCambiar, bloqueado, onModificarDestino }) {
+/** Barra para decidir todas las filas de un grupo de una vez, con una justificación común. */
+function AccionesGrupo({ grupo, lista, decisiones, onCambiarVarios }) {
+  const [texto, setTexto] = useState("");
+  const aplicar = (homologable) => {
+    // Pide justificación si alguna fila cambia lo que dijo la IA o si la IA pidió revisión.
+    const necesita = lista.some((a) => requiereJustificacion(a, { homologable }));
+    const sinTexto = lista.filter((a) => !(decisiones[a.id]?.justificacion || "").trim());
+    if (necesita && !texto.trim() && sinTexto.length > 0) return false;
+    onCambiarVarios(
+      lista.map((a) => a.id),
+      (a, d) => ({
+        homologable,
+        justificacion: (d?.justificacion || "").trim() || (requiereJustificacion(a, { homologable }) ? texto.trim() : ""),
+      })
+    );
+    return true;
+  };
+  const [falta, setFalta] = useState(false);
+  const pulsar = (h) => setFalta(!aplicar(h));
+  const esRevision = grupo.clave === "REQUIERE_REVISION";
+
+  return (
+    <div className="dd-acciones-grupo">
+      <span className="small fw-semibold">Todas las de este grupo:</span>
+      <button type="button" className="btn btn-sm btn-outline-success" onClick={() => pulsar(true)}>Homologar</button>
+      <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => pulsar(false)}>No homologar</button>
+      <input
+        className={`form-control form-control-sm ${falta && !texto.trim() ? "is-invalid" : ""}`}
+        placeholder={esRevision ? "Justificación común (obligatoria)" : "Justificación común (si cambia lo que sugirió la IA)"}
+        value={texto}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          setFalta(false);
+        }}
+        aria-label={`Justificación común para ${grupo.titulo}`}
+      />
+      {falta && !texto.trim() && <span className="small text-danger w-100">Escriba la justificación común para aplicar la decisión a todas.</span>}
+    </div>
+  );
+}
+
+export default function DecisionesDocente({ filas, decisiones, onCambiar, onCambiarVarios, bloqueado, onModificarDestino }) {
   const [abiertos, setAbiertos] = useState(() => Object.fromEntries(GRUPOS.map((g) => [g.clave, g.abierto])));
 
   return (
@@ -159,6 +200,9 @@ export default function DecisionesDocente({ filas, decisiones, onCambiar, bloque
             {abierto && (
               <div className="dd-grupo-cuerpo">
                 <p className="small text-muted mb-2">{g.ayuda}</p>
+                {!bloqueado && onCambiarVarios && lista.length > 1 && (
+                  <AccionesGrupo grupo={g} lista={lista} decisiones={decisiones} onCambiarVarios={onCambiarVarios} />
+                )}
                 {lista.map((a) => (
                   <Fila
                     key={a.id}

@@ -46,6 +46,7 @@ const decisionesIniciales = (consolidado) => {
   return Object.fromEntries(
     (consolidado?.detalle?.asignaturas || []).map((a) => {
       const sug = docente[a.id];
+      // Sin decisión del coordinador ni del docente se parte de lo que sugirió la IA.
       const decision =
         a.decisionCoordinador === HOMOLOGABLE || a.decisionCoordinador === NO_HOMOLOGABLE
           ? a.decisionCoordinador
@@ -53,8 +54,13 @@ const decisionesIniciales = (consolidado) => {
             ? sug.homologable
               ? HOMOLOGABLE
               : NO_HOMOLOGABLE
-            : "";
-      return [a.id, { decision, observacion: a.observacionCoordinador || sug?.justificacion || "" }];
+            : a.propuesta?.decision === HOMOLOGABLE
+              ? HOMOLOGABLE
+              : NO_HOMOLOGABLE;
+      return [
+        a.id,
+        { decision, observacion: a.observacionCoordinador || sug?.justificacion || a.propuesta?.justificacion || "" },
+      ];
     })
   );
 };
@@ -175,6 +181,91 @@ export default function InformeFinal() {
 
   const cambiarDecision = (id, campo, valor) =>
     setDecisiones((prev) => ({ ...prev, [id]: { ...prev[id], [campo]: valor } }));
+
+  const cambiada = (a) => a.id in sugerenciaDocente && (decisiones[a.id]?.decision === HOMOLOGABLE) !== sugerenciaDocente[a.id];
+  const recomendadas = asignaturas.filter((a) => sugerenciaDocente[a.id] === true);
+  const noRecomendadas = asignaturas.filter((a) => sugerenciaDocente[a.id] !== true);
+  const restablecerDocente = () => setDecisiones(decisionesIniciales({ ...consolidado, detalle: { ...consolidado.detalle,
+    asignaturas: asignaturas.map((a) => ({ ...a, decisionCoordinador: null, observacionCoordinador: null })) } }));
+
+  const filaDecision = (a) => {
+                                const d = decisiones[a.id] || {};
+                                const sug = sugerenciaDocente[a.id];
+                                const distinta = sug !== undefined && (d.decision === HOMOLOGABLE) !== sug;
+                                return (
+                                  <tr key={a.id} className={distinta ? "table-warning" : ""}>
+                                    <td>
+                                      <div className="fw-semibold">{nombreOrigen(a)}</div>
+                                      <div className="small text-muted">
+                                        → {a.asignaturaDestino}
+                                        {contenidoDe[a.id] ? ` · ${contenidoDe[a.id]}` : ""}
+                                      </div>
+                                    </td>
+                                    <td className="text-center">
+                                      <span
+                                        className={`badge rounded-pill ${
+                                          a.propuestaPor === "DOCENTE"
+                                            ? "bg-secondary-subtle text-secondary-emphasis"
+                                            : a.propuesta?.decision === "HOMOLOGABLE"
+                                              ? "bg-success-subtle text-success-emphasis"
+                                              : a.propuesta?.decision === "REQUIERE_REVISION"
+                                                ? "bg-warning-subtle text-warning-emphasis"
+                                                : "bg-danger-subtle text-danger-emphasis"
+                                        }`}
+                                        title={a.reglaAplicada || ""}
+                                      >
+                                        {a.propuestaPor === "DOCENTE"
+                                          ? "Docente"
+                                          : a.propuesta?.decision === "HOMOLOGABLE"
+                                            ? "Sí"
+                                            : a.propuesta?.decision === "REQUIERE_REVISION"
+                                              ? "Revisar"
+                                              : "No"}
+                                      </span>
+                                    </td>
+                                    <td className="text-center">
+                                      {sug === undefined ? (
+                                        <span className="text-muted">-</span>
+                                      ) : (
+                                        <span
+                                          className={`badge rounded-pill ${
+                                            sug ? "bg-success-subtle text-success-emphasis" : "bg-danger-subtle text-danger-emphasis"
+                                          }`}
+                                        >
+                                          {sug ? "Sí" : "No"}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="text-center">
+                                      <div className="btn-group btn-group-sm" role="group" aria-label={`Decisión para ${a.asignaturaDestino}`}>
+                                        <button
+                                          type="button"
+                                          className={`btn ${d.decision === HOMOLOGABLE ? "btn-success" : "btn-outline-success"}`}
+                                          onClick={() => cambiarDecision(a.id, "decision", HOMOLOGABLE)}
+                                        >
+                                          Homologa
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={`btn ${d.decision === NO_HOMOLOGABLE ? "btn-danger" : "btn-outline-danger"}`}
+                                          onClick={() => cambiarDecision(a.id, "decision", NO_HOMOLOGABLE)}
+                                        >
+                                          No
+                                        </button>
+                                      </div>
+                                    </td>
+                                    <td style={{ minWidth: 220 }}>
+                                      <input
+                                        className={`form-control form-control-sm ${d.observacion?.trim() ? "" : "is-invalid"}`}
+                                        value={d.observacion || ""}
+                                        maxLength={1000}
+                                        onChange={(e) => cambiarDecision(a.id, "observacion", e.target.value)}
+                                        aria-label={`Observación para ${a.asignaturaDestino}`}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              };
 
   // Lo que falta para poder emitir, o "" si está completo.
   const errorValidacion = () => {
@@ -433,99 +524,42 @@ export default function InformeFinal() {
                             </span>
                           )}
                         </div>
-                        <div className="table-responsive">
-                          <table className="table align-middle mb-0 is-tabla">
-                            <thead>
-                              <tr>
-                                <th>Asignatura</th>
-                                <th className="text-center">IA</th>
-                                <th className="text-center">Docente</th>
-                                <th className="text-center">Decisión final</th>
-                                <th>Observación *</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {asignaturas.map((a) => {
-                                const d = decisiones[a.id] || {};
-                                const sug = sugerenciaDocente[a.id];
-                                const distinta = sug !== undefined && (d.decision === HOMOLOGABLE) !== sug;
-                                return (
-                                  <tr key={a.id} className={distinta ? "table-warning" : ""}>
-                                    <td>
-                                      <div className="fw-semibold">{nombreOrigen(a)}</div>
-                                      <div className="small text-muted">
-                                        → {a.asignaturaDestino}
-                                        {contenidoDe[a.id] ? ` · ${contenidoDe[a.id]}` : ""}
-                                      </div>
-                                    </td>
-                                    <td className="text-center">
-                                      <span
-                                        className={`badge rounded-pill ${
-                                          a.propuestaPor === "DOCENTE"
-                                            ? "bg-secondary-subtle text-secondary-emphasis"
-                                            : a.propuesta?.decision === "HOMOLOGABLE"
-                                              ? "bg-success-subtle text-success-emphasis"
-                                              : a.propuesta?.decision === "REQUIERE_REVISION"
-                                                ? "bg-warning-subtle text-warning-emphasis"
-                                                : "bg-danger-subtle text-danger-emphasis"
-                                        }`}
-                                        title={a.reglaAplicada || ""}
-                                      >
-                                        {a.propuestaPor === "DOCENTE"
-                                          ? "Docente"
-                                          : a.propuesta?.decision === "HOMOLOGABLE"
-                                            ? "Sí"
-                                            : a.propuesta?.decision === "REQUIERE_REVISION"
-                                              ? "Revisar"
-                                              : "No"}
-                                      </span>
-                                    </td>
-                                    <td className="text-center">
-                                      {sug === undefined ? (
-                                        <span className="text-muted">-</span>
-                                      ) : (
-                                        <span
-                                          className={`badge rounded-pill ${
-                                            sug ? "bg-success-subtle text-success-emphasis" : "bg-danger-subtle text-danger-emphasis"
-                                          }`}
-                                        >
-                                          {sug ? "Sí" : "No"}
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="text-center">
-                                      <div className="btn-group btn-group-sm" role="group" aria-label={`Decisión para ${a.asignaturaDestino}`}>
-                                        <button
-                                          type="button"
-                                          className={`btn ${d.decision === HOMOLOGABLE ? "btn-success" : "btn-outline-success"}`}
-                                          onClick={() => cambiarDecision(a.id, "decision", HOMOLOGABLE)}
-                                        >
-                                          Homologa
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className={`btn ${d.decision === NO_HOMOLOGABLE ? "btn-danger" : "btn-outline-danger"}`}
-                                          onClick={() => cambiarDecision(a.id, "decision", NO_HOMOLOGABLE)}
-                                        >
-                                          No
-                                        </button>
-                                      </div>
-                                    </td>
-                                    <td style={{ minWidth: 220 }}>
-                                      <input
-                                        className={`form-control form-control-sm ${d.observacion?.trim() ? "" : "is-invalid"}`}
-                                        value={d.observacion || ""}
-                                        maxLength={1000}
-                                        onChange={(e) => cambiarDecision(a.id, "observacion", e.target.value)}
-                                        aria-label={`Observación para ${a.asignaturaDestino}`}
-                                      />
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          <button type="button" className="btn btn-sm btn-outline-primary" onClick={restablecerDocente}>
+                            Restablecer lo que decidió el docente
+                          </button>
                         </div>
+                        {[
+                          { clave: "si", titulo: "El docente recomienda homologar", lista: recomendadas, abierto: true },
+                          { clave: "no", titulo: "El docente no recomienda homologar", lista: noRecomendadas, abierto: false },
+                        ]
+                          .filter((g) => g.lista.length > 0)
+                          .map((g) => (
+                            <details key={g.clave} className="if-grupo mb-2" open={g.abierto || g.lista.some((a) => cambiada(a))}>
+                              <summary className="fw-semibold small py-1">
+                                {g.titulo} ({g.lista.length})
+                                {g.clave === "no" && (
+                                  <span className="fw-normal text-muted">
+                                    {" "}· se mantienen como «No» con la justificación del docente; ábralo solo si quiere cambiar alguna
+                                  </span>
+                                )}
+                              </summary>
+                              <div className="table-responsive">
+                                <table className="table align-middle mb-0 is-tabla">
+                                  <thead>
+                                    <tr>
+                                      <th>Asignatura</th>
+                                      <th className="text-center">IA</th>
+                                      <th className="text-center">Docente</th>
+                                      <th className="text-center">Decisión final</th>
+                                      <th>Observación *</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>{g.lista.map(filaDecision)}</tbody>
+                                </table>
+                              </div>
+                            </details>
+                          ))}
                         <p className="small text-muted mt-2 mb-0">
                           Se precargó lo que decidió el docente. Las filas en amarillo difieren de su decisión: justifique el
                           cambio con sus propias palabras (queda registrado). El informe final incluye solo las asignaturas

@@ -140,4 +140,32 @@ public class ComparadorSilabosTests
         Assert.Null(ComparadorSilabos.HorasDeSilabo("TOTAL DE HORAS AL SEMESTRE 0"));
         Assert.Null(ComparadorSilabos.HorasDeSilabo("sin dato"));
     }
+
+    private static AnalisisAsignatura Fila(string origen, string destino, string decision, int contenido, params string[] combinadas) => new()
+    {
+        AsignaturaOrigen = combinadas.Length > 0 ? string.Join(" + ", combinadas) : origen, AsignaturaDestino = destino, Decision = decision,
+        PorcentajeContenido = contenido, PorcentajeProfundidad = contenido, PorcentajeHoras = contenido, Combinada = combinadas.Length > 0,
+        MateriasOrigen = (combinadas.Length > 0 ? combinadas : new[] { origen }).Select(n => new MateriaOrigenResultado { Nombre = n }).ToList()
+    };
+
+    [Fact]
+    public void Combinacion_SeConservaSoloSiCadaMateriaAporta()
+    {
+        var filas = new List<AnalisisAsignatura>
+        {
+            Fila("Programación I", "Programación", DecisionAnalisis.NO_HOMOLOGABLE, 55),
+            Fila("Programación II", "Programación", DecisionAnalisis.NO_HOMOLOGABLE, 50),
+            Fila("Inglés", "Programación", DecisionAnalisis.NO_HOMOLOGABLE, 5),
+            Fila("", "Programación", DecisionAnalisis.HOMOLOGABLE, 95, "Programación I", "Programación II"),
+            Fila("", "Programación", DecisionAnalisis.HOMOLOGABLE, 99, "Programación I", "Inglés"),
+        };
+
+        var r = AnalisisService.DepurarCandidatas(AnalisisService.DescartarCombinacionesInnecesarias(filas));
+
+        var combinacion = Assert.Single(r, f => f.Combinada);
+        Assert.Equal("Programación I + Programación II", combinacion.AsignaturaOrigen);
+        // Las dos materias cuentan dentro de la combinación: no se repiten solas.
+        Assert.DoesNotContain(r, f => !f.Combinada && f.AsignaturaOrigen.StartsWith("Programación"));
+        Assert.Contains(r, f => f.AsignaturaOrigen == "Inglés");
+    }
 }

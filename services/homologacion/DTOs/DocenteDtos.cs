@@ -255,6 +255,10 @@ public class NuevaPropuestaDocenteDto
     [Required, MaxLength(200)]
     public string AsignaturaOrigen { get; set; } = string.Empty;
 
+    /// <summary>Segunda materia aprobada, cuando las dos juntas equivalen a la de destino (combinación).</summary>
+    [MaxLength(200)]
+    public string? AsignaturaOrigen2 { get; set; }
+
     /// <summary>Asignatura de la malla de destino.</summary>
     public int AsignaturaDestinoId { get; set; }
 

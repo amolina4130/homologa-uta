@@ -219,7 +219,11 @@ public class PreseleccionService
                 AsignaturaDestinoId = grupo.Candidata.AsignaturaId,
                 AreaOrigen = areas.Count == 1 ? areas[0] : null,
                 AreaDestino = grupo.Candidata.Area,
-                NivelOrigen = origenes.Select(o => o.Nivel).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
+                // En una combinación se muestran los niveles de las dos materias ("Primero y Segundo").
+                NivelOrigen = string.Join(" y ", origenes.Select(o => o.Nivel).Where(n => !string.IsNullOrWhiteSpace(n))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)) is { Length: > 0 and <= 30 } niveles
+                    ? niveles
+                    : origenes.Select(o => o.Nivel).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
                 NivelDestino = grupo.Candidata.Nivel,
                 NotaOrigen = origenes.FirstOrDefault()?.Nota,
                 MateriasOrigenPermitidas = origenes.Select(o => o.Nombre).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
@@ -240,7 +244,7 @@ public class PreseleccionService
                 ContenidoOrigenDeSilabo = origenes.All(o => o.DeSilabo),
                 // En una combinación manda la materia aprobada hace más tiempo (regla de los 10 años).
                 PeriodoAprobacion = origenes.Select(o => o.Periodo).Where(p => !string.IsNullOrWhiteSpace(p))
-                    .OrderBy(p => System.Text.RegularExpressions.Regex.Matches(p!, @"(19|20)d{2}").Select(m => int.Parse(m.Value)).DefaultIfEmpty(9999).Max())
+                    .OrderBy(p => System.Text.RegularExpressions.Regex.Matches(p!, @"\b(19|20)\d{2}\b").Select(m => int.Parse(m.Value)).DefaultIfEmpty(9999).Max())
                     .FirstOrDefault(),
                 EstadoSegunRecord = string.Join(" ", origenes.Select(o => o.EstadoSegunRecord).Where(e => !string.IsNullOrWhiteSpace(e))),
                 EsCombinacion = origenes.Count > 1
@@ -263,8 +267,11 @@ public class PreseleccionService
             {
                 var unicos = Unicos(g);
                 var lista = unicos.Select(o => Entrada(g, new List<OrigenPreseleccion> { o })).ToList();
-                if (unicos.Count >= 2)
-                    lista.Add(Entrada(g, unicos.Take(2).ToList()));
+                // Todas las parejas posibles: el análisis conserva solo la mejor combinación que
+                // cumpla y en la que cada materia aporte por sí misma (DescartarCombinacionesInnecesarias).
+                for (var i = 0; i < unicos.Count; i++)
+                    for (var j = i + 1; j < unicos.Count; j++)
+                        lista.Add(Entrada(g, new List<OrigenPreseleccion> { unicos[i], unicos[j] }));
                 return lista;
             })
             .ToList();

@@ -112,8 +112,31 @@ public class DocenteService
     /// no se tocan. Solo se aceptan materias aprobadas del récord y asignaturas de la malla destino.
     /// Devuelve la evaluación de cada fila nueva para incluirla en el informe del docente.
     /// </summary>
+    /// <summary>Destinos y materias de origen ya usados en homologaciones de esta revisión.</summary>
+    private sealed class UsoHomologacion
+    {
+        private readonly Dictionary<string, string> _destinos = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _origenes = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Registrar(int? destinoId, string destino, IEnumerable<string> origenes)
+        {
+            var lista = origenes.Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).ToList();
+            var clave = destinoId is > 0 ? destinoId.Value.ToString() : destino.Trim();
+            if (_destinos.TryGetValue(clave, out var previo))
+                throw new InformeException(400,
+                    $"{destino} ya se homologa con {previo}: una asignatura de destino no puede homologarse dos veces. " +
+                    "Marque una de las dos como «No homologar».");
+            foreach (var o in lista)
+                if (_origenes.TryGetValue(o, out var otroDestino))
+                    throw new InformeException(400,
+                        $"{o} ya se usa para homologar {otroDestino}: una materia aprobada no puede contar en dos homologaciones.");
+            _destinos[clave] = string.Join(" + ", lista);
+            foreach (var o in lista) _origenes[o] = destino;
+        }
+    }
+
     private async Task<List<EvaluacionAsignaturaDto>> AgregarPropuestasDocenteAsync(
-        int solicitudId, List<NuevaPropuestaDocenteDto> propuestas, CancellationToken ct)
+        int solicitudId, List<NuevaPropuestaDocenteDto> propuestas, CancellationToken ct, UsoHomologacion? usos = null)
     {
         if (propuestas.Count == 0) return new List<EvaluacionAsignaturaDto>();
 
@@ -137,6 +160,14 @@ public class DocenteService
             .Include(a => a.Asignaturas)
             .FirstAsync(a => a.SolicitudId == solicitudId, ct);
 
+        // Malla de origen (solo carreras de FISEI) para comparar también las propuestas del docente.
+        var mallaOrigen = new List<MemoriaAsignaturaDto>();
+        if (!string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase) && info.CarreraOrigenId > 0)
+        {
+            try { mallaOrigen = await _memoria.ObtenerAsignaturasAsync(info.CarreraOrigenId, null, ct); }
+            catch (MemoriaNoDisponibleException) { /* sin comparación: se informa como dato faltante */ }
+        }
+
         var filas = new List<(AnalisisAsignatura Fila, NuevaPropuestaDocenteDto Propuesta)>();
         foreach (var p in propuestas)
         {
@@ -147,19 +178,57 @@ public class DocenteService
                 throw new InformeException(400,
                     $"\"{origen}\" no está entre las materias aprobadas del récord: solo se pueden proponer materias aprobadas.");
 
+            var origen2 = (p.AsignaturaOrigen2 ?? string.Empty).Trim();
+            Models.MateriaAprobada? aprobada2 = null;
+            if (origen2.Length > 0)
+            {
+                if (string.Equals(origen2, origen, StringComparison.OrdinalIgnoreCase))
+                    throw new InformeException(400, "Las dos materias de la combinación deben ser distintas.");
+                aprobada2 = aprobadas.FirstOrDefault(m =>
+                    string.Equals(m.Nombre.Trim(), origen2, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InformeException(400,
+                        $"\"{origen2}\" no está entre las materias aprobadas del récord: solo se pueden proponer materias aprobadas.");
+            }
+            var nombreOrigen = aprobada2 is null ? origen : $"{aprobada.Nombre} + {aprobada2.Nombre}";
+
             var destino = malla.FirstOrDefault(d => d.AsignaturaId == p.AsignaturaDestinoId)
                           ?? throw new InformeException(400,
                               $"La asignatura de destino {p.AsignaturaDestinoId} no está en la malla de {info.CarreraDestino}.");
 
             if (string.IsNullOrWhiteSpace(p.Justificacion))
                 throw new InformeException(400,
-                    $"Justifique la propuesta {origen} → {destino.Nombre}.");
+                    $"Justifique la propuesta {nombreOrigen} → {destino.Nombre}.");
 
-            var motivo = ReglasHomologacion.MotivoSiNoHomologable(origen, destino.Nombre);
+            var motivo = ReglasHomologacion.MotivoSiNoHomologable(nombreOrigen, destino.Nombre);
+            if (motivo is null && p.Homologable)
+                usos?.Registrar(destino.AsignaturaId, destino.Nombre,
+                    aprobada2 is null ? new[] { aprobada.Nombre } : new[] { aprobada.Nombre, aprobada2.Nombre });
+
+            // Mismo método de cálculo que la IA, para que el informe muestre la coincidencia real.
+            var enOrigen = new[] { aprobada.Nombre, aprobada2?.Nombre }
+                .Where(n => n is not null)
+                .Select(n => PreseleccionService.BuscarEnMalla(mallaOrigen, n!))
+                .ToList();
+            var completas = enOrigen.All(m => m is not null) && enOrigen.Count > 0;
+            var comparacion = completas
+                ? Agents.ComparadorSilabos.Comparar(
+                    string.Join('\n', enOrigen.Select(m => m!.ContenidosMinimos)),
+                    string.Join('\n', enOrigen.Select(m => m!.ResultadosAprendizaje)),
+                    enOrigen.All(m => m!.Horas > 0) ? enOrigen.Sum(m => m!.Horas) : null,
+                    destino.ContenidosMinimos, destino.ResultadosAprendizaje, destino.Horas > 0 ? destino.Horas : null)
+                : null;
             var homologable = motivo is null && p.Homologable;
             var fila = new AnalisisAsignatura
             {
-                AsignaturaOrigen = origen.Length > 200 ? origen[..200] : origen,
+                AsignaturaOrigen = nombreOrigen.Length > 200 ? nombreOrigen[..200] : nombreOrigen,
+                Combinada = aprobada2 is not null,
+                PorcentajeContenido = comparacion?.Contenido ?? 0,
+                PorcentajeProfundidad = comparacion?.Profundidad ?? 0,
+                PorcentajeHoras = comparacion?.Horas ?? 0,
+                NivelOrigen = completas
+                    ? string.Join(" y ", enOrigen.Select(m => m!.Nivel).Distinct()) is { Length: <= 30 } nv ? nv : enOrigen[0]!.Nivel
+                    : null,
+                HorasOrigen = completas && enOrigen.All(m => m!.Horas > 0) ? enOrigen.Sum(m => m!.Horas) : null,
                 AsignaturaDestino = destino.Nombre,
                 AsignaturaDestinoId = destino.AsignaturaId,
                 AreaDestino = destino.Area,
@@ -170,10 +239,13 @@ public class DocenteService
                 Justificacion = motivo ?? $"Propuesta del docente: {p.Justificacion.Trim()}",
                 ReglaAplicada = motivo ?? "Propuesta agregada por el docente (la IA no la identificó).",
                 PropuestaPor = OrigenPropuesta.DOCENTE,
-                MateriasOrigen = new List<MateriaOrigenResultado>
-                {
-                    new() { Nombre = aprobada.Nombre, Nota = aprobada.Nota }
-                }
+                MateriasOrigen = aprobada2 is null
+                    ? new List<MateriaOrigenResultado> { new() { Nombre = aprobada.Nombre, Nota = aprobada.Nota } }
+                    : new List<MateriaOrigenResultado>
+                    {
+                        new() { Nombre = aprobada.Nombre, Nota = aprobada.Nota },
+                        new() { Nombre = aprobada2.Nombre, Nota = aprobada2.Nota }
+                    }
             };
             analisis.Asignaturas.Add(fila);
             filas.Add((fila, p));
@@ -579,10 +651,19 @@ public class DocenteService
                 "Debe decidir (homologar o no, con justificación) todas las sugerencias de la IA antes de enviar. " +
                 $"Faltan: {string.Join("; ", sinDecision)}.");
 
+        // Un destino no se homologa dos veces y una materia aprobada no cuenta en dos homologaciones.
+        var usos = new UsoHomologacion();
+        foreach (var e in evaluaciones.Where(e => e.Homologable))
+        {
+            var fila = analisis.Asignaturas.First(a => a.Id == e.AsignaturaId);
+            usos.Registrar(fila.AsignaturaDestinoId, fila.AsignaturaDestino,
+                fila.MateriasOrigen.Count > 0 ? fila.MateriasOrigen.Select(m => m.Nombre) : new[] { fila.AsignaturaOrigen });
+        }
+
         var nuevas = request?.NuevasPropuestas ?? new List<NuevaPropuestaDocenteDto>();
         if (nuevas.Count > 0)
         {
-            evaluaciones.AddRange(await AgregarPropuestasDocenteAsync(solicitudId, nuevas, ct));
+            evaluaciones.AddRange(await AgregarPropuestasDocenteAsync(solicitudId, nuevas, ct, usos));
             analisis = await _db.AnalisisSolicitudes
                 .AsNoTracking()
                 .Include(a => a.Asignaturas)

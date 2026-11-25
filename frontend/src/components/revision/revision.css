@@ -227,3 +227,17 @@
   color: #fff;
   font-size: 0.75rem;
 }
+
+.dd-acciones-grupo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.4rem;
+  background: var(--bs-tertiary-bg);
+}
+.dd-acciones-grupo .form-control {
+  flex: 1 1 240px;
+}

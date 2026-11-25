@@ -23,7 +23,7 @@ const esExterno = (d) => String(d?.modulo || "INTERNO").toUpperCase() === "EXTER
 const propuestaIA = (a) => (a.propuesta?.decision || "").toUpperCase();
 // Solo las materias aprobadas del récord pueden proponerse (el récord puede traer reprobadas).
 const estaAprobada = (m) => !/reprob|nos*aprob|retir|anulad|p[eé]rdid|desaprob/i.test(m?.estadoSegunDocumento || "");
-const PROPUESTA_VACIA = { asignaturaOrigen: "", asignaturaDestinoId: "", homologable: true, justificacion: "" };
+const PROPUESTA_VACIA = { asignaturaOrigen: "", asignaturaOrigen2: "", asignaturaDestinoId: "", homologable: true, justificacion: "" };
 
 export default function EvaluacionDocente() {
   const { id } = useParams();
@@ -95,6 +95,24 @@ export default function EvaluacionDocente() {
   const cambiarDecision = (asigId, campo, valor) =>
     setDecisiones((prev) => ({ ...prev, [asigId]: { ...prev[asigId], [campo]: valor } }));
 
+  // Decide varias filas de una vez: `calcular(fila, decisionActual)` devuelve la nueva decisión.
+  const cambiarVarios = (ids, calcular) =>
+    setDecisiones((prev) => {
+      const nuevo = { ...prev };
+      for (const id of ids) {
+        const fila = filasIA.find((a) => a.id === id);
+        if (fila) nuevo[id] = { ...prev[id], ...calcular(fila, prev[id]) };
+      }
+      return nuevo;
+    });
+
+  // Vuelve a la recomendación de la IA en las que la IA decidió (las "en revisión" no se tocan).
+  const aceptarIA = () =>
+    cambiarVarios(
+      filasIA.filter((a) => propuestaIA(a) !== "REQUIERE_REVISION").map((a) => a.id),
+      (a) => ({ homologable: propuestaIA(a) === "HOMOLOGABLE", justificacion: "" })
+    );
+
   // Modificar la equivalencia: la fila de la IA queda "No homologar" y se abre una propuesta
   // nueva con la misma materia de origen para elegir el destino correcto.
   const modificarDestino = (a) => {
@@ -102,7 +120,7 @@ export default function EvaluacionDocente() {
     if (!decisiones[a.id]?.justificacion)
       cambiarDecision(a.id, "justificacion", "La equivalencia propuesta por la IA no corresponde; se propone otro destino.");
     const origen = (a.materiasOrigen?.[0]?.nombre || a.asignaturaOrigen || "").trim();
-    setNuevas((n) => [...n, { ...PROPUESTA_VACIA, asignaturaOrigen: origen }]);
+    setNuevas((n) => [...n, { ...PROPUESTA_VACIA, asignaturaOrigen: origen, asignaturaOrigen2: a.materiasOrigen?.[1]?.nombre || "" }]);
   };
 
   const cambiarNueva = (i, campo, valor) =>
@@ -181,6 +199,7 @@ export default function EvaluacionDocente() {
         asignaturas: evaluaciones(),
         nuevasPropuestas: nuevas.map((p) => ({
           asignaturaOrigen: p.asignaturaOrigen,
+          asignaturaOrigen2: p.asignaturaOrigen2 || null,
           asignaturaDestinoId: Number(p.asignaturaDestinoId),
           homologable: p.homologable,
           justificacion: p.justificacion.trim(),
@@ -322,20 +341,26 @@ export default function EvaluacionDocente() {
                 <>
                   <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                     <p className="small text-muted mb-0 flex-grow-1" style={{ maxWidth: 720 }}>
-                      Ya viene marcada la recomendación de la IA: si está de acuerdo no tiene que hacer nada. Cambie la decisión
-                      solo donde no coincida (se le pedirá la justificación) y decida las que «requieren su decisión». La
-                      sugerencia original de la IA se conserva aparte.
+                      Ya viene marcada la recomendación de la IA: si está de acuerdo no tiene que hacer nada. Cambie solo las
+                      que no coincidan y decida las que «requieren su decisión»; puede hacerlo una por una o todas las de un
+                      grupo a la vez con una justificación común. La sugerencia original de la IA se conserva aparte.
                     </p>
                     {!bloqueado && (
-                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={analizar} disabled={ocupado === "analizar"}>
-                        {ocupado === "analizar" ? "Analizando…" : "Volver a analizar"}
-                      </button>
+                      <div className="d-flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={aceptarIA}>
+                          Aceptar lo que sugiere la IA
+                        </button>
+                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={analizar} disabled={ocupado === "analizar"}>
+                          {ocupado === "analizar" ? "Analizando…" : "Volver a analizar"}
+                        </button>
+                      </div>
                     )}
                   </div>
                   <DecisionesDocente
                     filas={filasIA}
                     decisiones={decisiones}
                     onCambiar={cambiarDecision}
+                    onCambiarVarios={cambiarVarios}
                     bloqueado={bloqueado}
                     onModificarDestino={(datos.mallaDestino || []).length > 0 ? modificarDestino : null}
                   />
@@ -406,6 +431,23 @@ export default function EvaluacionDocente() {
                           >
                             ✕
                           </button>
+                        </div>
+                        <div className="col-md-8">
+                          <label className="form-label small mb-1">
+                            Segunda materia aprobada <span className="text-muted">(opcional: si las dos juntas equivalen a la de destino)</span>
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={p.asignaturaOrigen2 || ""}
+                            onChange={(e) => cambiarNueva(i, "asignaturaOrigen2", e.target.value)}
+                          >
+                            <option value="">Sin segunda materia</option>
+                            {(datos.materiasAprobadas || [])
+                              .filter((m) => estaAprobada(m) && m.nombre !== p.asignaturaOrigen)
+                              .map((m) => (
+                                <option key={m.nombre} value={m.nombre}>{m.nombre}</option>
+                              ))}
+                          </select>
                         </div>
                         <div className="col-12">
                           <textarea
