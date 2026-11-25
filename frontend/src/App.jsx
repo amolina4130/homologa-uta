@@ -17,7 +17,6 @@ import RutaCarpeta from "./pages/RutaCarpeta";
 import SolicitudesDocente from "./pages/SolicitudesDocente";
 import EvaluacionDocente from "./pages/EvaluacionDocente";
 import PanelReglas from "./pages/PanelReglas";
-import PanelCoordinador from "./pages/PanelCoordinador";
 import DetalleSolicitudPage from "./pages/DetalleSolicitudPage";
 import DelegarDocentes from "./pages/DelegarDocentes";
 import InformesSugeridos from "./pages/InformesSugeridos";
@@ -25,6 +24,7 @@ import InformeFinal from "./pages/InformeFinal";
 import ResultadoAnalisis from "./pages/ResultadoAnalisis";
 import Equivalencias from "./pages/Equivalencias";
 import EstadoMemoria from "./pages/EstadoMemoria";
+import PlanesAnaliticos from "./pages/PlanesAnaliticos";
 
 export default function App() {
   return (
@@ -66,15 +66,14 @@ export default function App() {
             <Route path="/evaluar/:id" element={<><Menu /><EvaluacionDocente /></>} />
           </Route>
 
-          {/* El Coordinador delega, revisa el informe sugerido y emite el informe final */}
+          {/* Revisión del Coordinador: delegar → sugerencias → informe final (se envía al Comité y termina) */}
           <Route element={<RutaProtegida rolPermitido="COORDINADOR" />}>
             <Route path="/delegar-docentes" element={<><Menu /><DelegarDocentes /></>} />
             <Route path="/informes-sugeridos" element={<><Menu /><InformesSugeridos /></>} />
             <Route path="/informe-final" element={<><Menu /><InformeFinal /></>} />
-            {/* Detalle en una página propia, sin meter el contenido debajo de la lista. */}
-            <Route path="/detalle-solicitud/:id" element={<DetalleSolicitudPage />} />
-            {/* Ruta histórica: se mantiene como acceso directo al panel completo. */}
-            <Route path="/panel-coordinador" element={<><Menu /><PanelCoordinador /></>} />
+            <Route path="/detalle-solicitud/:id" element={<><Menu /><DetalleSolicitudPage /></>} />
+            {/* Ruta histórica: el panel completo permitía emitir informes sin pasar por los docentes. */}
+            <Route path="/panel-coordinador" element={<Navigate to="/inicio" replace />} />
           </Route>
 
           {/* El Administrador gestiona la configuración del sistema */}
@@ -82,6 +81,7 @@ export default function App() {
             <Route path="/reglas" element={<><Menu /><PanelReglas /></>} />
             <Route path="/equivalencias" element={<><Menu /><Equivalencias /></>} />
             <Route path="/memoria" element={<><Menu /><EstadoMemoria /></>} />
+            <Route path="/planes-analiticos" element={<><Menu /><PlanesAnaliticos /></>} />
           </Route>
 
           {/* Redirección por defecto */}

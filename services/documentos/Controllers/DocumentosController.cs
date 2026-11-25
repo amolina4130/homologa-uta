@@ -35,6 +35,42 @@ public class DocumentosController : ControllerBase
         _carpetaService = carpetaService;
     }
 
+    /// <summary>
+    /// Lee el texto de un PDF sin guardarlo. La nueva solicitud empieza subiendo el récord y la
+    /// carta del estudiante: con su texto se prellenan los datos antes de crear la solicitud.
+    /// </summary>
+    [HttpPost("leer-texto")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> LeerTexto(IFormFile? archivo, [FromQuery] bool diseno = false)
+    {
+        if (archivo == null || archivo.Length == 0)
+            return BadRequest(new { error = "No se envió ningún archivo." });
+
+        if (archivo.ContentType != "application/pdf" && !archivo.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { error = "El archivo debe ser un PDF." });
+
+        var tamanioMaximoMB = _config.GetValue<int>("TamanioMaximoPdfMB", 10);
+        if (archivo.Length > tamanioMaximoMB * 1024 * 1024)
+            return BadRequest(new { error = $"El archivo no debe superar los {tamanioMaximoMB} MB." });
+
+        var temporal = Path.Combine(Path.GetTempPath(), $"leer_{Guid.NewGuid()}.pdf");
+        try
+        {
+            await using (var destino = System.IO.File.Create(temporal))
+                await archivo.CopyToAsync(destino);
+
+            return Ok(new { texto = diseno ? _extractor.ExtraerTextoConDiseno(temporal) : _extractor.ExtraerTexto(temporal) });
+        }
+        catch (Exception)
+        {
+            return UnprocessableEntity(new { error = "No se pudo leer el PDF. Verifique que no esté dañado." });
+        }
+        finally
+        {
+            System.IO.File.Delete(temporal);
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> SubirDocumento([FromForm] DocumentoUploadRequest request)
     {

@@ -1,4 +1,4 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "./config";
 
 function getAuthHeaders() {
   const token = sessionStorage.getItem("token");
@@ -20,6 +20,20 @@ export async function obtenerDocumentosSolicitud(solicitudId) {
   });
   if (!res.ok) throw new Error("No se pudieron cargar los documentos de la solicitud");
   return await res.json();
+}
+
+// Lee el texto de un PDF sin guardarlo (para prellenar los datos de una nueva solicitud).
+export async function leerTextoPdf(archivo, { diseno = false } = {}) {
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+  const res = await fetch(`${GATEWAY_URL}/documentos/leer-texto${diseno ? "?diseno=true" : ""}`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: formData,
+  });
+  const cuerpo = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(cuerpo.error || "No se pudo leer el PDF.");
+  return cuerpo.texto || "";
 }
 
 export async function subirDocumento(solicitudId, tipoDocumento, archivo) {

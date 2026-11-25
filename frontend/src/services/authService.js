@@ -1,7 +1,20 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "./config";
+
+// fetch con un mensaje entendible cuando no se puede llegar al servidor.
+async function pedir(url, opciones) {
+  try {
+    return await fetch(url, opciones);
+  } catch {
+    const err = new Error(
+      `No se pudo conectar con el servidor (${GATEWAY_URL}). Verifique que el sistema esté levantado con "docker compose up -d".`
+    );
+    err.tipo = "conexion";
+    throw err;
+  }
+}
 
 export async function login(correo, contrasena) {
-  const res = await fetch(`${GATEWAY_URL}/auth/login`, {
+  const res = await pedir(`${GATEWAY_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ correo, contrasena }),
@@ -23,7 +36,7 @@ export async function login(correo, contrasena) {
 
 // Crea una cuenta de Comité o Docente; el rol se envía explícitamente.
 export async function registrar(nombre, correo, contrasena, rol = "COMITE") {
-  const res = await fetch(`${GATEWAY_URL}/auth/registro`, {
+  const res = await pedir(`${GATEWAY_URL}/auth/registro`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nombre, correo, contrasena, rol }),

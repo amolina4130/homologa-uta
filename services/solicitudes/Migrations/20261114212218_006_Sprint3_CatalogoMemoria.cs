@@ -11,13 +11,10 @@ namespace HomologaUTA.Solicitudes.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "NumeroProceso",
-                table: "Solicitudes",
-                type: "nvarchar(30)",
-                maxLength: 30,
-                nullable: false,
-                defaultValue: "");
+            // También lo crea 006_NumeroProcesoYEdicion: solo se agrega si falta.
+            migrationBuilder.Sql(@"
+IF COL_LENGTH('Solicitudes', 'NumeroProceso') IS NULL
+    ALTER TABLE [Solicitudes] ADD [NumeroProceso] nvarchar(30) NOT NULL DEFAULT N'';");
 
             migrationBuilder.AddColumn<string>(
                 name: "Area",
@@ -136,11 +133,9 @@ UPDATE [Solicitudes]
 SET [NumeroProceso] = 'SOL-' + RIGHT('0000' + CAST([Id] AS varchar(10)), 4)
 WHERE [NumeroProceso] = '' OR [NumeroProceso] IS NULL;");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Solicitudes_NumeroProceso",
-                table: "Solicitudes",
-                column: "NumeroProceso",
-                unique: true);
+            migrationBuilder.Sql(@"
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Solicitudes_NumeroProceso' AND object_id = OBJECT_ID('Solicitudes'))
+    CREATE UNIQUE INDEX [IX_Solicitudes_NumeroProceso] ON [Solicitudes] ([NumeroProceso]);");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Equivalencias_AsignaturaDestinoId",

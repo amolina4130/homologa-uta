@@ -37,6 +37,55 @@ public class MemoriaController : ControllerBase
         });
     }
 
+    public class PlanAnaliticoRequest
+    {
+        public string? Contenido { get; set; }
+        public string? ResultadosAprendizaje { get; set; }
+    }
+
+    /// <summary>
+    /// El Administrador carga (o reemplaza) el plan analítico de una asignatura. Se guarda en el
+    /// plan y en la memoria del agente a la vez, así la IA lo usa desde el siguiente análisis.
+    /// </summary>
+    [HttpPut("asignaturas/{asignaturaId:int}/plan")]
+    public async Task<IActionResult> GuardarPlan(int asignaturaId, [FromBody] PlanAnaliticoRequest request, CancellationToken ct)
+    {
+        if (!AutorizacionServicio.EsAdministrador(User))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { mensaje = "Solo el Administrador puede cargar planes analíticos." });
+
+        var contenido = (request?.Contenido ?? string.Empty).Trim();
+        var resultados = (request?.ResultadosAprendizaje ?? string.Empty).Trim();
+        if (contenido.Length < 40)
+            return BadRequest(new { mensaje = "Los contenidos del plan están vacíos o son demasiado cortos." });
+        if (contenido.Length > 20000 || resultados.Length > 10000)
+            return BadRequest(new { mensaje = "El plan es demasiado extenso." });
+
+        var asignatura = await _db.Asignaturas.FirstOrDefaultAsync(a => a.Id == asignaturaId, ct);
+        if (asignatura is null)
+            return NotFound(new { mensaje = "La asignatura no existe." });
+
+        var fecha = DateTime.UtcNow;
+        var plan = await _db.PlanesAnaliticos.FirstOrDefaultAsync(p => p.AsignaturaId == asignaturaId, ct);
+        if (plan is null)
+        {
+            plan = new Models.PlanAnalitico { AsignaturaId = asignaturaId };
+            _db.PlanesAnaliticos.Add(plan);
+        }
+        plan.Contenido = contenido;
+        plan.ResultadosAprendizaje = resultados;
+        plan.FechaCarga = fecha;
+
+        foreach (var fila in await _db.MemoriaAsignaturas.Where(m => m.AsignaturaId == asignaturaId).ToListAsync(ct))
+        {
+            fila.ContenidosMinimos = contenido;
+            fila.FechaActualizacion = fecha;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { asignaturaId, nombre = asignatura.Nombre, fechaCarga = fecha });
+    }
+
     /// <summary>Estado de la última carga de memoria.</summary>
     [HttpGet("estado")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -64,6 +113,7 @@ public class MemoriaController : ControllerBase
         if (nivelMaximo is > 0)
             consulta = consulta.Where(m => m.NivelNumerico <= nivelMaximo);
 
+        // Los resultados de aprendizaje del plan analítico se usan para medir la profundidad (Art. 20).
         var lista = await consulta
             .OrderBy(m => m.NivelNumerico)
             .ThenBy(m => m.Nombre)
@@ -75,7 +125,11 @@ public class MemoriaController : ControllerBase
                 area = m.Area,
                 creditos = m.Creditos,
                 horas = m.Horas,
-                contenidosMinimos = m.ContenidosMinimos
+                contenidosMinimos = m.ContenidosMinimos,
+                resultadosAprendizaje = _db.PlanesAnaliticos
+                    .Where(p => p.AsignaturaId == m.AsignaturaId)
+                    .Select(p => p.ResultadosAprendizaje)
+                    .FirstOrDefault() ?? string.Empty
             })
             .ToListAsync();
 

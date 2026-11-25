@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatearTamano } from "../utils/formato";
 
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "../services/config";
 
 export default function ListaDocumentos({ documentos }) {
   const [pdfVista, setPdfVista] = useState(null);

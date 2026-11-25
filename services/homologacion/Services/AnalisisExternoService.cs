@@ -4,6 +4,7 @@ using HomologaUTA.Homologacion.Data;
 using HomologaUTA.Homologacion.DTOs;
 using HomologaUTA.Homologacion.Eventos;
 using HomologaUTA.Homologacion.Models;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace HomologaUTA.Homologacion.Services;
@@ -60,6 +61,30 @@ public class AnalisisExternoService
         var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
                    ?? throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");
 
+        // Un análisis nuevo reemplaza las asignaturas y devuelve la solicitud a revisión:
+        // no se permite cuando ya hay informe final o resolución, porque los borraría.
+        var estadoActual = await _db.AnalisisSolicitudes
+            .AsNoTracking()
+            .Where(a => a.SolicitudId == solicitudId)
+            .Select(a => a.Estado)
+            .FirstOrDefaultAsync(ct);
+        if (estadoActual is EstadoAnalisis.INFORME_EMITIDO or EstadoAnalisis.RESUELTA)
+            throw new AnalisisSolicitudException(409,
+                "La solicitud ya tiene informe final emitido; no se puede volver a analizar.");
+
+        // El docente asignado genera (o repite) el análisis mientras revisa. Cuando ya envió su
+        // informe, la sugerencia de la IA queda fija para conservar la trazabilidad.
+        if (await _db.DelegacionesDocente.AnyAsync(d => d.SolicitudId == solicitudId &&
+                                                        d.Estado == EstadoDelegacionDocente.REVISADO, ct))
+            throw new AnalisisSolicitudException(409,
+                "El docente ya envió su informe técnico; la sugerencia de la IA se conserva y no se vuelve a generar.");
+
+        // Un análisis nuevo cambia las filas: el borrador del docente apuntaba a las anteriores.
+        var borradores = await _db.DelegacionesDocente
+            .Where(d => d.SolicitudId == solicitudId && d.SugerenciaJson != null)
+            .ToListAsync(ct);
+        foreach (var b in borradores) b.SugerenciaJson = null;
+
         var entrada = await PrepararEntradaAsync(solicitudId, info, request, ct);
 
         // 1. Enviar al agente. Si falla o vence el tiempo, sale por excepción antes de tocar la base de datos.
@@ -67,6 +92,11 @@ public class AnalisisExternoService
         var filas = respuesta.Asignaturas
             .Select(a => ConstruirFila(a, entrada))
             .ToList();
+        // Igual que el agente interno: sin combinaciones innecesarias y una sugerencia por materia.
+        filas = AnalisisService.DescartarCombinacionesInnecesarias(filas);
+        filas = AnalisisService.DepurarCandidatas(filas);
+        // Las materias aprobadas que el agente no devolvió quedan para el docente, con lo que faltó.
+        filas.AddRange(SinRespuesta(entrada, filas));
 
         // 2. Guardar: si la solicitud ya tenía un análisis, se reemplaza
         var fecha = DateTime.UtcNow;
@@ -184,12 +214,15 @@ public class AnalisisExternoService
             }
             catch (AnalisisSolicitudException ex) when (ex.StatusCode == 409)
             {
-                // Sin memoria cargada todavía se puede analizar con las asignaturas de la solicitud;
-                // la preselección se activará en cuanto la memoria esté disponible.
-                _logger.LogWarning(ex,
-                    "El análisis externo de {SolicitudId} no pudo usar la preselección; se usan las asignaturas de la solicitud",
-                    solicitudId);
+                _logger.LogWarning(ex, "El análisis externo de {SolicitudId} no pudo usar la preselección", solicitudId);
+                throw;
             }
+
+            // Solo son candidatas las materias APROBADAS según el récord académico.
+            if (preseleccion is not { UsaMateriasAprobadas: true })
+                throw new AnalisisSolicitudException(409,
+                    "Primero suba el récord académico y confirme las materias aprobadas: " +
+                    "la IA solo sugiere homologar materias que el estudiante aprobó.");
 
             if (preseleccion is { UsaMateriasAprobadas: true, Entradas.Count: > 0 })
             {
@@ -247,14 +280,11 @@ public class AnalisisExternoService
         if (string.IsNullOrWhiteSpace(entrada.Documentos.HistorialAcademico))
             entrada.Documentos.HistorialAcademico = UnirTextos(documentos, "HISTORIAL");
 
+        // Los sílabos que se envían son los de la UNIVERSIDAD DE ORIGEN (documentos de la carpeta).
+        // El contenido de destino ya va en MateriasDestino; antes se enviaba aquí también y el
+        // agente terminaba comparando la asignatura de destino consigo misma.
         entrada.Documentos.Silabos = usaPreseleccion
-            ? entrada.MateriasDestino
-                .Select(d => new SilaboAgenteExternoDto
-                {
-                    Asignatura = d.Nombre,
-                    Contenido = string.IsNullOrWhiteSpace(d.Contenido) ? d.Nombre : d.Contenido
-                })
-                .ToList()
+            ? SilabosDeOrigen(entrada.MateriasOrigen, documentos)
             : ConstruirSilabos(info, documentos);
 
         return entrada;
@@ -267,6 +297,8 @@ public class AnalisisExternoService
         Area = entrada.AreaDestino,
         Nivel = entrada.NivelDestino,
         Contenido = entrada.ContenidoDestino,
+        ResultadosAprendizaje = entrada.ResultadosDestino,
+        Horas = entrada.HorasDestino,
         MateriasOrigenPermitidas = entrada.MateriasOrigenPermitidas
             .Where(m => !string.IsNullOrWhiteSpace(m))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -281,9 +313,7 @@ public class AnalisisExternoService
     private static List<SilaboAgenteExternoDto> ConstruirSilabos(
         SolicitudCompletaDto info, List<DocumentoExtraidoDto> documentos)
     {
-        var silabos = documentos
-            .Where(d => EsTipo(d.TipoDocumento, "SILABO") && !string.IsNullOrWhiteSpace(d.TextoExtraido))
-            .ToList();
+        var silabos = documentos.Where(EsDocumentoDeAsignatura).ToList();
 
         var usados = new HashSet<int>();
         var lista = new List<SilaboAgenteExternoDto>();
@@ -292,7 +322,6 @@ public class AnalisisExternoService
         {
             var documento = silabos.FirstOrDefault(d =>
                 !usados.Contains(d.Id) && CoincideConAsignatura(d, asignatura.AsignaturaOrigen));
-            documento ??= silabos.FirstOrDefault(d => !usados.Contains(d.Id));
 
             if (documento is not null)
                 usados.Add(documento.Id);
@@ -310,14 +339,90 @@ public class AnalisisExternoService
         return lista;
     }
 
+    /// <summary>
+    /// Sílabo de cada materia aprobada, buscado por nombre entre los documentos procesados de la
+    /// carpeta. Si una materia no tiene sílabo no se le asigna otro: falta información.
+    /// </summary>
+    private static List<SilaboAgenteExternoDto> SilabosDeOrigen(
+        List<string> materiasOrigen, List<DocumentoExtraidoDto> documentos)
+    {
+        var silabos = documentos.Where(EsDocumentoDeAsignatura).ToList();
+
+        return materiasOrigen
+            .Select(m => (Materia: m, Documento: silabos.FirstOrDefault(d => CoincideConAsignatura(d, m))))
+            .Where(x => x.Documento is not null)
+            .Select(x => new SilaboAgenteExternoDto { Asignatura = x.Materia, Contenido = x.Documento!.TextoExtraido!.Trim() })
+            .ToList();
+    }
+
+    private const string CriterioExterno =
+        "Criterios generales de equivalencia académica (contenidos, resultados de aprendizaje, horas y créditos). " +
+        "No se aplican las reglas internas de homologación entre carreras de FISEI.";
+
+    /// <summary>Materias aprobadas que el agente no evaluó: quedan para revisión con lo que faltó.</summary>
+    private static IEnumerable<AnalisisAsignatura> SinRespuesta(AgenteExternoRequest entrada, List<AnalisisAsignatura> filas)
+    {
+        var evaluadas = filas.SelectMany(f => f.MateriasOrigen.Select(m => m.Nombre))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var materia in entrada.MateriasOrigen.Where(m => !evaluadas.Contains(m)))
+        {
+            var tieneSilabo = entrada.Documentos.Silabos.Any(s =>
+                string.Equals(s.Asignatura, materia, StringComparison.OrdinalIgnoreCase));
+            yield return new AnalisisAsignatura
+            {
+                AsignaturaOrigen = Recortar(materia, MaxNombre),
+                AsignaturaDestino = "Sin equivalente probable",
+                MateriasOrigen = new List<MateriaOrigenResultado> { new() { Nombre = Recortar(materia, MaxNombre) } },
+                Decision = DecisionAnalisis.REQUIERE_REVISION,
+                Justificacion = tieneSilabo
+                    ? "El agente externo no encontró una asignatura equivalente en la malla de destino."
+                    : "No se encontró el sílabo de esta materia en la carpeta de la universidad de origen; " +
+                      "solicite el documento antes de decidir.",
+                Diferencias = tieneSilabo ? null : "Información faltante: sílabo de la materia de origen.",
+                ReglaAplicada = CriterioExterno,
+                RequiereRevision = true
+            };
+        }
+    }
+
     private static bool EsTipo(string tipo, string esperado) =>
         tipo.Contains(esperado, StringComparison.OrdinalIgnoreCase);
 
-    private static bool CoincideConAsignatura(DocumentoExtraidoDto documento, string asignatura) =>
-        (!string.IsNullOrWhiteSpace(documento.NombreArchivo) &&
-         documento.NombreArchivo.Contains(asignatura, StringComparison.OrdinalIgnoreCase)) ||
-        (!string.IsNullOrWhiteSpace(documento.TextoExtraido) &&
-         documento.TextoExtraido.Contains(asignatura, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// PDF de la universidad de origen que puede describir una asignatura: sílabo, plan analítico
+    /// u otro documento suelto de la carpeta. No cuentan el récord, la malla, la carta ni el enlace.
+    /// </summary>
+    private static bool EsDocumentoDeAsignatura(DocumentoExtraidoDto d) =>
+        !string.IsNullOrWhiteSpace(d.TextoExtraido) &&
+        !EsTipo(d.TipoDocumento, "HISTORIAL") && !EsTipo(d.TipoDocumento, "RECORD") &&
+        !EsTipo(d.TipoDocumento, "MALLA") && !EsTipo(d.TipoDocumento, "URL_EXTERNA") &&
+        !EsTipo(d.TipoDocumento, "SOLICITUD");
+
+    /// <summary>
+    /// El documento es de la asignatura si su nombre aparece en el nombre del archivo o en el
+    /// encabezado del texto (portada), sin distinguir tildes ni mayúsculas. No se busca en todo
+    /// el texto: un sílabo nombra otras asignaturas como prerrequisitos.
+    /// </summary>
+    private static bool CoincideConAsignatura(DocumentoExtraidoDto documento, string asignatura)
+    {
+        var nombre = Normalizar(asignatura);
+        if (nombre.Length < 3) return false;
+        var archivo = Normalizar(Path.GetFileNameWithoutExtension(documento.NombreArchivo ?? string.Empty));
+        if (Regex.IsMatch(archivo, $@"(^| ){Regex.Escape(nombre)}( |$)")) return true;
+        var texto = documento.TextoExtraido ?? string.Empty;
+        var portada = Normalizar(texto.Length > 600 ? texto[..600] : texto);
+        return Regex.IsMatch(portada, $@"(^| ){Regex.Escape(nombre)}( |$)");
+    }
+
+    private static string Normalizar(string texto)
+    {
+        var d = texto.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(d.Length);
+        foreach (var c in d)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        return Regex.Replace(sb.ToString().ToLowerInvariant(), "[^a-z0-9]+", " ").Trim();
+    }
 
     private static string UnirTextos(List<DocumentoExtraidoDto> documentos, string tipo) =>
         string.Join("\n\n", documentos
@@ -363,11 +468,29 @@ public class AnalisisExternoService
         string justificacion;
         bool requiereRevision;
 
+        // Comparación con el método definido: sílabo de origen (carpeta) contra la asignatura
+        // de destino de FISEI. Solo con los datos que existen; lo que falta se informa.
+        var silaboOrigen = string.Join("\n", entrada.Documentos.Silabos
+            .Where(s => origenes.Contains(s.Asignatura, StringComparer.OrdinalIgnoreCase))
+            .Select(s => s.Contenido));
+        // Las horas de origen salen del propio sílabo si las declara; la profundidad se mide con
+        // los resultados de aprendizaje de la asignatura de FISEI.
+        var horasOrigen = HomologaUTA.Homologacion.Agents.ComparadorSilabos.HorasDeSilabo(silaboOrigen);
+        var comparacion = HomologaUTA.Homologacion.Agents.ComparadorSilabos.Comparar(
+            string.IsNullOrWhiteSpace(silaboOrigen) ? null : silaboOrigen, null, horasOrigen,
+            destino?.Contenido, destino?.ResultadosAprendizaje, destino?.Horas);
+        var faltantes = new List<string>();
+        if (string.IsNullOrWhiteSpace(silaboOrigen)) faltantes.Add("sílabo de la materia de origen");
+        if (comparacion.Horas is null)
+            faltantes.Add("horas de la asignatura de origen (verifíquelas en los documentos)");
+        faltantes.Add("créditos de la universidad de origen (verifíquelos en los documentos)");
+
+        // Desarrollo de Proyectos, Titulación y Prácticas son actividades finales de la carrera
+        // receptora: no se reconocen por equivalencia de asignatura, sea interna o externa.
         var motivoExclusion = ReglasHomologacion.MotivoSiNoHomologable(
             string.Join(" + ", origenes), a.NombreDestino);
         if (motivoExclusion is not null)
         {
-            // La regla institucional de materias no homologables también aplica al agente externo.
             decision = DecisionAnalisis.NO_HOMOLOGABLE;
             justificacion = motivoExclusion;
             requiereRevision = false;
@@ -395,20 +518,49 @@ public class AnalisisExternoService
             requiereRevision = sinJustificacion;
         }
 
+        // Criterio general: además de los contenidos se miran los resultados de aprendizaje y las
+        // horas. Si alguno queda bajo el 80 %, la decisión la toma el docente.
+        if (decision == DecisionAnalisis.HOMOLOGABLE && !string.IsNullOrWhiteSpace(silaboOrigen) &&
+            (comparacion.Profundidad < 80 || comparacion.Horas is < 80))
+        {
+            decision = DecisionAnalisis.REQUIERE_REVISION;
+            requiereRevision = true;
+            justificacion = Recortar(
+                $"{justificacion} Cubre el {comparacion.Profundidad}% de los resultados de aprendizaje" +
+                (comparacion.Horas is int h ? $" y el {h}% de la carga horaria" : string.Empty) +
+                "; el docente debe verificar la equivalencia.", MaxJustificacion);
+        }
+
+        // Sin sílabo de origen no hay base para elegir destino: solo se mantiene si el nombre es
+        // equivalente; si no, la materia queda "Sin equivalente probable" para que decida el docente.
+        var destinoSinBase = string.IsNullOrWhiteSpace(silaboOrigen) &&
+                             PreseleccionService.SimilitudNombre(string.Join(" ", origenes), a.NombreDestino) < 0.5;
+
         return new AnalisisAsignatura
         {
             AsignaturaOrigen = Recortar(string.Join(" + ", origenes), MaxNombre),
-            AsignaturaDestino = Recortar(a.NombreDestino.Trim(), MaxNombre),
-            AsignaturaDestinoId = a.AsignaturaDestinoId ?? (destino?.AsignaturaId > 0 ? destino.AsignaturaId : null),
+            AsignaturaDestino = destinoSinBase ? "Sin equivalente probable" : Recortar(a.NombreDestino.Trim(), MaxNombre),
+            AsignaturaDestinoId = destinoSinBase ? null : a.AsignaturaDestinoId ?? (destino?.AsignaturaId > 0 ? destino.AsignaturaId : null),
             AreaDestino = string.IsNullOrWhiteSpace(destino?.Area) ? null : Recortar(destino!.Area!.Trim(), 80),
             Combinada = materias.Count == 2,
             MateriasOrigen = materias,
             PorcentajeContenido = a.PorcentajeSimilitud,
-            PorcentajeProfundidad = 0,
-            PorcentajeHoras = 0,
+            PorcentajeProfundidad = string.IsNullOrWhiteSpace(silaboOrigen) ? 0 : comparacion.Profundidad,
+            PorcentajeHoras = comparacion.Horas ?? 0,
+            HorasOrigen = horasOrigen,
+            HorasDestino = destino?.Horas,
             Decision = decision,
             Justificacion = Recortar(justificacion, MaxJustificacion),
-            RequiereRevision = requiereRevision
+            RequiereRevision = requiereRevision || string.IsNullOrWhiteSpace(silaboOrigen),
+            NivelDestino = string.IsNullOrWhiteSpace(destino?.Nivel) ? null : Recortar(destino!.Nivel!.Trim(), 30),
+            ContenidosCoincidentes = comparacion.Coincidencias.Count == 0 || string.IsNullOrWhiteSpace(silaboOrigen)
+                ? null
+                : Recortar(string.Join("; ", comparacion.Coincidencias), 2000),
+            Diferencias = Recortar(string.Join("; ",
+                (string.IsNullOrWhiteSpace(silaboOrigen) ? new List<string>() : comparacion.Diferencias)
+                .Concat(faltantes.Select(f => $"Información faltante: {f}"))), 2000),
+            ReglaAplicada = motivoExclusion ?? CriterioExterno,
+            PropuestaPor = OrigenPropuesta.IA
         };
     }
 

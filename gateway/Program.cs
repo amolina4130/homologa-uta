@@ -68,14 +68,12 @@ authBuilder.AddPolicy("coordinador", p => p.RequireRole(coordinadorRoles));
 // ---------------------------------------------------------------
 // 4) CORS: FORZADO PARA EL FRONTEND
 // ---------------------------------------------------------------
-var origins = new[]
-{
-    "http://localhost:3000", "http://127.0.0.1:3000",   // Docker / preview
-    "http://localhost:5173", "http://127.0.0.1:5173"    // Vite en desarrollo
-};
+// Se acepta cualquier origen: el frontend puede abrirse desde localhost, 127.0.0.1, la IP del
+// equipo o Vite en otro puerto (5174...). La sesión viaja en la cabecera Authorization (JWT),
+// no en cookies, así que esto no expone la sesión a otros sitios.
 builder.Services.AddCors(options =>
     options.AddPolicy("frontend", policy => policy
-        .WithOrigins(origins)
+        .SetIsOriginAllowed(_ => true)
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()));

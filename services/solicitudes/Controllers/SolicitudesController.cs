@@ -447,8 +447,8 @@ public class SolicitudesController : ControllerBase
         if (request.CarreraOrigenId == request.CarreraDestinoId)
             return "La carrera de origen y destino no pueden ser iguales.";
 
-        if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
-            return "Debe seleccionar al menos una asignatura.";
+        // Las asignaturas a homologar ya no se eligen a mano: salen de las materias aprobadas del
+        // récord académico, que la IA compara después con la malla de destino.
 
         if ((request.UniversidadOrigen?.Trim().Length ?? 0) > 150 ||
             (request.UniversidadDestino?.Trim().Length ?? 0) > 150)

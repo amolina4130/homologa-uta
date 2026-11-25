@@ -47,14 +47,16 @@ public class CoordinadorService
     }
 
     /// <summary>Solicitudes pendientes de revisión, las más antiguas primero.</summary>
-    public async Task<List<PendienteDto>> ListarPendientesAsync(CancellationToken ct = default)
+    public async Task<List<PendienteDto>> ListarPendientesAsync(
+        bool incluirEmitidos = false, CancellationToken ct = default)
     {
-        // Fuente 1: análisis que esperan al Coordinador o que ya tienen informe emitido
-        // (estos últimos se muestran para poder registrar la resolución del Consejo, HU-17).
+        // Fuente 1: análisis que esperan al Coordinador. El trámite termina cuando el
+        // Coordinador emite el informe final y lo envía al Comité: esos ya no están
+        // pendientes y solo se incluyen si se piden (para consultarlos o corregirlos).
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
             .Where(a => a.Estado == EstadoAnalisis.PENDIENTE_REVISION
-                        || a.Estado == EstadoAnalisis.INFORME_EMITIDO)
+                        || (incluirEmitidos && a.Estado == EstadoAnalisis.INFORME_EMITIDO))
             .Select(a => new
             {
                 a.SolicitudId,
@@ -127,40 +129,29 @@ public class CoordinadorService
 
         var analisis = await CargarAnalisisAsync(solicitudId, ct);
 
+        // El análisis con IA lo genera el docente asignado, no se dispara al abrir el detalle.
+        // Mientras no exista, se devuelven los datos de la solicitud sin sugerencias.
         if (analisis is null)
         {
-            // Una solicitud con informe emitido pero sin análisis es un dato inconsistente.
-            if (string.Equals(info.Estado, EstadoSolicitudHomologacion.INFORME_EMITIDO, StringComparison.OrdinalIgnoreCase))
-                return null;
-
-            try
+            return new DetalleSolicitudDto
             {
-                if (string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase))
-                {
-                    await _analisisExterno.AnalizarSolicitudAsync(solicitudId, null, ct);
-                }
-                else
-                {
-                    // Sin cuerpo: el servicio decide si usa las materias aprobadas (preselección
-                    // HU-21) o las asignaturas de la solicitud.
-                    await _analisis.AnalizarSolicitudAsync(solicitudId, null, ct);
-                }
-            }
-            catch (Exception ex) when (ex is AnalisisSolicitudException
-                                       or AgenteExternoTimeoutException
-                                       or AgenteExternoException
-                                       or DocumentosNoDisponibleException
-                                       or SolicitudesNoDisponibleException)
-            {
-                _logger.LogWarning(ex, "No se pudo generar el análisis de la solicitud {SolicitudId}", solicitudId);
-                return null;
-            }
-
-            analisis = await CargarAnalisisAsync(solicitudId, ct);
+                SolicitudId = solicitudId,
+                NumeroProceso = info.NumeroProceso,
+                Estado = info.Estado,
+                Fecha = info.FechaRegistro,
+                Estudiante = NombreEstudiante(info),
+                EstudianteCedula = CedulaEstudiante(info),
+                ComiteCorreo = info.EstudianteCorreo,
+                Tipo = info.Tipo,
+                CarreraOrigen = info.CarreraOrigen,
+                CarreraDestino = info.CarreraDestino,
+                Modulo = info.Modulo,
+                UniversidadOrigen = info.UniversidadOrigen,
+                UniversidadDestino = info.UniversidadDestino,
+                FechaAnalisis = null,
+                Asignaturas = new()
+            };
         }
-
-        if (analisis is null)
-            return null;
 
         // La resolución del Consejo (si ya existe) se muestra en el mismo detalle y en el
         // formulario de resolución (HU-17/HU-22).
@@ -221,7 +212,18 @@ public class CoordinadorService
                         },
                         DecisionCoordinador = a.DecisionCoordinador,
                         ObservacionCoordinador = a.ObservacionCoordinador,
-                        DecisionFinal = final?.DecisionFinal
+                        DecisionFinal = final?.DecisionFinal,
+                        CambioRespectoDocente = a.CambioRespectoDocente,
+                        NivelOrigen = a.NivelOrigen,
+                        NivelDestino = a.NivelDestino,
+                        HorasOrigen = a.HorasOrigen,
+                        HorasDestino = a.HorasDestino,
+                        CreditosOrigen = a.CreditosOrigen,
+                        CreditosDestino = a.CreditosDestino,
+                        ContenidosCoincidentes = a.ContenidosCoincidentes,
+                        Diferencias = a.Diferencias,
+                        ReglaAplicada = a.ReglaAplicada,
+                        PropuestaPor = a.PropuestaPor
                     };
                 })
                 .ToList()
@@ -250,6 +252,12 @@ public class CoordinadorService
 
         if (analisis.Estado == EstadoAnalisis.INFORME_EMITIDO)
             throw new InformeException(409, "El informe técnico de esta solicitud ya fue emitido.");
+
+        // Flujo IA → Docente → Coordinador: tampoco por esta ruta se emite sin la revisión docente.
+        if (!await _db.DelegacionesDocente.AnyAsync(d => d.SolicitudId == solicitudId &&
+                                                         d.Estado == EstadoDelegacionDocente.REVISADO, ct))
+            throw new InformeException(409,
+                "El informe solo se puede emitir después de que el Docente haya enviado su informe técnico.");
 
         ValidarInforme(analisis, request);
 
@@ -316,6 +324,16 @@ public class CoordinadorService
         if (destinatarios.Count is < 1 or > 2)
             throw new InformeException(400, "Debe delegar la solicitud a uno o dos docentes.");
 
+        // El docente parte del récord: sin materias leídas no tiene qué analizar.
+        if (!await _db.MateriasAprobadas.AnyAsync(m => m.SolicitudId == solicitudId, ct))
+            throw new InformeException(409,
+                "Antes de asignar al docente suba el récord académico de la solicitud para leer sus materias.");
+
+        // Una vez que un docente envió su informe, reasignar borraría su revisión.
+        if (await _db.DelegacionesDocente.AnyAsync(d => d.SolicitudId == solicitudId &&
+                                                        d.Estado == EstadoDelegacionDocente.REVISADO, ct))
+            throw new InformeException(409, "El docente ya envió su informe técnico; la solicitud no se puede reasignar.");
+
         var anteriores = await _db.DelegacionesDocente
             .Where(d => d.SolicitudId == solicitudId)
             .ToListAsync(ct);
@@ -341,6 +359,19 @@ public class CoordinadorService
 
         _db.DelegacionesDocente.AddRange(nuevas);
         await _db.SaveChangesAsync(ct);
+
+        // Asignada al docente: la solicitud sale de "por completar" y queda en revisión.
+        try
+        {
+            var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct);
+            if (info is not null && string.Equals(info.Estado, "REGISTRADA", StringComparison.OrdinalIgnoreCase))
+                await _solicitudes.CambiarEstadoAsync(solicitudId, EstadoSolicitudHomologacion.PENDIENTE_REVISION,
+                    usuario ?? "coordinador@homologauta", ct);
+        }
+        catch (SolicitudesNoDisponibleException ex)
+        {
+            _logger.LogWarning(ex, "No se pudo cambiar el estado de la solicitud {SolicitudId} al delegarla", solicitudId);
+        }
 
         _logger.LogInformation(
             "El coordinador {Coordinador} delegó la solicitud {SolicitudId} en: {Docentes}",
@@ -536,11 +567,24 @@ public class CoordinadorService
             Asignaturas = asignaturas
         });
 
+        // Trazabilidad: la evaluación del docente no se modifica. Si el Coordinador decide distinto,
+        // debe escribir su propia justificación y la fila queda marcada como cambio.
+        var decisionesDocente = DecisionesDocente(revisionDocente.EvaluacionesJson);
         foreach (var item in asignaturas)
         {
             var asignatura = analisis.Asignaturas.First(a => a.Id == item.AsignaturaId);
-            asignatura.DecisionCoordinador = NormalizarDecision(item.Decision);
+            var decision = NormalizarDecision(item.Decision);
+            var cambio = decisionesDocente.TryGetValue(item.AsignaturaId, out var docente) &&
+                         (docente.Homologable ? DecisionAnalisis.HOMOLOGABLE : DecisionAnalisis.NO_HOMOLOGABLE) != decision;
+
+            if (cambio && string.Equals(item.Observacion.Trim(), (docente!.Justificacion ?? string.Empty).Trim(),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InformeException(400,
+                    $"Cambió la decisión del docente en {asignatura.AsignaturaDestino}: escriba su propia justificación del cambio.");
+
+            asignatura.DecisionCoordinador = decision;
             asignatura.ObservacionCoordinador = item.Observacion.Trim();
+            asignatura.CambioRespectoDocente = cambio;
         }
 
         var detalle = await ObtenerDetalleAsync(solicitudId, ct)
@@ -604,6 +648,8 @@ public class CoordinadorService
             CedulaEstudiante = cedula,
             CarreraOrigen = detalle.CarreraOrigen,
             CarreraDestino = detalle.CarreraDestino,
+            UniversidadOrigen = detalle.UniversidadOrigen,
+            UniversidadDestino = detalle.UniversidadDestino,
             Asignaturas = filas,
             Firmante = firmante,
             CoordinadorCorreo = coordinadorCorreo,
@@ -702,6 +748,8 @@ public class CoordinadorService
             CedulaEstudiante = cedula,
             CarreraOrigen = detalle.CarreraOrigen,
             CarreraDestino = detalle.CarreraDestino,
+            UniversidadOrigen = detalle.UniversidadOrigen,
+            UniversidadDestino = detalle.UniversidadDestino,
             Asignaturas = filas,
             Firmante = firmante,
             CoordinadorCorreo = coordinadorCorreo,
@@ -749,6 +797,8 @@ public class CoordinadorService
                 : analisis.CedulaEstudiante,
             CarreraOrigen = detalle.CarreraOrigen,
             CarreraDestino = detalle.CarreraDestino,
+            UniversidadOrigen = detalle.UniversidadOrigen,
+            UniversidadDestino = detalle.UniversidadDestino,
             Asignaturas = filas,
             Firmante = analisis.NombreFirmante ?? analisis.CoordinadorCorreo ?? string.Empty,
             CoordinadorCorreo = analisis.CoordinadorCorreo,
@@ -790,6 +840,8 @@ public class CoordinadorService
                 : request.CedulaEstudiante,
             CarreraOrigen = consolidado.Detalle.CarreraOrigen,
             CarreraDestino = consolidado.Detalle.CarreraDestino,
+            UniversidadOrigen = consolidado.Detalle.UniversidadOrigen,
+            UniversidadDestino = consolidado.Detalle.UniversidadDestino,
             Asignaturas = ConstruirFilasInforme(consolidado.Detalle, evaluaciones),
             Firmante = request.NombreFirmante ?? coordinadorCorreo ?? string.Empty,
             CoordinadorCorreo = coordinadorCorreo,
@@ -909,7 +961,13 @@ public class CoordinadorService
                     AsignaturaDestino = a.AsignaturaDestino,
                     Justificacion = justificacion,
                     Contenido = $"{a.Propuesta.PorcentajeContenido}% · {justificacion}",
-                    SeHomologa = "SÍ"
+                    SeHomologa = "SÍ",
+                    NivelOrigen = a.NivelOrigen,
+                    NivelDestino = a.NivelDestino,
+                    PorcentajeContenido = a.Propuesta.PorcentajeContenido,
+                    PorcentajeProfundidad = a.Propuesta.PorcentajeProfundidad,
+                    PorcentajeHoras = a.Propuesta.PorcentajeHoras,
+                    JustificacionIA = a.Propuesta.Justificacion
                 };
             })
             .ToList();
@@ -930,7 +988,9 @@ public class CoordinadorService
         InformeTexto = delegacion.InformeTexto,
         InformeSugeridoTexto = delegacion.InformeTexto,
         RevisadoPor = revisadoPor,
-        ResultadoDocente = CalcularResultadoDocente(delegacion.EvaluacionesJson)
+        ResultadoDocente = CalcularResultadoDocente(delegacion.EvaluacionesJson),
+        DocumentacionSolicitada = delegacion.DocumentacionSolicitada,
+        FechaSolicitudDocumentacion = delegacion.FechaSolicitudDocumentacion
     };
 
     /// <summary>
@@ -995,6 +1055,22 @@ public class CoordinadorService
             .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct);
 
     /// <summary>Valida que el informe traiga exactamente las asignaturas del análisis, sin repetidas ni ajenas.</summary>
+    /// <summary>Decisión del docente por asignatura, tal como la envió (para detectar cambios).</summary>
+    private static Dictionary<int, EvaluacionAsignaturaDto> DecisionesDocente(string? evaluacionesJson)
+    {
+        if (string.IsNullOrWhiteSpace(evaluacionesJson)) return new();
+        try
+        {
+            return (JsonSerializer.Deserialize<List<EvaluacionAsignaturaDto>>(evaluacionesJson) ?? new())
+                .GroupBy(e => e.AsignaturaId)
+                .ToDictionary(g => g.Key, g => g.First());
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
+    }
+
     private static void ValidarInforme(AnalisisSolicitud analisis, EmitirInformeRequest request)
     {
         if (request?.Asignaturas is null || request.Asignaturas.Count == 0)

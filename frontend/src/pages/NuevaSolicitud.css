@@ -1,0 +1,191 @@
+.ns-sobretitulo {
+  letter-spacing: 0.06em;
+}
+
+/* Indicador de pasos */
+.ns-pasos {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.ns-pasos li {
+  flex: 1 1 0;
+  min-width: 120px;
+  position: relative;
+}
+
+.ns-pasos li + li::before {
+  content: "";
+  position: absolute;
+  top: 1rem;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--bs-border-color);
+}
+
+.ns-pasos li.hecho + li::before,
+.ns-pasos li.hecho + li.actual::before {
+  background: var(--bs-success);
+}
+
+.ns-paso-boton {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--bs-secondary-color);
+}
+
+.ns-paso-boton:disabled {
+  cursor: default;
+}
+
+.ns-punto {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: var(--bs-body-bg);
+  border: 2px solid var(--bs-border-color);
+}
+
+.ns-pasos li.hecho .ns-punto {
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+  color: #fff;
+}
+
+.ns-pasos li.actual .ns-punto {
+  border-color: var(--bs-primary);
+  background: var(--bs-primary);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--bs-primary-bg-subtle);
+}
+
+.ns-pasos li.actual .ns-nombre {
+  color: var(--bs-body-color);
+  font-weight: 600;
+}
+
+.ns-nombre {
+  font-size: 0.85rem;
+}
+
+/* Paso 1: asignaturas */
+.ns-asignaturas {
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+
+.ns-asignatura {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.ns-asignatura:hover {
+  background: var(--bs-tertiary-bg);
+}
+
+.ns-asignatura.marcada {
+  background: var(--bs-primary-bg-subtle);
+}
+
+.ns-vacio {
+  border: 1px dashed var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--bs-secondary-color);
+}
+
+/* Paso 2: requisitos */
+.ns-requisito {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.ns-requisito.listo {
+  border-color: var(--bs-success-border-subtle);
+  background: var(--bs-success-bg-subtle);
+}
+
+.ns-requisito.listo h3 {
+  color: var(--bs-success-text-emphasis);
+}
+
+.ns-archivo {
+  flex: 1 1 280px;
+  max-width: 520px;
+}
+
+.ns-alternativa summary {
+  cursor: pointer;
+  color: var(--bs-primary);
+  font-size: 0.9rem;
+}
+
+/* Paso 4: resumen */
+.ns-resumen {
+  height: 100%;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.ns-resumen-titulo {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color);
+}
+
+/* Navegación entre pasos */
+.ns-acciones {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--bs-border-color-translucent);
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+}
+
+/* Pantalla final */
+.ns-final {
+  max-width: 640px;
+}
+
+.ns-final-icono {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  background: var(--bs-success-bg-subtle);
+  color: var(--bs-success);
+}

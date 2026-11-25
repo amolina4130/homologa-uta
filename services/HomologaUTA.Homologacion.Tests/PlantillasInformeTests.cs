@@ -119,19 +119,46 @@ public class PlantillasInformeTests
     }
 
     [Fact]
-    public void InformeFinal_AfirmaYVaDirigidoAlConsejoDirectivo()
+    public void InformeFinal_RecomiendaYVaDirigidoAlComite()
     {
         var texto = PlantillaInformeFinal.GenerarTexto(
             "SOL-0003", "UTA-FISEI-2026-045", "Estudiante Prueba", "1234567890",
             "Tecnologías de la Información", "Software", Filas(),
             firmante: "coordinador@uta.edu.ec");
 
-        Assert.Contains("Consejo Directivo", texto);
+        Assert.Equal("Comité de Homologación", PlantillaInformeFinal.Destinatario);
         Assert.Contains("De mi consideración:", texto);
-        Assert.Contains("se resuelve homologar", texto);
+        Assert.Contains("se recomienda la homologación", texto);
         Assert.DoesNotContain("se sugiere", texto);
+        Assert.DoesNotContain("se resuelve", texto);
         Assert.DoesNotContain("Quipus", texto);
         Assert.Contains("Coordinador de Homologación", texto);
         Assert.Contains("C.I.:", texto);
+    }
+
+    [Fact]
+    public void Pdfs_SeGeneranConTablaYDatosNuevos()
+    {
+        var filas = new List<FilaInformeAsignatura>
+        {
+            new() { AsignaturaOrigen = "Física", AsignaturaDestino = "Física", SeHomologa = "SÍ", NivelOrigen = "Primero", NivelDestino = "Primero",
+                    PorcentajeContenido = 100, PorcentajeProfundidad = 100, PorcentajeHoras = 100,
+                    Justificacion = "Acepta la sugerencia de la IA.", JustificacionIA = "El sílabo cubre el 100% de los temas. Cumple." },
+            new() { AsignaturaOrigen = "Álgebra", AsignaturaDestino = "Álgebra Lineal", SeHomologa = "NO", PorcentajeContenido = 60, Justificacion = "No cubre espacios vectoriales." },
+        };
+
+        var docente = PlantillaInformeDocente.GenerarPdf(new DatosInformeDocente
+        {
+            NumeroProceso = "SOL-0001", NumeroMemorando = "SOL-0001", NombreEstudiante = "Estudiante", CedulaEstudiante = "1234567890",
+            CarreraOrigen = "TI", CarreraDestino = "Software", Asignaturas = filas, Docente = "Docente", CedulaFirmante = "1800000000"
+        });
+        var final = PlantillaInformeFinal.GenerarPdfDesdeTexto("Para: Comité\nDe mi consideración: texto editado.\nN.º | A | B\n1 | x | y\n\nAtentamente,\nX", new DatosInformeFinal
+        {
+            NumeroProceso = "SOL-0001", NumeroMemorando = "M-1", NombreEstudiante = "Estudiante", CedulaEstudiante = "1234567890",
+            CarreraOrigen = "TI", CarreraDestino = "Software", Asignaturas = filas.Take(1).ToList(), Firmante = "coordinador@uta.edu.ec",
+            UniversidadOrigen = "Universidad X", UniversidadDestino = "UTA"
+        });
+        Assert.True(docente.Length > 1000);
+        Assert.True(final.Length > 1000);
     }
 }

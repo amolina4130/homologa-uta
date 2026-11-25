@@ -8,6 +8,8 @@ import {
 } from "../services/documentosService";
 import {
   actualizarMateriasAprobadas,
+  analizarSolicitud,
+  analizarSolicitudExterna,
   extraerRecord,
   obtenerMateriasAprobadas,
 } from "../services/homologacionService";
@@ -39,6 +41,8 @@ export default function AdjuntarDocumentos() {
   const [cargando, setCargando] = useState(false);
   const [documentos, setDocumentos] = useState([]);
   const [estadoSolicitud, setEstadoSolicitud] = useState("");
+  const [moduloSolicitud, setModuloSolicitud] = useState("INTERNO");
+  const [enviando, setEnviando] = useState(false);
 
   const [materias, setMaterias] = useState([]);
   const [requiereRevision, setRequiereRevision] = useState(false);
@@ -93,6 +97,7 @@ export default function AdjuntarDocumentos() {
     try {
       const detalle = await obtenerSolicitud(id);
       setEstadoSolicitud(detalle?.estado || "");
+      setModuloSolicitud(detalle?.modulo || "INTERNO");
     } catch {
       setEstadoSolicitud("");
     }
@@ -202,7 +207,33 @@ export default function AdjuntarDocumentos() {
     }
   };
 
+  // El análisis se ejecuta cuando el récord ya está cargado: así usa las materias aprobadas
+  // reales y la solicitud llega al Coordinador completa. Después las materias quedan fijas.
+  const enviarARevision = async () => {
+    if (!solicitudId) return;
+    if (
+      !window.confirm(
+        "¿Enviar la solicitud a revisión? Se analizarán las materias y ya no podrá editarlas."
+      )
+    )
+      return;
+    setEnviando(true);
+    setErrorMaterias("");
+    setMensajeMaterias("");
+    try {
+      if (moduloSolicitud === "EXTERNO") await analizarSolicitudExterna(solicitudId);
+      else await analizarSolicitud(solicitudId);
+      setEstadoSolicitud("PENDIENTE_REVISION");
+      setMensajeMaterias("Solicitud enviada a revisión. Ya aparece para delegar a los docentes.");
+    } catch (err) {
+      setErrorMaterias(err.message || "No se pudo enviar la solicitud a revisión.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const soloLecturaMaterias = Boolean(estadoSolicitud) && estadoSolicitud !== "REGISTRADA";
+  const puedeEnviar = estadoSolicitud === "REGISTRADA" && materias.length > 0;
 
   return (
     <div className="container mt-4">
@@ -331,6 +362,23 @@ export default function AdjuntarDocumentos() {
                     mensaje={mensajeMaterias}
                     error={errorMaterias}
                   />
+
+                  {puedeEnviar && (
+                    <div className="alert alert-primary d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 mb-0">
+                      <span>
+                        <strong>¿Ya cargó el récord y revisó las materias?</strong> Envíe la solicitud a revisión
+                        para que se analice y pueda delegarse a los docentes.
+                      </span>
+                      <button type="button" className="btn btn-primary fw-semibold" onClick={enviarARevision} disabled={enviando}>
+                        {enviando ? "Analizando…" : "Enviar a revisión"}
+                      </button>
+                    </div>
+                  )}
+                  {estadoSolicitud && estadoSolicitud !== "REGISTRADA" && (
+                    <p className="small text-muted mt-3 mb-0">
+                      Esta solicitud ya está en revisión; las materias no se pueden modificar.
+                    </p>
+                  )}
                 </div>
               )}
 

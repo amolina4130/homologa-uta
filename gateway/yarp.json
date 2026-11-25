@@ -11,6 +11,11 @@
         "AuthorizationPolicy": "Anonymous",
         "Match": { "Path": "/auth/registro" }
       },
+      "auth-docentes": {
+        "ClusterId": "auth",
+        "AuthorizationPolicy": "coordinador",
+        "Match": { "Path": "/auth/docentes" }
+      },
       "auth": {
         "ClusterId": "auth",
         "AuthorizationPolicy": "autenticado",

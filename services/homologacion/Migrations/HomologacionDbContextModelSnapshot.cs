@@ -54,8 +54,21 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<bool>("CambioRespectoDocente")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("Combinada")
                         .HasColumnType("bit");
+
+                    b.Property<string>("ContenidosCoincidentes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("CreditosDestino")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CreditosOrigen")
+                        .HasColumnType("int");
 
                     b.Property<string>("Decision")
                         .IsRequired()
@@ -66,10 +79,28 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<string>("Diferencias")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int?>("HorasDestino")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("HorasOrigen")
+                        .HasColumnType("int");
+
                     b.Property<string>("Justificacion")
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("NivelDestino")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("NivelOrigen")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("ObservacionCoordinador")
                         .HasMaxLength(1000)
@@ -83,6 +114,17 @@ namespace HomologaUTA.Homologacion.Migrations
 
                     b.Property<int>("PorcentajeProfundidad")
                         .HasColumnType("int");
+
+                    b.Property<string>("PropuestaPor")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("IA");
+
+                    b.Property<string>("ReglaAplicada")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("RequiereRevision")
                         .HasColumnType("bit");
@@ -204,6 +246,10 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("DocumentacionSolicitada")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -217,6 +263,9 @@ namespace HomologaUTA.Homologacion.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("FechaRevision")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaSolicitudDocumentacion")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("FechaSugerencia")

@@ -37,6 +37,8 @@ export default function Login() {
       setErrorLogin(
         err.tipo === "credenciales"
           ? "Credenciales incorrectas. Intente nuevamente."
+          : err.tipo === "conexion"
+          ? err.message
           : "No se pudo conectar con el servidor. Intente más tarde."
       );
     } finally {

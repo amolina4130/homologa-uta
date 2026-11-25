@@ -127,7 +127,7 @@ public class DetalleSolicitudDto
     public string Modulo { get; set; } = "INTERNO";
     public string? UniversidadOrigen { get; set; }
     public string? UniversidadDestino { get; set; }
-    public DateTime FechaAnalisis { get; set; }
+    public DateTime? FechaAnalisis { get; set; }
 
     /// <summary>Solo si el informe ya se emitió.</summary>
     public string? CoordinadorCorreo { get; set; }
@@ -165,6 +165,24 @@ public class DetalleAsignaturaDto
 
     /// <summary>Decisión final del Consejo Directivo, si ya se registró la resolución (HU-17).</summary>
     public string? DecisionFinal { get; set; }
+
+    /// <summary>true cuando el Coordinador decidió distinto que el Docente.</summary>
+    public bool CambioRespectoDocente { get; set; }
+
+    // Datos de la comparación que vio la IA (semestres de las mallas, horas, créditos,
+    // coincidencias, diferencias y regla aplicada).
+    public string? NivelOrigen { get; set; }
+    public string? NivelDestino { get; set; }
+    public int? HorasOrigen { get; set; }
+    public int? HorasDestino { get; set; }
+    public int? CreditosOrigen { get; set; }
+    public int? CreditosDestino { get; set; }
+    public string? ContenidosCoincidentes { get; set; }
+    public string? Diferencias { get; set; }
+    public string? ReglaAplicada { get; set; }
+
+    /// <summary>IA o DOCENTE: quién propuso esta fila.</summary>
+    public string PropuestaPor { get; set; } = "IA";
 }
 
 /// <summary>Lo que propuso el agente para la asignatura.</summary>

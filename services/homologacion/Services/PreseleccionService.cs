@@ -14,6 +14,9 @@ public class EntradasPreseleccion
 {
     public bool UsaMateriasAprobadas { get; set; }
     public List<AsignaturaAnalisisDto> Entradas { get; set; } = new();
+
+    /// <summary>Una entrada por materia aprobada y candidata, más las combinaciones como alternativa.</summary>
+    public List<AsignaturaAnalisisDto> EntradasIndividuales { get; set; } = new();
     public List<MateriaSinCandidataDto> SinCandidata { get; set; } = new();
 }
 
@@ -58,6 +61,8 @@ public class PreseleccionService
             .Where(m => m.SolicitudId == solicitudId)
             .OrderBy(m => m.Id)
             .ToListAsync(ct);
+        // Solo cuentan las materias APROBADAS: el récord también puede traer reprobadas o retiradas.
+        materias = materias.Where(m => ReglasHomologacion.EstaAprobada(m.EstadoSegunDocumento)).ToList();
 
         if (materias.Count == 0)
             throw new AnalisisSolicitudException(409,
@@ -78,7 +83,26 @@ public class PreseleccionService
             solicitudId, estado.Huella);
 
         var destino = await _memoria.ObtenerAsignaturasAsync(info.CarreraDestinoId, null, ct);
-        return Construir(info, materias, destino);
+        return Construir(info, materias, destino, await ObtenerMallaOrigenAsync(info, ct));
+    }
+
+    /// <summary>
+    /// Agente interno: la carrera de origen también es de FISEI, así que su malla y sus sílabos
+    /// están en el sistema. De ahí salen el contenido, el semestre, las horas y los créditos de
+    /// cada materia aprobada (no se deducen del último semestre cursado). En externo, vacía.
+    /// </summary>
+    private async Task<List<MemoriaAsignaturaDto>> ObtenerMallaOrigenAsync(SolicitudCompletaDto info, CancellationToken ct)
+    {
+        if (EsExterno(info) || info.CarreraOrigenId <= 0) return new List<MemoriaAsignaturaDto>();
+        try
+        {
+            return await _memoria.ObtenerAsignaturasAsync(info.CarreraOrigenId, null, ct);
+        }
+        catch (MemoriaNoDisponibleException ex)
+        {
+            _logger.LogWarning(ex, "No se pudo leer la malla de origen de la solicitud {SolicitudId}", info.Id);
+            return new List<MemoriaAsignaturaDto>();
+        }
     }
 
     /// <summary>true si el estudiante ya tiene materias aprobadas extraídas del récord (HU-20).</summary>
@@ -99,6 +123,8 @@ public class PreseleccionService
             .Where(m => m.SolicitudId == solicitudId)
             .OrderBy(m => m.Id)
             .ToListAsync(ct);
+        // Solo cuentan las materias APROBADAS: el récord también puede traer reprobadas o retiradas.
+        materias = materias.Where(m => ReglasHomologacion.EstaAprobada(m.EstadoSegunDocumento)).ToList();
 
         if (materias.Count == 0)
             return new EntradasPreseleccion { UsaMateriasAprobadas = false };
@@ -117,7 +143,12 @@ public class PreseleccionService
             "El análisis de {SolicitudId} usa la memoria con huella {Huella}", solicitudId, estado.Huella);
 
         var destino = await _memoria.ObtenerAsignaturasAsync(info.CarreraDestinoId, null, ct);
-        var preseleccion = Construir(info, materias, destino);
+
+        var mallaOrigen = await ObtenerMallaOrigenAsync(info, ct);
+        var preseleccion = Construir(info, materias, destino, mallaOrigen);
+        var porMateria = materias
+            .GroupBy(m => m.Nombre.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         // Se agrupa por asignatura de destino: si dos materias aprobadas son candidatas para el
         // mismo destino, el agente las recibe juntas y puede proponer la combinación (HU-22).
@@ -127,8 +158,14 @@ public class PreseleccionService
         {
             var origen = info.Asignaturas.FirstOrDefault(a =>
                 string.Equals(a.AsignaturaOrigen?.Trim(), par.MateriaOrigen.Trim(), StringComparison.OrdinalIgnoreCase));
+            var enMalla = BuscarEnMalla(mallaOrigen, par.MateriaOrigen);
+            porMateria.TryGetValue(par.MateriaOrigen.Trim(), out var aprobada);
 
-            var contenidoOrigen = origen?.ContenidoOrigen
+            var silabo = enMalla is not null && !string.IsNullOrWhiteSpace(enMalla.ContenidosMinimos)
+                ? enMalla.ContenidosMinimos
+                : null;
+            var contenidoOrigen = silabo
+                ?? (string.IsNullOrWhiteSpace(origen?.ContenidoOrigen) ? null : origen!.ContenidoOrigen)
                 ?? $"Materia aprobada {par.MateriaOrigen}" +
                    (par.Nota.HasValue ? $" con nota {par.Nota:0.##}" : string.Empty) +
                    (string.IsNullOrWhiteSpace(par.Area) ? "." : $". Área: {par.Area}.");
@@ -150,18 +187,20 @@ public class PreseleccionService
                     Nombre = par.MateriaOrigen,
                     Contenido = contenidoOrigen,
                     Area = par.Area,
-                    Nivel = origen?.NivelOrigen,
-                    Nota = par.Nota
+                    Nivel = !string.IsNullOrWhiteSpace(enMalla?.Nivel) ? enMalla!.Nivel : origen?.NivelOrigen,
+                    Nota = par.Nota,
+                    Horas = enMalla?.Horas is > 0 ? enMalla.Horas : origen?.HorasOrigen is > 0 ? origen.HorasOrigen : null,
+                    Creditos = enMalla?.Creditos is > 0 ? enMalla.Creditos : origen?.CreditosOrigen is > 0 ? origen.CreditosOrigen : null,
+                    Resultados = string.IsNullOrWhiteSpace(enMalla?.ResultadosAprendizaje) ? null : enMalla!.ResultadosAprendizaje,
+                    DeSilabo = silabo is not null,
+                    Periodo = aprobada?.Periodo,
+                    EstadoSegunRecord = aprobada?.EstadoSegunDocumento
                 });
             }
         }
 
-        var entradas = grupos.Values.Select(grupo =>
+        AsignaturaAnalisisDto Entrada(GrupoPreseleccion grupo, List<OrigenPreseleccion> origenes)
         {
-            var origenes = grupo.Origenes
-                .GroupBy(o => o.Nombre, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First())
-                .ToList();
 
             var areas = origenes
                 .Select(o => o.Area)
@@ -186,14 +225,55 @@ public class PreseleccionService
                 MateriasOrigenPermitidas = origenes.Select(o => o.Nombre).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 NotasMateriasOrigen = origenes
                     .GroupBy(o => o.Nombre.Trim(), StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(g => g.Key, g => g.First().Nota, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First().Nota, StringComparer.OrdinalIgnoreCase),
+                // Con dos materias de origen, horas y créditos se suman (cubren juntas el destino).
+                HorasOrigen = origenes.All(o => o.Horas is > 0) ? origenes.Sum(o => o.Horas!.Value) : null,
+                CreditosOrigen = origenes.All(o => o.Creditos is > 0) ? origenes.Sum(o => o.Creditos!.Value) : null,
+                HorasDestino = grupo.Candidata.Horas > 0 ? grupo.Candidata.Horas : null,
+                CreditosDestino = grupo.Candidata.Creditos > 0 ? grupo.Candidata.Creditos : null,
+                ResultadosOrigen = origenes.Any(o => o.Resultados is not null)
+                    ? string.Join("\n", origenes.Select(o => o.Resultados).Where(r => r is not null))
+                    : null,
+                ResultadosDestino = string.IsNullOrWhiteSpace(grupo.Candidata.ResultadosAprendizaje)
+                    ? null
+                    : grupo.Candidata.ResultadosAprendizaje,
+                ContenidoOrigenDeSilabo = origenes.All(o => o.DeSilabo),
+                // En una combinación manda la materia aprobada hace más tiempo (regla de los 10 años).
+                PeriodoAprobacion = origenes.Select(o => o.Periodo).Where(p => !string.IsNullOrWhiteSpace(p))
+                    .OrderBy(p => System.Text.RegularExpressions.Regex.Matches(p!, @"(19|20)d{2}").Select(m => int.Parse(m.Value)).DefaultIfEmpty(9999).Max())
+                    .FirstOrDefault(),
+                EstadoSegunRecord = string.Join(" ", origenes.Select(o => o.EstadoSegunRecord).Where(e => !string.IsNullOrWhiteSpace(e))),
+                EsCombinacion = origenes.Count > 1
             };
-        }).ToList();
+        }
+
+        List<OrigenPreseleccion> Unicos(GrupoPreseleccion g) => g.Origenes
+            .GroupBy(o => o.Nombre, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .ToList();
+
+        // Agrupadas por destino (las usa el agente externo, que decide la combinación).
+        var entradas = grupos.Values.Select(g => Entrada(g, Unicos(g))).ToList();
+
+        // Agente interno: cada materia aprobada se compara SOLA con cada candidata; la combinación
+        // de dos materias se agrega solo como alternativa (HU-22) y se descarta si no cumple o si
+        // una materia sola ya cubre el destino.
+        var individuales = grupos.Values
+            .SelectMany(g =>
+            {
+                var unicos = Unicos(g);
+                var lista = unicos.Select(o => Entrada(g, new List<OrigenPreseleccion> { o })).ToList();
+                if (unicos.Count >= 2)
+                    lista.Add(Entrada(g, unicos.Take(2).ToList()));
+                return lista;
+            })
+            .ToList();
 
         return new EntradasPreseleccion
         {
             UsaMateriasAprobadas = true,
             Entradas = entradas,
+            EntradasIndividuales = individuales,
             SinCandidata = preseleccion.SinCandidata
         };
     }
@@ -256,6 +336,11 @@ public class PreseleccionService
             entrada.ContenidoDestino = candidata.ContenidosMinimos;
             entrada.AreaDestino = candidata.Area;
             entrada.NivelDestino = candidata.Nivel;
+            entrada.HorasDestino = candidata.Horas > 0 ? candidata.Horas : null;
+            entrada.CreditosDestino = candidata.Creditos > 0 ? candidata.Creditos : null;
+            entrada.ResultadosDestino = string.IsNullOrWhiteSpace(candidata.ResultadosAprendizaje)
+                ? null
+                : candidata.ResultadosAprendizaje;
         }
 
         return sinCandidata;
@@ -265,7 +350,7 @@ public class PreseleccionService
         SolicitudCompletaDto info, string nombre, List<MemoriaAsignaturaDto> destino)
     {
         var materia = new Models.MateriaAprobada { Nombre = nombre };
-        var preseleccion = Construir(info, new List<Models.MateriaAprobada> { materia }, destino);
+        var preseleccion = Construir(info, new List<Models.MateriaAprobada> { materia }, destino, new List<MemoriaAsignaturaDto>());
         var idCandidata = preseleccion.Pares
             .FirstOrDefault(p => string.Equals(p.MateriaOrigen.Trim(), nombre, StringComparison.OrdinalIgnoreCase))
             ?.CandidatasDestino.FirstOrDefault()?.AsignaturaId;
@@ -276,23 +361,37 @@ public class PreseleccionService
     private PreseleccionDto Construir(
         SolicitudCompletaDto info,
         List<Models.MateriaAprobada> materias,
-        List<MemoriaAsignaturaDto> destino)
+        List<MemoriaAsignaturaDto> destino,
+        List<MemoriaAsignaturaDto> mallaOrigen)
     {
         var resultado = new PreseleccionDto();
 
         foreach (var materia in materias)
         {
-            var area = _config.DetectarArea(materia.Nombre);
-            var nivel = NivelDeLaMateria(info, materia.Nombre);
+            var enMalla = BuscarEnMalla(mallaOrigen, materia.Nombre);
+            // El área sale de la malla (misma clasificación que el destino) cuando la materia está en ella.
+            var area = !string.IsNullOrWhiteSpace(enMalla?.Area) ? enMalla!.Area : _config.DetectarArea(materia.Nombre);
+            var nivelMalla = NivelUtil.Numerico(enMalla?.Nivel);
+            var nivel = nivelMalla > 0 ? nivelMalla : NivelDeLaMateria(info, materia.Nombre);
+
+            // Primero las asignaturas de nombre equivalente (aunque cambie el área o el nivel); luego
+            // las de la misma área y nivel cercano. Los destinos con plan genérico (sin plan analítico
+            // real) no sirven para comparar y solo entran si el nombre coincide. En el agente externo
+            // no se conoce el nivel de origen, así que se ofrecen más candidatas.
+            var externo = string.Equals(info.Modulo, "EXTERNO", StringComparison.OrdinalIgnoreCase);
+            var maximo = externo ? Math.Max(_config.MaxCandidatas, 6) : _config.MaxCandidatas;
+            double Parecido(MemoriaAsignaturaDto d) => SimilitudNombre(materia.Nombre, d.Nombre);
 
             var candidatas = destino
-                .Where(d => MismaArea(area, d.Area))
-                .Where(d => nivel is null
-                            || d.Nivel is null
-                            || NivelUtil.Numerico(d.Nivel) <= nivel.Value + _config.MargenNivel)
-                .OrderBy(d => Math.Abs(NivelUtil.Numerico(d.Nivel) - (nivel ?? NivelUtil.Numerico(d.Nivel))))
+                .Where(d => Parecido(d) >= 0.5 ||
+                            (MismaArea(area, d.Area) &&
+                             !Agents.ComparadorSilabos.EsPlanGenerico(d.ContenidosMinimos) &&
+                             (nivel is null || d.Nivel is null ||
+                              NivelUtil.Numerico(d.Nivel) <= nivel.Value + _config.MargenNivel)))
+                .OrderByDescending(Parecido)
+                .ThenBy(d => Math.Abs(NivelUtil.Numerico(d.Nivel) - (nivel ?? NivelUtil.Numerico(d.Nivel))))
                 .ThenBy(d => d.Nombre)
-                .Take(_config.MaxCandidatas)
+                .Take(maximo)
                 .ToList();
 
             if (candidatas.Count == 0)
@@ -319,7 +418,10 @@ public class PreseleccionService
                     Area = c.Area,
                     Nivel = c.Nivel,
                     NivelNumerico = NivelUtil.Numerico(c.Nivel),
-                    ContenidosMinimos = c.ContenidosMinimos
+                    ContenidosMinimos = c.ContenidosMinimos,
+                    ResultadosAprendizaje = c.ResultadosAprendizaje,
+                    Horas = c.Horas,
+                    Creditos = c.Creditos
                 }).ToList()
             });
         }
@@ -338,6 +440,57 @@ public class PreseleccionService
 
         var nivel = NivelUtil.Numerico(origen.NivelOrigen);
         return nivel > 0 ? nivel : null;
+    }
+
+    private static bool EsExterno(SolicitudInfoDto info) =>
+        string.Equals(info.Modulo?.Trim(), "EXTERNO", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Busca una materia del récord en la malla de origen. El récord suele traer el nombre en
+    /// mayúsculas y sin tildes ("CALCULO DIFERENCIAL"), así que se compara normalizado.
+    /// </summary>
+    internal static MemoriaAsignaturaDto? BuscarEnMalla(List<MemoriaAsignaturaDto> malla, string nombre)
+    {
+        if (malla.Count == 0 || string.IsNullOrWhiteSpace(nombre)) return null;
+        var buscado = ClaveNombre(nombre);
+        var exacta = malla.FirstOrDefault(m => ClaveNombre(m.Nombre) == buscado);
+        if (exacta is not null) return exacta;
+
+        // Variantes menores ("Base de Datos" / "Bases de Datos", "Física" / "Física Básica").
+        var tokens = buscado.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        return malla
+            .Select(m => (m, Parecido: Parecido(tokens, ClaveNombre(m.Nombre).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet())))
+            .Where(x => x.Parecido >= 0.75)
+            .OrderByDescending(x => x.Parecido)
+            .Select(x => x.m)
+            .FirstOrDefault();
+    }
+
+    /// <summary>Parecido entre dos nombres de asignatura (0 a 1), sin tildes ni conectores.</summary>
+    internal static double SimilitudNombre(string? a, string? b) =>
+        Parecido(ClaveNombre(a ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(),
+                 ClaveNombre(b ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet());
+
+    private static double Parecido(HashSet<string> a, HashSet<string> b) =>
+        a.Count == 0 || b.Count == 0 ? 0 : (double)a.Intersect(b).Count() / Math.Max(a.Count, b.Count);
+
+    private static readonly HashSet<string> Conectores = new(StringComparer.Ordinal)
+        { "de", "del", "la", "las", "el", "los", "y", "e", "en", "a", "para" };
+
+    private static string ClaveNombre(string texto)
+    {
+        var descompuesto = (texto ?? string.Empty).Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+        foreach (var c in descompuesto)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark)
+                continue;
+            sb.Append(char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : ' ');
+        }
+        return string.Join(' ', sb.ToString()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => !Conectores.Contains(p))
+            .Select(p => p.EndsWith('s') && p.Length > 4 ? p[..^1] : p));
     }
 
     private static bool MismaArea(string areaOrigen, string areaDestino) =>
@@ -361,6 +514,12 @@ internal class OrigenPreseleccion
     public string? Area { get; set; }
     public string? Nivel { get; set; }
     public decimal? Nota { get; set; }
+    public int? Horas { get; set; }
+    public int? Creditos { get; set; }
+    public string? Resultados { get; set; }
+    public bool DeSilabo { get; set; }
+    public string? Periodo { get; set; }
+    public string? EstadoSegunRecord { get; set; }
 }
 
 /// <summary>Configuración de la preselección: tabla de áreas, margen de nivel y máximo de candidatas.</summary>

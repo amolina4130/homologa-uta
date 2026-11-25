@@ -1,0 +1,56 @@
+/* Usa también las clases de DelegarDocentes.css (lista y encabezado comunes a la revisión). */
+
+.is-estado {
+  background: var(--bs-tertiary-bg);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.is-resumen {
+  border: 1px solid var(--bs-border-color-translucent);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.is-progreso {
+  height: 8px;
+  background: var(--bs-danger-bg-subtle);
+}
+
+.is-tabla thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  background: var(--bs-tertiary-bg);
+  white-space: nowrap;
+}
+
+.is-tabla td,
+.is-tabla th {
+  padding: 0.75rem;
+}
+
+.is-contenido {
+  width: 7rem;
+}
+
+.is-memorando summary {
+  cursor: pointer;
+  color: var(--bs-primary);
+}
+
+.is-memorando pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.875rem;
+  background: var(--bs-tertiary-bg);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.is-siguiente {
+  border-top: 1px solid var(--bs-border-color-translucent);
+  padding-top: 1rem;
+}

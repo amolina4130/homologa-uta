@@ -1,4 +1,4 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "./config";
 
 const getAuthHeaders = () => {
   const token = sessionStorage.getItem("token");
@@ -117,9 +117,9 @@ export async function obtenerResolucion(solicitudId) {
   return await res.json();
 }
 
-// HU-18: descarga el informe PDF y lo entrega al navegador.
+// Descarga el informe final que el Coordinador envió al Comité (cierra el trámite).
 export async function descargarInforme(solicitudId) {
-  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/informe`, {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/${solicitudId}/informe-final`, {
     headers: getAuthHeaders(),
   });
 
@@ -131,7 +131,7 @@ export async function descargarInforme(solicitudId) {
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement("a");
   enlace.href = url;
-  enlace.download = `Informe_SOL-${String(solicitudId).padStart(4, "0")}.pdf`;
+  enlace.download = `Informe_Final_SOL-${String(solicitudId).padStart(4, "0")}.pdf`;
   document.body.appendChild(enlace);
   enlace.click();
   enlace.remove();

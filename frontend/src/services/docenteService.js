@@ -1,4 +1,4 @@
-const GATEWAY_URL = import.meta.env.VITE_GATEWAY_URL || "http://localhost:8080";
+import { GATEWAY_URL } from "./config";
 
 const getAuthHeaders = () => {
   const token = sessionStorage.getItem("token");
@@ -25,6 +25,16 @@ const lanzarError = async (res, mensajePorDefecto) => {
   error.status = res.status;
   throw error;
 };
+
+// El docente genera (o repite) con la IA el análisis de las materias aprobadas. Devuelve el detalle.
+export async function analizarSolicitudDocente(id) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/docente/${id}/analizar`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo generar el análisis con la IA");
+  return extraerDatos(await res.json());
+}
 
 export async function obtenerSolicitudesDocente() {
   const res = await fetch(`${GATEWAY_URL}/homologacion/docente/solicitudes`, {
@@ -81,6 +91,17 @@ export async function evaluarSolicitud(id, payload) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) await lanzarError(res, "No se pudo registrar la evaluación");
+  return extraerDatos(await res.json());
+}
+
+/** El docente pide al Coordinador documentación adicional antes de decidir. */
+export async function solicitarDocumentacion(id, detalle) {
+  const res = await fetch(`${GATEWAY_URL}/homologacion/docente/${id}/solicitar-documentacion`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ detalle }),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo registrar el pedido de documentación");
   return extraerDatos(await res.json());
 }
 

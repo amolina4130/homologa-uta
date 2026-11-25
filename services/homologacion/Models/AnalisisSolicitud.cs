@@ -91,4 +91,39 @@ public class AnalisisAsignatura
 
     /// <summary>Observación del Coordinador para esta asignatura.</summary>
     public string? ObservacionCoordinador { get; set; }
+
+    /// <summary>true cuando el Coordinador decidió distinto que el Docente (queda justificado).</summary>
+    public bool CambioRespectoDocente { get; set; }
+
+    // ---- Datos de la comparación (tomados de las mallas y sílabos, no deducidos) ----
+
+    /// <summary>Semestre de la materia de origen según la malla de origen.</summary>
+    public string? NivelOrigen { get; set; }
+
+    /// <summary>Semestre de la asignatura de destino según la malla de destino.</summary>
+    public string? NivelDestino { get; set; }
+
+    public int? HorasOrigen { get; set; }
+    public int? HorasDestino { get; set; }
+    public int? CreditosOrigen { get; set; }
+    public int? CreditosDestino { get; set; }
+
+    /// <summary>Temas del destino que también están en el origen.</summary>
+    public string? ContenidosCoincidentes { get; set; }
+
+    /// <summary>Temas del destino que no aparecen en el origen, y datos que faltaron.</summary>
+    public string? Diferencias { get; set; }
+
+    /// <summary>Regla institucional o criterio con el que se llegó a la recomendación.</summary>
+    public string? ReglaAplicada { get; set; }
+
+    /// <summary>IA = sugerencia original del agente (no se modifica); DOCENTE = propuesta agregada por el docente.</summary>
+    public string PropuestaPor { get; set; } = OrigenPropuesta.IA;
+}
+
+/// <summary>Quién propuso una fila del análisis.</summary>
+public static class OrigenPropuesta
+{
+    public const string IA = "IA";
+    public const string DOCENTE = "DOCENTE";
 }

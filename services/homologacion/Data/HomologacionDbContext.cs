@@ -52,6 +52,12 @@ public class HomologacionDbContext : DbContext
             e.Property(a => a.Justificacion).IsRequired().HasMaxLength(2000);
             e.Property(a => a.DecisionCoordinador).HasMaxLength(30);
             e.Property(a => a.ObservacionCoordinador).HasMaxLength(1000);
+            e.Property(a => a.NivelOrigen).HasMaxLength(30);
+            e.Property(a => a.NivelDestino).HasMaxLength(30);
+            e.Property(a => a.ContenidosCoincidentes).HasMaxLength(2000);
+            e.Property(a => a.Diferencias).HasMaxLength(2000);
+            e.Property(a => a.ReglaAplicada).HasMaxLength(500);
+            e.Property(a => a.PropuestaPor).IsRequired().HasMaxLength(20).HasDefaultValue("IA");
 
             e.HasOne(a => a.AnalisisSolicitud)
              .WithMany(s => s.Asignaturas)
@@ -112,6 +118,7 @@ public class HomologacionDbContext : DbContext
             e.Property(d => d.NombreDocente).HasMaxLength(200);
             e.Property(d => d.DocenteCedula).HasMaxLength(50);
             e.Property(d => d.DocenteCorreoInforme).HasMaxLength(200);
+            e.Property(d => d.DocumentacionSolicitada).HasMaxLength(1000);
             e.Property(d => d.InformeTexto).HasMaxLength(8000);
             e.Property(d => d.EvaluacionesJson).HasMaxLength(8000);
             e.Property(d => d.SugerenciaJson).HasColumnType("nvarchar(max)");

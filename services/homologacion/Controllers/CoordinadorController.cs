@@ -21,13 +21,17 @@ public class CoordinadorController : ControllerBase
         _docente = docente;
     }
 
-    // Endpoint para el Coordinador (Lista de pendientes)
+    /// <summary>
+    /// Solicitudes en revisión del Coordinador. Con <c>incluirEmitidos=true</c> también devuelve
+    /// las que ya tienen informe final (trámite terminado), para consultarlas o corregirlas.
+    /// </summary>
     [HttpGet("coordinador/pendientes")]
-    public async Task<ActionResult<List<PendienteDto>>> Pendientes(CancellationToken ct)
+    public async Task<ActionResult<List<PendienteDto>>> Pendientes(
+        [FromQuery] bool incluirEmitidos, CancellationToken ct)
     {
         try
         {
-            return Ok(await _servicio.ListarPendientesAsync(ct));
+            return Ok(await _servicio.ListarPendientesAsync(incluirEmitidos, ct));
         }
         catch (SolicitudesNoDisponibleException ex)
         {
