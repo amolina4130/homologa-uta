@@ -89,7 +89,7 @@ namespace HomologaUTA.Autenticacion.Tests
                 Contrasena = "Demo123!"
             };
 
-            var result = await controller.Registrar(request);
+            var result = await controller.Registro(request);
 
             var objectResult = Assert.IsType<CreatedResult>(result);
             Assert.Equal(201, objectResult.StatusCode);
@@ -118,7 +118,7 @@ namespace HomologaUTA.Autenticacion.Tests
             await context.SaveChangesAsync();
 
             var controller = new AuthController(context, hasher, tokenService);
-            var registro = await controller.Registrar(new RegistroRequest
+            var registro = await controller.Registro(new RegistroRequest
             {
                 Nombre = "Ana Estudiante",
                 Correo = "ana@uta.edu.ec",
@@ -160,7 +160,7 @@ namespace HomologaUTA.Autenticacion.Tests
                 Contrasena = "Demo123!"
             };
 
-            var result = await controller.Registrar(request);
+            var result = await controller.Registro(request);
 
             var conflict = Assert.IsType<ConflictObjectResult>(result);
             Assert.Equal(409, conflict.StatusCode);
@@ -184,7 +184,7 @@ namespace HomologaUTA.Autenticacion.Tests
                 Contrasena = "corta"
             };
 
-            var result = await controller.Registrar(request);
+            var result = await controller.Registro(request);
 
             Assert.IsType<BadRequestObjectResult>(result);
             Assert.Equal(0, await context.Usuarios.CountAsync());
@@ -204,7 +204,7 @@ namespace HomologaUTA.Autenticacion.Tests
                 Contrasena = "Demo123!"
             };
 
-            var result = await controller.Registrar(request);
+            var result = await controller.Registro(request);
 
             Assert.IsType<BadRequestObjectResult>(result);
         }
