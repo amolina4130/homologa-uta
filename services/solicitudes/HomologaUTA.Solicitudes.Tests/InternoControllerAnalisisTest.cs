@@ -3,6 +3,7 @@ using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace HomologaUTA.Solicitudes.Tests;
@@ -23,6 +24,7 @@ public class InternoControllerAnalisisTests
     {
         var options = new DbContextOptionsBuilder<SolicitudesDbContext>()
             .UseInMemoryDatabase(databaseName: "TestDbInterno_" + Guid.NewGuid())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         var db = new SolicitudesDbContext(options);
 

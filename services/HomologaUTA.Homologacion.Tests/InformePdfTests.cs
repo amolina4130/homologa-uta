@@ -17,11 +17,11 @@ public class InformePdfTests
 {
     // ---------- Plantilla (solo dibuja) ----------
 
-    private static InformeDatos DatosBase(int asignaturas = 2) => new()
+    private static InformeData DatosBase(int asignaturas = 2) => new()
     {
         SolicitudId = 7,
         NumeroProceso = "SOL-0007",
-        EstudianteCorreo = "estudiante@uta.edu.ec",
+        Estudiante = "Ana Pérez",
         FechaRegistro = new DateTime(2026, 11, 2),
         CarreraOrigen = "Software",
         CarreraDestino = "Tecnologías de la Información",
@@ -77,7 +77,7 @@ public class InformePdfTests
             NumeroResolucion = "RES-2026-045",
             Fecha = new DateTime(2026, 11, 10),
             Observacion = "Aprobada en sesión ordinaria.",
-            Decisiones = new() { new InformeDecisionFinal { Asignatura = "Asignatura origen 1", DecisionFinal = "HOMOLOGABLE" } }
+            Decisiones = new() { new InformeDecisionFinal { Asignatura = "Asignatura origen 1", Decision = "HOMOLOGABLE" } }
         };
 
         AssertEsPdf(PlantillaInforme.Generar(d));
@@ -121,7 +121,8 @@ public class InformePdfTests
             var dto = new SolicitudCompletaDto
             {
                 Id = id,
-                EstudianteCorreo = "estudiante@uta.edu.ec",
+                EstudianteNombre = "Ana Pérez",
+                EstudianteCorreo = "comite@uta.edu.ec",
                 FechaRegistro = new DateTime(2026, 11, 2),
                 CarreraOrigen = "Software",
                 CarreraDestino = "TI",
@@ -182,21 +183,21 @@ public class InformePdfTests
     public async Task GenerarPdf_ConSolicitudYAnalisis_DevuelvePdf()
     {
         using var db = BdConAnalisis(5);
-        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+        var servicio = new InformeService(db, ClienteSolicitudes(5), NullLogger<InformeService>.Instance);
 
-        AssertEsPdf(await servicio.GenerarPdf(5));
+        AssertEsPdf(await servicio.GenerarPdfAsync(5));
     }
 
     [Fact]
     public async Task ReunirDatos_ArmaNumeroDeProcesoYAsignaturas()
     {
         using var db = BdConAnalisis(5);
-        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+        var servicio = new InformeService(db, ClienteSolicitudes(5), NullLogger<InformeService>.Instance);
 
         var datos = await servicio.ReunirDatosAsync(5);
 
         Assert.Equal("SOL-0005", datos.NumeroProceso);
-        Assert.Equal("estudiante@uta.edu.ec", datos.EstudianteCorreo);
+        Assert.Equal("Ana Pérez", datos.Estudiante);
         Assert.Equal(2, datos.Asignaturas.Count);
         Assert.Null(datos.Resolucion);   // sin resolución del Consejo: la sección se omite
     }
@@ -205,9 +206,9 @@ public class InformePdfTests
     public async Task GenerarPdf_SolicitudInexistente_Lanza404()
     {
         using var db = BdConAnalisis(5);
-        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+        var servicio = new InformeService(db, ClienteSolicitudes(5), NullLogger<InformeService>.Instance);
 
-        var ex = await Assert.ThrowsAsync<AnalisisSolicitudException>(() => servicio.GenerarPdf(99));
+        var ex = await Assert.ThrowsAsync<InformeException>(() => servicio.GenerarPdfAsync(99));
         Assert.Equal(404, ex.StatusCode);
     }
 
@@ -215,9 +216,9 @@ public class InformePdfTests
     public async Task GenerarPdf_SolicitudSinAnalisis_Lanza404()
     {
         using var db = BdConAnalisis(5, conAnalisis: false);
-        var servicio = new InformeHomologacion(db, ClienteSolicitudes(5));
+        var servicio = new InformeService(db, ClienteSolicitudes(5), NullLogger<InformeService>.Instance);
 
-        var ex = await Assert.ThrowsAsync<AnalisisSolicitudException>(() => servicio.GenerarPdf(5));
+        var ex = await Assert.ThrowsAsync<InformeException>(() => servicio.GenerarPdfAsync(5));
         Assert.Equal(404, ex.StatusCode);
     }
 }

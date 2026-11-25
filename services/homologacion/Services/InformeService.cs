@@ -30,20 +30,7 @@ public class InformeService : IInformeService
 
     public async Task<byte[]> GenerarPdfAsync(int solicitudId, CancellationToken ct = default)
     {
-        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
-                   ?? throw new InformeException(404, "Solicitud no encontrada.");
-
-        var analisis = await _db.AnalisisSolicitudes
-            .AsNoTracking()
-            .Include(a => a.Asignaturas)
-                .ThenInclude(a => a.MateriasOrigen)
-            .Include(a => a.Resolucion!)
-                .ThenInclude(r => r.Decisiones)
-            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct)
-            ?? throw new InformeException(404,
-                "La solicitud todavía no tiene un análisis generado; no se puede emitir el informe.");
-
-        var datos = ConstruirDatos(info, analisis);
+        var datos = await ReunirDatosAsync(solicitudId, ct);
 
         try
         {
@@ -56,6 +43,23 @@ public class InformeService : IInformeService
         }
     }
 
+    public async Task<InformeData> ReunirDatosAsync(int solicitudId, CancellationToken ct = default)
+    {
+        var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
+                   ?? throw new InformeException(404, "Solicitud no encontrada.");
+
+        var analisis = await _db.AnalisisSolicitudes
+            .AsNoTracking()
+            .Include(a => a.Asignaturas)
+                .ThenInclude(a => a.MateriasOrigen)
+            .Include(a => a.Resolucion!)
+                .ThenInclude(r => r.Decisiones)
+            .FirstOrDefaultAsync(a => a.SolicitudId == solicitudId, ct)
+            ?? throw new InformeException(404,
+                "La solicitud todavÃ­a no tiene un anÃ¡lisis generado; no se puede emitir el informe.");
+
+        return ConstruirDatos(info, analisis);
+    }
     private static InformeData ConstruirDatos(SolicitudCompletaDto info, AnalisisSolicitud analisis)
     {
         var finales = analisis.Resolucion?.Decisiones

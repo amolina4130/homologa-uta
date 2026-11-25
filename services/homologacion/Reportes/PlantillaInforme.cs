@@ -62,6 +62,7 @@ public static class PlantillaInforme
 {
     public static byte[] Generar(InformeData data)
     {
+        QuestPDF.Settings.License = LicenseType.Community;
         return Document.Create(container =>
         {
             container.Page(page =>

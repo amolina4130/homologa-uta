@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using HomologaUTA.Solicitudes.DTOs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace HomologaUTA.Solicitudes.Tests;
@@ -18,6 +19,7 @@ public class UniversidadesSolicitudTests
     {
         var opciones = new DbContextOptionsBuilder<SolicitudesDbContext>()
             .UseInMemoryDatabase("TestUniversidades_" + Guid.NewGuid())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new SolicitudesDbContext(opciones);
     }
@@ -48,7 +50,8 @@ public class UniversidadesSolicitudTests
     private static string? Mensaje(IActionResult resultado)
     {
         var mala = Assert.IsType<BadRequestObjectResult>(resultado);
-        return mala.Value!.GetType().GetProperty("mensaje")!.GetValue(mala.Value) as string;
+        var tipo = mala.Value!.GetType();
+        return (tipo.GetProperty("mensaje") ?? tipo.GetProperty("error"))?.GetValue(mala.Value) as string;
     }
 
     [Fact]
