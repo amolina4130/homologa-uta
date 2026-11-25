@@ -38,6 +38,9 @@ public class ResultadoRecordAgente
 /// </summary>
 public class AgenteExtractorRecord
 {
+    /// <summary>Máximo de tokens de la respuesta: alcanza para ~50 materias con sus datos.</summary>
+    private const int TokensRespuestaRecord = 2048;
+
     private readonly OllamaClient _ollama;
     private readonly ResiliencePipeline _pipeline;
     private readonly ILogger<AgenteExtractorRecord> _logger;
@@ -99,7 +102,10 @@ RÉCORD:
 
         var respuesta = await _pipeline.ExecuteAsync(async token =>
         {
-            var raw = await _ollama.GenerarRespuestaAsync($"{systemPrompt}\n\n{userPrompt}");
+            // Un récord trae decenas de materias (unos 40 tokens cada una). Con el límite por
+            // defecto del cliente (256) el JSON salía cortado en la 4.ª o 5.ª materia y fallaba.
+            var raw = await _ollama.GenerarRespuestaAsync(
+                $"{systemPrompt}\n\n{userPrompt}", token, numPredict: TokensRespuestaRecord);
 
             var json = raw.Replace("```json", "").Replace("```", "").Trim();
             var inicio = json.IndexOf('{');

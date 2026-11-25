@@ -1,0 +1,227 @@
+/* ---------- Menús desplegables de la barra ---------- */
+
+.menu-desplegable {
+  min-width: 300px;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+}
+
+.menu-desplegable .dropdown-header {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.menu-opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  white-space: normal;
+}
+
+.menu-opcion-titulo {
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.menu-opcion-desc {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  line-height: 1.3;
+}
+
+.menu-opcion.active .menu-opcion-desc {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Número de paso del proceso de revisión */
+.menu-paso {
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary-text-emphasis);
+}
+
+.menu-opcion.active .menu-paso {
+  background: #fff;
+  color: var(--bs-primary);
+}
+
+/* ---------- Zona derecha: campanita y avatar ---------- */
+
+.barra-derecha .dropdown {
+  position: relative;
+}
+
+/* Bootstrap solo alinea .dropdown-menu-end con su JavaScript (Popper), que esta
+   aplicación no carga; sin esto el panel se salía por la derecha de la pantalla. */
+.barra-derecha .menu-derecha {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  left: auto;
+  max-width: calc(100vw - 1.5rem);
+  z-index: 1050;
+}
+
+.boton-circulo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 0;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.boton-circulo:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6);
+}
+
+.boton-icono {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.boton-icono:hover,
+.boton-icono[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.boton-icono .contador {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--bs-danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  border: 2px solid var(--bs-primary);
+}
+
+.avatar {
+  background: #fff;
+  color: var(--bs-primary);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.avatar:hover,
+.avatar[aria-expanded="true"] {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.45);
+}
+
+.avatar-grande {
+  width: 48px;
+  height: 48px;
+  font-size: 1.1rem;
+  background: var(--bs-primary);
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+/* ---------- Panel de notificaciones ---------- */
+
+.panel-notificaciones {
+  width: 380px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.panel-notificaciones .lista {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.notificacion {
+  display: block;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+  color: inherit;
+  text-decoration: none;
+}
+
+.notificacion:hover,
+.notificacion:focus {
+  background: var(--bs-tertiary-bg);
+  color: inherit;
+}
+
+.notificacion:last-child {
+  border-bottom: 0;
+}
+
+/* Con el menú colapsado (móvil) los íconos quedan a la izquierda: el panel se abre hacia la derecha. */
+@media (max-width: 991.98px) {
+  .barra-derecha .menu-derecha {
+    left: 0;
+    right: auto;
+  }
+}
+
+/* Notificaciones leídas / no leídas */
+.notificacion .punto-no-leida {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--bs-primary);
+}
+
+.notificacion.leida {
+  opacity: 0.6;
+}
+
+.notificacion.leida .punto-no-leida {
+  background: transparent;
+}
+
+.notificacion .min-w-0 {
+  min-width: 0;
+}
+
+.boton-marcar {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  color: var(--bs-secondary-color);
+  font-size: 0.8rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boton-marcar:hover {
+  background: var(--bs-success-bg-subtle);
+  border-color: var(--bs-success);
+  color: var(--bs-success);
+}

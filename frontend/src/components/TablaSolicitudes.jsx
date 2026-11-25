@@ -2,12 +2,19 @@ import { Link } from "react-router-dom";
 
 const ESTADOS_CON_INFORME = ["INFORME_EMITIDO", "RESUELTA"];
 
+// Para el Comité el trámite termina cuando recibe el informe final del Coordinador.
+const ETIQUETA_ESTADO = {
+  REGISTRADA: "Registrada",
+  PENDIENTE_REVISION: "En revisión",
+  INFORME_EMITIDO: "Informe recibido",
+  RESUELTA: "Resuelta",
+};
+
 const claseEstado = (estado) => {
   switch (estado) {
     case "RESUELTA":
-      return "bg-success";
     case "INFORME_EMITIDO":
-      return "bg-info text-dark";
+      return "bg-success";
     case "PENDIENTE_REVISION":
       return "bg-warning text-dark";
     default:
@@ -66,7 +73,7 @@ export const TablaSolicitudes = ({ solicitudes, onDescargarInforme }) => {
                 </td>
                 <td className="text-center">
                   <span className={`badge p-2 ${claseEstado(sol.estado)}`}>
-                    {sol.estado || "REGISTRADA"}
+                    {ETIQUETA_ESTADO[sol.estado] || sol.estado || "Registrada"}
                   </span>
                 </td>
                 <td className="text-center">

@@ -49,7 +49,7 @@ export default function NotificacionesDocente() {
     <div className="dropdown" ref={contenedor}>
       <button
         type="button"
-        className="btn btn-outline-light btn-sm position-relative"
+        className="boton-circulo boton-icono"
         aria-label={`Notificaciones: ${total} solicitud(es) pendiente(s) de revisar`}
         aria-expanded={abierto}
         title="Notificaciones"
@@ -57,16 +57,13 @@ export default function NotificacionesDocente() {
       >
         <span aria-hidden="true">🔔</span>
         {total > 0 && (
-          <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-            {total > 9 ? "9+" : total}
-            <span className="visually-hidden">solicitudes pendientes</span>
-          </span>
+          <span className="contador" aria-hidden="true">{total > 9 ? "9+" : total}</span>
         )}
       </button>
 
       <ul
-        className={`dropdown-menu dropdown-menu-end shadow ${abierto ? "show" : ""}`}
-        style={{ minWidth: "300px" }}
+        className={`dropdown-menu menu-desplegable menu-derecha ${abierto ? "show" : ""}`}
+        style={{ width: "320px" }}
       >
         <li>
           <h6 className="dropdown-header fw-bold text-dark">Notificaciones</h6>

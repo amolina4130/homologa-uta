@@ -70,6 +70,17 @@ public class AnalisisService
         if (info is null)
             throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");
 
+        // Un análisis nuevo reemplaza las asignaturas y devuelve la solicitud a revisión:
+        // no se permite cuando ya hay informe final o resolución, porque los borraría.
+        var estadoActual = await _db.AnalisisSolicitudes
+            .AsNoTracking()
+            .Where(a => a.SolicitudId == solicitudId)
+            .Select(a => a.Estado)
+            .FirstOrDefaultAsync(ct);
+        if (estadoActual is EstadoAnalisis.INFORME_EMITIDO or EstadoAnalisis.RESUELTA)
+            throw new AnalisisSolicitudException(409,
+                "La solicitud ya tiene informe final emitido; no se puede volver a analizar.");
+
         EntradasPreseleccion? preseleccion = null;
         List<AsignaturaAnalisisDto> entradas;
 
@@ -379,18 +390,17 @@ public class AnalisisService
             justificacion = $"{entrada.EquivalenciaAplicada.Trim()} {justificacion}";
         }
 
+        // El agente a veces une varias materias en un solo texto ("A + B"): se separan.
         var nombres = (agente.MateriasOrigen ?? new List<string>())
             .Where(m => !string.IsNullOrWhiteSpace(m))
-            .Select(m => m.Trim())
+            .SelectMany(m => m.Split(new[] { '+', ',', ';' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (nombres.Count == 0)
-            nombres.Add(entrada.AsignaturaOrigen.Trim());
-
-        if (nombres.Count > 2)
-            throw new AnalisisSolicitudException(400,
-                "Una asignatura de destino no puede cubrirse con más de dos materias de origen.");
+        // Una propuesta inválida del agente (materias que el estudiante no aprobó o más de dos)
+        // no aborta el análisis de toda la solicitud: esa asignatura queda en revisión manual.
+        string? problema = null;
 
         if (entrada.MateriasOrigenPermitidas.Count > 0)
         {
@@ -399,8 +409,27 @@ public class AnalisisService
                 .ToList();
 
             if (ajenas.Count > 0)
-                throw new AnalisisSolicitudException(400,
-                    $"El agente propuso materias que no pertenecen al estudiante: {string.Join(", ", ajenas)}.");
+            {
+                problema = $"El agente propuso materias que el estudiante no tiene aprobadas ({string.Join(", ", ajenas)}).";
+                nombres = nombres.Except(ajenas, StringComparer.OrdinalIgnoreCase).ToList();
+            }
+        }
+
+        if (nombres.Count > 2)
+        {
+            problema ??= "El agente propuso más de dos materias de origen para una asignatura.";
+            nombres = nombres.Take(2).ToList();
+        }
+
+        if (nombres.Count == 0)
+            nombres.Add(entrada.AsignaturaOrigen.Trim());
+
+        var requiereRevision = agente.RequiereRevision;
+        if (problema is not null)
+        {
+            decision = DecisionAnalisis.REQUIERE_REVISION;
+            justificacion = $"{problema} Revise la equivalencia manualmente. {justificacion}";
+            requiereRevision = true;
         }
 
         var materias = nombres.Select((nombre, indice) => new MateriaOrigenResultado
@@ -425,7 +454,7 @@ public class AnalisisService
             PorcentajeHoras = agente.Horas,
             Decision = decision,
             Justificacion = Recortar(justificacion, MaxJustificacion),
-            RequiereRevision = agente.RequiereRevision
+            RequiereRevision = requiereRevision
         };
     }
 

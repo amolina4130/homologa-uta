@@ -1,0 +1,99 @@
+.dd-sobretitulo {
+  letter-spacing: 0.06em;
+}
+
+/* Lista de solicitudes pendientes */
+.dd-lista {
+  position: sticky;
+  top: 1rem;
+}
+
+.dd-items {
+  max-height: calc(100vh - 230px);
+  min-height: 200px;
+  overflow-y: auto;
+  border-top: 1px solid var(--bs-border-color-translucent);
+}
+
+.dd-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+  border-left: 3px solid transparent;
+  padding: 0.75rem 1rem;
+  transition: background-color 0.12s;
+}
+
+.dd-item:hover {
+  background: var(--bs-tertiary-bg);
+}
+
+.dd-item.activa {
+  background: var(--bs-primary-bg-subtle);
+  border-left-color: var(--bs-primary);
+}
+
+.dd-item:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: -2px;
+}
+
+/* Pasos del panel derecho */
+.dd-paso {
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--bs-border-color-translucent);
+}
+
+.dd-paso:last-child {
+  padding-bottom: 0;
+}
+
+.dd-paso-numero {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--bs-primary-bg-subtle);
+  color: var(--bs-primary-text-emphasis);
+  flex: 0 0 auto;
+}
+
+.dd-paso-numero.hecho {
+  background: var(--bs-success);
+  color: #fff;
+}
+
+.dd-caja {
+  background: var(--bs-tertiary-bg);
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.9rem;
+}
+
+.dd-vacio-icono {
+  width: 4rem;
+  height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+  border-radius: 50%;
+  background: var(--bs-success-bg-subtle);
+  color: var(--bs-success);
+}
+
+@media (max-width: 991.98px) {
+  .dd-lista {
+    position: static;
+  }
+
+  .dd-items {
+    max-height: 340px;
+  }
+}

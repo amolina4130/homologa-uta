@@ -1,0 +1,95 @@
+/* Línea de tiempo del trámite */
+.ds-etapas {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+}
+
+.ds-etapas li {
+  flex: 1 1 0;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  gap: 0.35rem;
+  color: var(--bs-secondary-color);
+}
+
+/* Conector entre etapas */
+.ds-etapas li + li::before {
+  content: "";
+  position: absolute;
+  top: 0.9rem;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  background: var(--bs-border-color);
+  z-index: 0;
+}
+
+.ds-etapas li.hecha + li::before {
+  background: var(--bs-success);
+}
+
+.ds-punto {
+  position: relative;
+  z-index: 1;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--bs-body-bg);
+  border: 2px solid var(--bs-border-color);
+}
+
+.ds-etapas li.hecha .ds-punto {
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+  color: #fff;
+}
+
+.ds-etapas li.actual .ds-punto {
+  border-color: var(--bs-primary);
+  color: var(--bs-primary);
+  box-shadow: 0 0 0 4px var(--bs-primary-bg-subtle);
+}
+
+.ds-etapas li.actual .ds-nombre {
+  color: var(--bs-body-color);
+  font-weight: 600;
+}
+
+.ds-nombre {
+  font-size: 0.8rem;
+}
+
+/* Datos del trámite */
+.ds-datos dt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color);
+}
+
+.ds-datos dd {
+  margin-bottom: 0.75rem;
+}
+
+.ds-tabla thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+  background: var(--bs-tertiary-bg);
+  white-space: nowrap;
+}

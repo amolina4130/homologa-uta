@@ -119,6 +119,29 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Docentes registrados, para que el Coordinador elija a quién delegar una solicitud
+    /// en lugar de escribir el correo a mano. El Gateway restringe esta ruta al rol COORDINADOR.
+    /// </summary>
+    [HttpGet("docentes")]
+    [ProducesResponseType(typeof(List<DocenteResumen>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Docentes()
+    {
+        var docentes = await _db.Usuarios
+            .AsNoTracking()
+            .Where(u => u.Rol.Nombre == "DOCENTE")
+            .OrderBy(u => u.Nombre == "" ? u.Correo : u.Nombre)
+            .Select(u => new DocenteResumen
+            {
+                Nombre = u.Nombre,
+                Correo = u.Correo,
+                Titulo = u.Titulo
+            })
+            .ToListAsync();
+
+        return Ok(docentes);
+    }
+
+    /// <summary>
     /// Registra una cuenta nueva de Comité o Docente. El correo debe ser único y la
     /// contraseña se guarda con hash (HU-12).
     /// </summary>

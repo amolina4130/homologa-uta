@@ -47,14 +47,16 @@ public class CoordinadorService
     }
 
     /// <summary>Solicitudes pendientes de revisión, las más antiguas primero.</summary>
-    public async Task<List<PendienteDto>> ListarPendientesAsync(CancellationToken ct = default)
+    public async Task<List<PendienteDto>> ListarPendientesAsync(
+        bool incluirEmitidos = false, CancellationToken ct = default)
     {
-        // Fuente 1: análisis que esperan al Coordinador o que ya tienen informe emitido
-        // (estos últimos se muestran para poder registrar la resolución del Consejo, HU-17).
+        // Fuente 1: análisis que esperan al Coordinador. El trámite termina cuando el
+        // Coordinador emite el informe final y lo envía al Comité: esos ya no están
+        // pendientes y solo se incluyen si se piden (para consultarlos o corregirlos).
         var analisis = await _db.AnalisisSolicitudes
             .AsNoTracking()
             .Where(a => a.Estado == EstadoAnalisis.PENDIENTE_REVISION
-                        || a.Estado == EstadoAnalisis.INFORME_EMITIDO)
+                        || (incluirEmitidos && a.Estado == EstadoAnalisis.INFORME_EMITIDO))
             .Select(a => new
             {
                 a.SolicitudId,

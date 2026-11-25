@@ -11,10 +11,9 @@ const FILTROS_VACIOS = { estado: "", carreraId: "", desde: "", hasta: "" };
 
 const ESTADOS = [
   { valor: "", etiqueta: "Todos los estados" },
-  { valor: "REGISTRADA", etiqueta: "REGISTRADA" },
-  { valor: "PENDIENTE_REVISION", etiqueta: "PENDIENTE_REVISION" },
-  { valor: "INFORME_EMITIDO", etiqueta: "INFORME_EMITIDO" },
-  { valor: "RESUELTA", etiqueta: "RESUELTA" },
+  { valor: "REGISTRADA", etiqueta: "Registrada" },
+  { valor: "PENDIENTE_REVISION", etiqueta: "En revisión" },
+  { valor: "INFORME_EMITIDO", etiqueta: "Informe recibido" },
 ];
 
 const MisSolicitudes = () => {

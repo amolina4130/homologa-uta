@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import NotificacionesDocente from "./NotificacionesDocente";
 import NotificacionesCoordinador from "./NotificacionesCoordinador";
+import "./Menu.css";
 
 const CAMPOS_PERFIL = [
   { clave: "nombre", etiqueta: "Nombre completo", placeholder: "Ej.: Ing. María Pérez" },
@@ -24,8 +25,6 @@ const RUTAS = {
   inicio: "/inicio",
   nueva: "/nueva-solicitud",
   mis: "/mis-solicitudes",
-  adjuntar: "/adjuntar-documentos",
-  url: "/ruta-carpeta",
   evaluar: "/solicitudes-docente",
   delegar: "/delegar-docentes",
   sugeridos: "/informes-sugeridos",
@@ -37,39 +36,39 @@ const RUTAS = {
   memoria: "/memoria",
 };
 
+// `desc` aparece debajo del nombre en los menús desplegables; `paso` numera las
+// etapas del proceso de revisión en el orden en que se hacen.
 const ITEMS = {
   inicio: { etiqueta: "Inicio", ruta: RUTAS.inicio },
-  nueva: { etiqueta: "Nueva solicitud", ruta: RUTAS.nueva },
-  mis: { etiqueta: "Mis solicitudes", ruta: RUTAS.mis },
-  adjuntar: { etiqueta: "Adjuntar documentos", ruta: RUTAS.adjuntar },
-  url: { etiqueta: "Ruta / URL externa", ruta: RUTAS.url },
-  evaluar: {
-    etiqueta: "Revisión por el Docente",
-    ruta: RUTAS.evaluar,
-  },
-  delegar: { etiqueta: "Delegar docentes", ruta: RUTAS.delegar },
-  sugeridos: { etiqueta: "Informes sugeridos", ruta: RUTAS.sugeridos },
-  final: { etiqueta: "Generar informe final", ruta: RUTAS.final },
+  nueva: { etiqueta: "Nueva solicitud", desc: "Datos, récord y envío a revisión, paso a paso", ruta: RUTAS.nueva },
+  mis: { etiqueta: "Mis solicitudes", desc: "Ver el avance de las solicitudes registradas", ruta: RUTAS.mis },
+  evaluar: { etiqueta: "Revisión por el Docente", ruta: RUTAS.evaluar },
+  delegar: { etiqueta: "Delegar a docentes", desc: "Asignar las solicitudes pendientes de revisión", ruta: RUTAS.delegar, paso: 1 },
+  sugeridos: { etiqueta: "Sugerencias de docentes", desc: "Revisar lo que propusieron los docentes", ruta: RUTAS.sugeridos, paso: 2 },
+  final: { etiqueta: "Informe final", desc: "Emitirlo y enviarlo al Comité (cierra el trámite)", ruta: RUTAS.final, paso: 3 },
   carreras: { etiqueta: "Carreras y mallas", ruta: RUTAS.carreras },
-  estado: { etiqueta: "Estado del sistema", ruta: RUTAS.estado },
-  reglas: { etiqueta: "Reglas", ruta: RUTAS.reglas },
-  equivalencias: { etiqueta: "Equivalencias", ruta: RUTAS.equivalencias },
-  memoria: { etiqueta: "Memoria del agente", ruta: RUTAS.memoria },
+  estado: { etiqueta: "Estado del sistema", desc: "Disponibilidad de los servicios", ruta: RUTAS.estado },
+  reglas: { etiqueta: "Reglas", desc: "Reglas de negocio de la homologación", ruta: RUTAS.reglas },
+  equivalencias: { etiqueta: "Equivalencias", desc: "Asignaturas equivalentes entre carreras", ruta: RUTAS.equivalencias },
+  memoria: { etiqueta: "Memoria del agente", desc: "Estado del conocimiento del agente de IA", ruta: RUTAS.memoria },
 };
 
 const MENUS = {
   COMITE: [
     { tipo: "link", clave: "inicio" },
-    { tipo: "grupo", etiqueta: "Solicitudes", claves: ["nueva", "mis", "adjuntar", "url"] },
+    // Los documentos se cargan dentro del asistente de "Nueva solicitud".
+    { tipo: "grupo", etiqueta: "Solicitudes", claves: ["nueva", "mis"] },
     { tipo: "link", clave: "carreras" },
   ],
+  // Ordenado como trabaja el coordinador: registra la solicitud (el asistente incluye los
+  // documentos) y luego la lleva por la revisión (delegar → sugerencias → informe final).
   COORDINADOR: [
     { tipo: "link", clave: "inicio" },
-    { tipo: "grupo", etiqueta: "Solicitudes", claves: ["nueva", "adjuntar", "url"] },
+    { tipo: "link", clave: "nueva" },
     {
       tipo: "grupo",
-      etiqueta: "Gestión",
-      claves: ["delegar", "sugeridos", "final"],
+      etiqueta: "Revisión",
+      claves: [{ encabezado: "Pasos de la revisión" }, "delegar", "sugeridos", "final"],
     },
     { tipo: "link", clave: "carreras" },
   ],
@@ -88,6 +87,29 @@ const MENUS = {
   ],
 };
 
+const NOMBRE_ROL = {
+  COMITE: "Comité",
+  COORDINADOR: "Coordinador",
+  DOCENTE: "Docente",
+  ADMINISTRADOR: "Administrador",
+};
+
+// Iniciales para el avatar, sin contar títulos como "Ing." o "Mg.".
+const inicialesDe = (usuario) => {
+  const palabras = (usuario?.nombre || "")
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p && !p.endsWith("."));
+  if (palabras.length) return palabras.slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+  return (usuario?.correo || "?")[0].toUpperCase();
+};
+
+// En los grupos, una cadena es una opción del menú y un objeto { encabezado } un subtítulo.
+const esClave = (c) => typeof c === "string";
+
+// Clave del menú de la cuenta (avatar); comparte el estado de "grupo abierto".
+const CLAVE_CUENTA = "__cuenta";
+
 export default function Menu() {
   const { rol, usuario, guardarPerfil, cerrarSesion } = useAuth();
   const navigate = useNavigate();
@@ -101,10 +123,6 @@ export default function Menu() {
   const [errorPerfil, setErrorPerfil] = useState("");
 
   useEffect(() => {
-    setPerfil(perfilInicial(usuario));
-  }, [usuario]);
-
-  useEffect(() => {
     const cerrarAlClicExterior = (evento) => {
       const dentroDelMenu =
         evento.target instanceof Element && evento.target.closest(".navbar");
@@ -114,8 +132,16 @@ export default function Menu() {
       }
     };
 
+    const cerrarConEscape = (evento) => {
+      if (evento.key === "Escape") setGrupoAbierto(null);
+    };
+
     document.addEventListener("click", cerrarAlClicExterior);
-    return () => document.removeEventListener("click", cerrarAlClicExterior);
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => {
+      document.removeEventListener("click", cerrarAlClicExterior);
+      document.removeEventListener("keydown", cerrarConEscape);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -162,15 +188,29 @@ export default function Menu() {
   const renderEnlace = (clave, enDropdown = false) => {
     const item = ITEMS[clave];
     const activo = location.pathname === item.ruta;
-    const clases = enDropdown
-      ? `dropdown-item ${activo ? "active" : ""}`
-      : `nav-link ${activo ? "active fw-bold text-white" : "text-white-50"}`;
+    if (enDropdown) {
+      return (
+        <Link
+          key={clave}
+          to={item.ruta}
+          className={`dropdown-item menu-opcion ${activo ? "active" : ""}`}
+          aria-current={activo ? "page" : undefined}
+          onClick={cerrarAlNavegar}
+        >
+          {item.paso && <span className="menu-paso" aria-hidden="true">{item.paso}</span>}
+          <span>
+            <span className="menu-opcion-titulo d-block">{item.etiqueta}</span>
+            {item.desc && <span className="menu-opcion-desc d-block">{item.desc}</span>}
+          </span>
+        </Link>
+      );
+    }
 
     return (
       <Link
         key={clave}
         to={item.ruta}
-        className={clases}
+        className={`nav-link ${activo ? "active fw-bold text-white" : "text-white-50"}`}
         aria-current={activo ? "page" : undefined}
         onClick={cerrarAlNavegar}
       >
@@ -180,6 +220,7 @@ export default function Menu() {
   };
 
   const entradas = MENUS[rol] || MENUS.COMITE;
+  const puedeEditarPerfil = rol === "COORDINADOR" || rol === "DOCENTE";
 
   return (
     <nav className="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow-sm mb-4">
@@ -219,7 +260,7 @@ export default function Menu() {
 
               const abierto = grupoAbierto === entrada.etiqueta;
               const grupoActivo = entrada.claves.some(
-                (clave) => location.pathname === ITEMS[clave].ruta
+                (clave) => esClave(clave) && location.pathname === ITEMS[clave].ruta
               );
 
               return (
@@ -240,35 +281,66 @@ export default function Menu() {
                   >
                     {entrada.etiqueta}
                   </button>
-                  <ul className={`dropdown-menu ${abierto ? "show" : ""}`}>
-                    {entrada.claves.map((clave) => (
-                      <li key={clave}>{renderEnlace(clave, true)}</li>
-                    ))}
+                  <ul className={`dropdown-menu menu-desplegable ${abierto ? "show" : ""}`}>
+                    {entrada.claves.map((clave) =>
+                      esClave(clave) ? (
+                        <li key={clave}>{renderEnlace(clave, true)}</li>
+                      ) : (
+                        <li key={clave.encabezado}>
+                          <h6 className="dropdown-header">{clave.encabezado}</h6>
+                        </li>
+                      )
+                    )}
                   </ul>
                 </li>
               );
             })}
           </ul>
 
-          <div className="d-flex align-items-center gap-3">
-            <span className="text-white-50 small d-none d-md-inline">
-              Rol: {rol}
-            </span>
+          <div className="barra-derecha d-flex align-items-center gap-2 pb-2 pb-lg-0">
             {rol === "DOCENTE" && <NotificacionesDocente />}
             {rol === "COORDINADOR" && <NotificacionesCoordinador />}
-            {(rol === "COORDINADOR" || rol === "DOCENTE") && (
+
+            <div className="dropdown">
               <button
                 type="button"
-                className="btn btn-outline-light btn-sm"
-                onClick={abrirPerfil}
-                title="Ver mi perfil"
+                className="boton-circulo avatar"
+                aria-haspopup="true"
+                aria-expanded={grupoAbierto === CLAVE_CUENTA}
+                aria-label="Mi cuenta"
+                title={usuario?.nombre || usuario?.correo || "Mi cuenta"}
+                onClick={() => setGrupoAbierto(grupoAbierto === CLAVE_CUENTA ? null : CLAVE_CUENTA)}
               >
-                Mi perfil
+                {inicialesDe(usuario)}
               </button>
-            )}
-            <button onClick={handleLogout} className="btn btn-outline-light btn-sm">
-              Cerrar sesión
-            </button>
+
+              {grupoAbierto === CLAVE_CUENTA && (
+                <div className="dropdown-menu menu-desplegable menu-derecha show" style={{ width: 300 }}>
+                  <div className="d-flex align-items-center gap-3 px-2 py-2">
+                    <span className="boton-circulo avatar-grande" aria-hidden="true">{inicialesDe(usuario)}</span>
+                    <div className="text-truncate">
+                      <div className="fw-bold text-truncate">{usuario?.nombre || "Sin nombre registrado"}</div>
+                      <div className="small text-muted text-truncate">{usuario?.correo}</div>
+                      <span className="badge rounded-pill bg-primary-subtle text-primary-emphasis mt-1">
+                        {NOMBRE_ROL[rol] || rol}
+                      </span>
+                    </div>
+                  </div>
+                  <hr className="dropdown-divider" />
+                  {puedeEditarPerfil && (
+                    <button type="button" className="dropdown-item menu-opcion" onClick={abrirPerfil}>
+                      <span>
+                        <span className="menu-opcion-titulo d-block">Mi perfil</span>
+                        <span className="menu-opcion-desc d-block">Nombre, título y datos para los informes</span>
+                      </span>
+                    </button>
+                  )}
+                  <button type="button" className="dropdown-item menu-opcion text-danger" onClick={handleLogout}>
+                    <span className="menu-opcion-titulo">Cerrar sesión</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -60,6 +60,17 @@ public class AnalisisExternoService
         var info = await _solicitudes.ObtenerCompletaAsync(solicitudId, ct)
                    ?? throw new AnalisisSolicitudException(404, "Solicitud no encontrada.");
 
+        // Un análisis nuevo reemplaza las asignaturas y devuelve la solicitud a revisión:
+        // no se permite cuando ya hay informe final o resolución, porque los borraría.
+        var estadoActual = await _db.AnalisisSolicitudes
+            .AsNoTracking()
+            .Where(a => a.SolicitudId == solicitudId)
+            .Select(a => a.Estado)
+            .FirstOrDefaultAsync(ct);
+        if (estadoActual is EstadoAnalisis.INFORME_EMITIDO or EstadoAnalisis.RESUELTA)
+            throw new AnalisisSolicitudException(409,
+                "La solicitud ya tiene informe final emitido; no se puede volver a analizar.");
+
         var entrada = await PrepararEntradaAsync(solicitudId, info, request, ct);
 
         // 1. Enviar al agente. Si falla o vence el tiempo, sale por excepción antes de tocar la base de datos.

@@ -28,8 +28,11 @@ const lanzarError = async (res, mensajePorDefecto) => {
   throw error;
 };
 
-export async function obtenerSolicitudesPendientes() {
-  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/pendientes`, {
+// Solicitudes en revisión. Con { incluirEmitidos: true } también trae las que ya tienen
+// informe final (trámite terminado), para consultarlas o corregirlas.
+export async function obtenerSolicitudesPendientes({ incluirEmitidos = false } = {}) {
+  const query = incluirEmitidos ? "?incluirEmitidos=true" : "";
+  const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/pendientes${query}`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) await lanzarError(res, "Error al cargar solicitudes pendientes");
@@ -89,7 +92,7 @@ export async function obtenerConsolidado(id) {
   return extraerDatos(json);
 }
 
-// Emite el informe final que se envía al Consejo Directivo.
+// Emite el informe final que el Coordinador envía al Comité (cierra el trámite).
 // Genera una vista previa editable del informe final sin emitirlo.
 export async function previsualizarInformeFinal(id, payload) {
   const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final/vista-previa`, {
@@ -102,7 +105,7 @@ export async function previsualizarInformeFinal(id, payload) {
   return extraerDatos(json);
 }
 
-// Emite el informe final que se envía al Consejo Directivo.
+// Emite el informe final que el Coordinador envía al Comité (cierra el trámite).
 export async function emitirInformeFinal(id, payload) {
   const res = await fetch(`${GATEWAY_URL}/homologacion/coordinador/${id}/informe-final`, {
     method: "POST",
@@ -160,4 +163,13 @@ export async function registrarResolucion(id, resolucion) {
   if (!res.ok) await lanzarError(res, "Error al registrar la resolución");
   const json = await res.json();
   return extraerDatos(json);
+}
+
+// Docentes registrados, para elegir a quién delegar (nombre, correo y título).
+export async function obtenerDocentes() {
+  const res = await fetch(`${GATEWAY_URL}/auth/docentes`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) await lanzarError(res, "No se pudo cargar la lista de docentes");
+  return await res.json();
 }

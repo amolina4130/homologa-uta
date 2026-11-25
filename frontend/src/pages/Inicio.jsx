@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { obtenerSolicitudesDocente } from "../services/docenteService";
-import { obtenerCarreras, obtenerMisSolicitudes } from "../services/solicitudesService";
-import { descargarInforme } from "../services/homologacionService";
-import { TablaSolicitudes } from "../components/TablaSolicitudes";
 import { filtrarPendientes, numeroSolicitud } from "../utils/solicitudesDocente";
+import InicioCoordinador from "./InicioCoordinador";
 
 const CAMPOS_PERFIL = [
   { clave: "nombre", etiqueta: "Nombre completo", placeholder: "Ej.: Ing. María Pérez" },
@@ -23,16 +21,6 @@ const perfilInicial = (usuario) => ({
   telefono: usuario?.telefono || "",
 });
 
-const FILTROS_VACIOS = { estado: "", carreraId: "", desde: "", hasta: "" };
-
-const ESTADOS_SOLICITUD = [
-  { valor: "", etiqueta: "Todos los estados" },
-  { valor: "REGISTRADA", etiqueta: "REGISTRADA" },
-  { valor: "PENDIENTE_REVISION", etiqueta: "PENDIENTE_REVISION" },
-  { valor: "INFORME_EMITIDO", etiqueta: "INFORME_EMITIDO" },
-  { valor: "RESUELTA", etiqueta: "RESUELTA" },
-];
-
 export default function Inicio() {
   const { rol, usuario, guardarPerfil } = useAuth();
   const [pendientes, setPendientes] = useState([]);
@@ -42,12 +30,6 @@ export default function Inicio() {
   const [guardandoPerfil, setGuardandoPerfil] = useState(false);
   const [mensajePerfil, setMensajePerfil] = useState("");
   const [errorPerfil, setErrorPerfil] = useState("");
-  const [misSolicitudes, setMisSolicitudes] = useState([]);
-  const [cargandoMis, setCargandoMis] = useState(false);
-  const [errorMis, setErrorMis] = useState("");
-  const [mensajeMis, setMensajeMis] = useState("");
-  const [filtrosMis, setFiltrosMis] = useState(FILTROS_VACIOS);
-  const [carrerasMis, setCarrerasMis] = useState([]);
 
   useEffect(() => {
     if (rol !== "DOCENTE") return undefined;
@@ -77,54 +59,6 @@ export default function Inicio() {
     };
   }, [rol]);
 
-  const cargarMisSolicitudes = useCallback(async (criterios = {}) => {
-    setCargandoMis(true);
-    setErrorMis("");
-    try {
-      const data = await obtenerMisSolicitudes(criterios);
-      setMisSolicitudes(Array.isArray(data) ? data : data?.data || []);
-    } catch (e) {
-      setErrorMis(e.message || "No se pudieron cargar sus solicitudes.");
-    } finally {
-      setCargandoMis(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (rol !== "COORDINADOR") return;
-    cargarMisSolicitudes({});
-    obtenerCarreras()
-      .then((data) => setCarrerasMis(Array.isArray(data) ? data : []))
-      .catch(() => setCarrerasMis([]));
-  }, [rol, cargarMisSolicitudes]);
-
-  const cambiarFiltroMis = (campo, valor) => {
-    setFiltrosMis((prev) => ({ ...prev, [campo]: valor }));
-  };
-
-  const aplicarFiltrosMis = (ev) => {
-    ev.preventDefault();
-    setMensajeMis("");
-    cargarMisSolicitudes(filtrosMis);
-  };
-
-  const limpiarFiltrosMis = () => {
-    setFiltrosMis(FILTROS_VACIOS);
-    setMensajeMis("");
-    cargarMisSolicitudes({});
-  };
-
-  const descargarMiInforme = async (id) => {
-    setErrorMis("");
-    setMensajeMis("");
-    try {
-      await descargarInforme(id);
-      setMensajeMis(`Informe de SOL-${String(id).padStart(4, "0")} descargado.`);
-    } catch (e) {
-      setErrorMis(e.message || "No se pudo descargar el informe.");
-    }
-  };
-
   const cambiarPerfil = (clave, valor) => {
     setPerfil((prev) => ({ ...prev, [clave]: valor }));
     setMensajePerfil("");
@@ -147,7 +81,9 @@ export default function Inicio() {
     }
   };
 
-  if (rol === "DOCENTE" || rol === "COORDINADOR") {
+  if (rol === "COORDINADOR") return <InicioCoordinador />;
+
+  if (rol === "DOCENTE") {
     const esDocente = rol === "DOCENTE";
     const primera = pendientes[0];
     const total = pendientes.length;
@@ -392,99 +328,6 @@ export default function Inicio() {
         </div>
       );
     }
-
-    return (
-      <div className="container mt-4">
-        <div className="card shadow-sm border-0">
-          <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center gap-2">
-            <div>
-              <h2 className="mb-0 fw-bold">Mis solicitudes</h2>
-              <small className="d-block fw-normal">
-                Solicitudes registradas por usted. No es lo mismo que “Pendientes de revisión”.
-              </small>
-            </div>
-            <Link to="/mis-solicitudes" className="btn btn-light btn-sm fw-bold">
-              Ver todas
-            </Link>
-          </div>
-          <div className="card-body p-4">
-            <form className="row g-3 align-items-end mb-4" onSubmit={aplicarFiltrosMis}>
-              <div className="col-md-3">
-                <label htmlFor="inicioFiltroEstado" className="form-label fw-bold">Estado</label>
-                <select
-                  id="inicioFiltroEstado"
-                  className="form-select"
-                  value={filtrosMis.estado}
-                  onChange={(e) => cambiarFiltroMis("estado", e.target.value)}
-                >
-                  {ESTADOS_SOLICITUD.map((e) => (
-                    <option key={e.valor} value={e.valor}>{e.etiqueta}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-3">
-                <label htmlFor="inicioFiltroCarrera" className="form-label fw-bold">Carrera</label>
-                <select
-                  id="inicioFiltroCarrera"
-                  className="form-select"
-                  value={filtrosMis.carreraId}
-                  onChange={(e) => cambiarFiltroMis("carreraId", e.target.value)}
-                >
-                  <option value="">Todas las carreras</option>
-                  {carrerasMis.map((c) => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-md-2">
-                <label htmlFor="inicioFiltroDesde" className="form-label fw-bold">Desde</label>
-                <input
-                  id="inicioFiltroDesde"
-                  type="date"
-                  className="form-control"
-                  value={filtrosMis.desde}
-                  onChange={(e) => cambiarFiltroMis("desde", e.target.value)}
-                />
-              </div>
-              <div className="col-md-2">
-                <label htmlFor="inicioFiltroHasta" className="form-label fw-bold">Hasta</label>
-                <input
-                  id="inicioFiltroHasta"
-                  type="date"
-                  className="form-control"
-                  value={filtrosMis.hasta}
-                  onChange={(e) => cambiarFiltroMis("hasta", e.target.value)}
-                />
-              </div>
-              <div className="col-md-2 d-flex gap-2">
-                <button type="submit" className="btn btn-primary fw-bold" disabled={cargandoMis}>Filtrar</button>
-                <button type="button" className="btn btn-outline-secondary" onClick={limpiarFiltrosMis} disabled={cargandoMis}>
-                  Limpiar
-                </button>
-              </div>
-            </form>
-
-            {mensajeMis && <div className="alert alert-success">{mensajeMis}</div>}
-            {errorMis && <div className="alert alert-danger">{errorMis}</div>}
-            {cargandoMis ? (
-              <div className="d-flex justify-content-center my-4">
-                <div className="spinner-border text-primary" role="status">
-                  <span className="visually-hidden">Cargando...</span>
-                </div>
-              </div>
-            ) : (
-              <TablaSolicitudes solicitudes={misSolicitudes} onDescargarInforme={descargarMiInforme} />
-            )}
-
-            <div className="d-flex justify-content-end mt-4">
-              <Link to="/delegar-docentes" className="btn btn-outline-primary fw-bold">
-                Solicitudes pendientes de revisión
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (

@@ -328,8 +328,8 @@ export default function EvaluacionDocente() {
             agente proponga un informe con esos datos; (2) agregue observaciones y marque{" "}
             <strong>Homologo</strong> o <strong>No homologo</strong> en cada materia; (3) envíe
             manualmente el informe sugerido al Coordinador. La URL y los documentos ya los registró
-            el Coordinador: no tiene que volver a subirlos. El informe final para el Consejo
-            Directivo lo emite el Coordinador.
+            el Coordinador: no tiene que volver a subirlos. El informe final lo emite el
+            Coordinador y lo envía al Comité.
           </div>
 
           {detalle && (
