@@ -1,5 +1,6 @@
 using Xunit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using HomologaUTA.Solicitudes.Data;
 using HomologaUTA.Solicitudes.Controllers;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,7 @@ namespace HomologaUTA.Solicitudes.Tests
         {
             var options = new DbContextOptionsBuilder<SolicitudesDbContext>()
                 .UseInMemoryDatabase(databaseName: "TestDbEdicion_" + Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
             return new SolicitudesDbContext(options);
         }

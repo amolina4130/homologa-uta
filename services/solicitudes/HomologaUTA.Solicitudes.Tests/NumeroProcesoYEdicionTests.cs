@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using HomologaUTA.Solicitudes.Controllers;
@@ -10,6 +11,7 @@ using HomologaUTA.Solicitudes.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace HomologaUTA.Solicitudes.Tests;
@@ -23,6 +25,7 @@ public class NumeroProcesoYEdicionTests
     {
         var opciones = new DbContextOptionsBuilder<SolicitudesDbContext>()
             .UseInMemoryDatabase("TestEdicion_" + Guid.NewGuid())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new SolicitudesDbContext(opciones);
     }
@@ -35,6 +38,8 @@ public class NumeroProcesoYEdicionTests
 
         var contexto = new DefaultHttpContext();
         contexto.Request.Headers.Authorization = $"Bearer e30.{payload}.firma";
+        contexto.User = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim(ClaimTypes.Email, correo), new Claim("email", correo) }, "Test"));
 
         return new SolicitudesController(db)
         {

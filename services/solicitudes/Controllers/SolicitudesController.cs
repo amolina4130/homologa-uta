@@ -248,7 +248,8 @@ public class SolicitudesController : ControllerBase
             EstadoAnterior = solicitud.Estado,
             EstadoNuevo = solicitud.Estado,
             UsuarioCorreo = correo,
-            FechaCambio = DateTime.UtcNow
+            FechaCambio = DateTime.UtcNow,
+            Detalle = "Solicitud editada"
         });
 
         await _db.SaveChangesAsync();
@@ -449,6 +450,12 @@ public class SolicitudesController : ControllerBase
         if (request.AsignaturasIds == null || !request.AsignaturasIds.Any())
             return "Debe seleccionar al menos una asignatura.";
 
+        if ((request.UniversidadOrigen?.Trim().Length ?? 0) > 150 ||
+            (request.UniversidadDestino?.Trim().Length ?? 0) > 150)
+        {
+            return "El nombre de la universidad no puede superar los 150 caracteres.";
+        }
+
         if (NormalizarModulo(request.Modulo) == "EXTERNO" &&
             (string.IsNullOrWhiteSpace(request.UniversidadOrigen) ||
              string.IsNullOrWhiteSpace(request.UniversidadDestino)))
@@ -463,12 +470,34 @@ public class SolicitudesController : ControllerBase
     {
         // Secuencia legible y consecutiva: SOL-0001, SOL-0002, ...
         // No depende del Id IDENTITY (puede saltar por reinicios de SQL Server).
-        var maximo = await _db.Database
-            .SqlQueryRaw<int>(@"
-                SELECT ISNULL(MAX(CAST(SUBSTRING(NumeroProceso, 5, 30) AS int)), 0) AS [Value]
-                FROM Solicitudes WITH (UPDLOCK, HOLDLOCK)
-                WHERE NumeroProceso LIKE 'SOL-[0-9][0-9][0-9][0-9]%'")
-            .SingleAsync();
+        int maximo;
+        if (_db.Database.IsRelational())
+        {
+            maximo = await _db.Database
+                .SqlQueryRaw<int>(@"
+                    SELECT ISNULL(MAX(CAST(SUBSTRING(NumeroProceso, 5, 30) AS int)), 0) AS [Value]
+                    FROM Solicitudes WITH (UPDLOCK, HOLDLOCK)
+                    WHERE NumeroProceso LIKE 'SOL-[0-9][0-9][0-9][0-9]%'")
+                .SingleAsync();
+        }
+        else
+        {
+            var numeros = await _db.Solicitudes
+                .Select(s => s.NumeroProceso)
+                .ToListAsync();
+
+            maximo = numeros
+                .Select(n =>
+                {
+                    if (string.IsNullOrWhiteSpace(n) || !n.StartsWith("SOL-", StringComparison.OrdinalIgnoreCase))
+                        return 0;
+                    var parte = n.Substring(4);
+                    var digitos = new string(parte.TakeWhile(char.IsDigit).ToArray());
+                    return int.TryParse(digitos, out var valor) ? valor : 0;
+                })
+                .DefaultIfEmpty(0)
+                .Max();
+        }
 
         return $"SOL-{maximo + 1:D4}";
     }
